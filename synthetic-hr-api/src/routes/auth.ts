@@ -58,8 +58,37 @@ router.post('/provision', authenticateToken, async (req: Request, res: Response)
       return res.status(401).json({ success: false, error: 'Missing authentication' });
     }
 
+    const userId = req.user.id;
+    const email = req.user.email;
+
+    // Defense-in-depth idempotency:
+    // even if `authenticateToken` cannot derive org context (ex: transient RLS mistakes),
+    // never remap an existing user into a brand-new organization.
+    try {
+      const query = new URLSearchParams({
+        select: 'id,organization_id',
+        id: eq(userId),
+        limit: '1',
+      });
+      const rows = (await supabaseRestAsService('users', query)) as any[];
+      const existingOrgId = rows?.[0]?.organization_id ?? null;
+      if (existingOrgId) {
+        return res.json({
+          success: true,
+          message: 'Already provisioned',
+          data: {
+            organizationId: existingOrgId,
+            slug: null,
+          },
+        });
+      }
+    } catch (lookupError: any) {
+      logger.error('User profile lookup failed during provision (idempotency guard)', { error: lookupError?.message || 'Unknown error' });
+      return res.status(500).json({ success: false, error: 'Failed to resolve user profile' });
+    }
+
+    // Fast-path idempotency when org context is already known.
     if (req.user.organization_id) {
-      // Idempotent: already provisioned.
       return res.json({
         success: true,
         message: 'Already provisioned',
@@ -69,9 +98,6 @@ router.post('/provision', authenticateToken, async (req: Request, res: Response)
         },
       });
     }
-
-    const userId = req.user.id;
-    const email = req.user.email;
     const desiredName = result.data.name || email || 'User';
     const desiredOrgName = result.data.orgName || (email ? `${email.split('@')[0]}'s Workspace` : 'Workspace');
 

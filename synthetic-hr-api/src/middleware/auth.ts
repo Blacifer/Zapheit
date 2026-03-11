@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import logger from '../lib/logger';
-import { SupabaseRestError, supabaseRestAsUser } from '../lib/supabase-rest';
+import { SupabaseRestError, eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
 
 const debugLog = (msg: string) => {
   if (process.env.AUTH_DEBUG === 'true') {
@@ -100,7 +100,11 @@ export const authenticateToken = async (
     // Attach the verified JWT for downstream RLS-enforced PostgREST calls.
     req.userJwt = token;
 
-    // Fetch user profile (RLS-enforced) to derive organization and role.
+    // Fetch user profile to derive organization and role.
+    //
+    // IMPORTANT: We prefer the service role for this lookup to avoid brittle coupling to RLS
+    // on `public.users`. If RLS is temporarily misconfigured, a user should not be remapped
+    // into a brand-new organization during `/auth/provision`.
     debugLog('[AUTH] Attempting user profile lookup for ID: ' + jwtPayload.sub);
 
     let userProfile: any = null;
@@ -108,19 +112,19 @@ export const authenticateToken = async (
 
     try {
       const byIdQuery = new URLSearchParams();
-      byIdQuery.set('id', `eq.${encodeURIComponent(String(jwtPayload.sub))}`);
+      byIdQuery.set('id', eq(String(jwtPayload.sub)));
       byIdQuery.set('select', 'id,email,organization_id,role');
       byIdQuery.set('limit', '1');
 
-      let rows: any[] = await supabaseRestAsUser(token, 'users', byIdQuery);
+      let rows: any[] = await supabaseRestAsService('users', byIdQuery);
 
       if ((!rows || rows.length === 0) && jwtPayload.email) {
         // Fallback for older seeds where profile id mismatches auth.uid(): resolve by email.
         const byEmailQuery = new URLSearchParams();
-        byEmailQuery.set('email', `eq.${encodeURIComponent(String(jwtPayload.email))}`);
+        byEmailQuery.set('email', eq(String(jwtPayload.email)));
         byEmailQuery.set('select', 'id,email,organization_id,role');
         byEmailQuery.set('limit', '1');
-        rows = await supabaseRestAsUser(token, 'users', byEmailQuery);
+        rows = await supabaseRestAsService('users', byEmailQuery);
         if (rows && rows.length > 0) {
           debugLog('[AUTH] Resolved user organization by email fallback');
         }
