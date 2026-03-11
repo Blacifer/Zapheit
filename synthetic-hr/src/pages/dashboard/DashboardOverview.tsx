@@ -1,0 +1,722 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  Layers3,
+  RefreshCw,
+  ShieldAlert,
+  Siren,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import type { AIAgent, Incident, CostData } from '../../types';
+import OperationalMetrics from '../../components/OperationalMetrics';
+import { api } from '../../lib/api-client';
+
+interface DashboardOverviewProps {
+  agents: AIAgent[];
+  incidents: Incident[];
+  costData: CostData[];
+  onAddAgent: () => void;
+  onNavigate?: (page: string) => void;
+}
+
+type ActivityItem = {
+  id: string;
+  at: string;
+  title: string;
+  detail: string;
+  tone: 'info' | 'warn' | 'risk';
+};
+
+type OverviewTelemetry = {
+  generatedAt: string;
+  days: number;
+  movement: {
+    spendCurrentDay: number;
+    spendPreviousDay: number;
+    requestsCurrentDay: number;
+    requestsPreviousDay: number;
+    incidentsCurrent24h: number;
+    incidentsPrevious24h: number;
+    healthyIntegrations: number;
+    degradedIntegrations: number;
+  };
+  trends: {
+    cost: Array<{ date: string; value: number }>;
+    requests: Array<{ date: string; value: number }>;
+    incidents: Array<{ date: string; value: number }>;
+  };
+  integrations: {
+    total: number;
+    healthy: number;
+    degraded: number;
+    requestVolumeAvailable: boolean;
+  };
+};
+
+function formatCompactCurrency(value: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    notation: value >= 1000 ? 'compact' : 'standard',
+    maximumFractionDigits: value >= 1000 ? 1 : 2,
+  }).format(value);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+  }).format(value);
+}
+
+function formatRelative(value?: string | null) {
+  if (!value) return 'No timestamp';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No timestamp';
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function statusToneClasses(tone: 'good' | 'warn' | 'risk' | 'info') {
+  if (tone === 'good') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
+  if (tone === 'warn') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
+  if (tone === 'risk') return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
+  return 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300';
+}
+
+function ActionPill({
+  label,
+  tone,
+  onClick,
+}: {
+  label: string;
+  tone: 'good' | 'warn' | 'risk' | 'info';
+  onClick?: () => void;
+}) {
+  const className = `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${onClick ? 'hover:brightness-110' : ''} ${statusToneClasses(tone)}`;
+
+  if (!onClick) {
+    return (
+      <span className={className}>
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <button onClick={onClick} className={className}>
+      {label}
+      <ArrowRight className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function Sparkline({
+  values,
+  strokeClass,
+}: {
+  values: number[];
+  strokeClass: string;
+}) {
+  const safeValues = values.length > 1 ? values : [0, 0];
+  const width = 120;
+  const height = 36;
+  const min = Math.min(...safeValues);
+  const max = Math.max(...safeValues);
+  const range = max - min || 1;
+  const points = safeValues
+    .map((value, index) => {
+      const x = (index / (safeValues.length - 1)) * width;
+      const y = height - ((value - min) / range) * (height - 4) - 2;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-9 w-full">
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+        className={strokeClass}
+      />
+    </svg>
+  );
+}
+
+function SectionEyebrow({ label }: { label: string }) {
+  return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300/80">{label}</p>;
+}
+
+export default function DashboardOverview({
+  agents,
+  incidents,
+  costData,
+  onAddAgent,
+  onNavigate,
+}: DashboardOverviewProps) {
+  const [telemetry, setTelemetry] = useState<OverviewTelemetry | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [secondsSince, setSecondsSince] = useState(0);
+  const AUTO_REFRESH_INTERVAL = 8; // seconds
+
+  const loadOverviewState = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const telemetryResponse = await api.dashboard.getTelemetry(7);
+      if (telemetryResponse.success && telemetryResponse.data) {
+        setTelemetry(telemetryResponse.data);
+      }
+    } catch { /* silently ignore */ }
+    setLastRefreshed(new Date());
+    setSecondsSince(0);
+    setRefreshing(false);
+  }, []);
+
+  // Initial load
+  useEffect(() => { void loadOverviewState(); }, [loadOverviewState]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadOverviewState();
+    }, AUTO_REFRESH_INTERVAL * 1000);
+    return () => clearInterval(interval);
+  }, [loadOverviewState]);
+
+  // Live countdown clock
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setSecondsSince(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [lastRefreshed]);
+
+  const hasData = agents.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Overview</h1>
+          <p className="mt-2 text-slate-400">Your command center wakes up after the first governed agent is added to fleet.</p>
+        </div>
+
+        <div className="rounded-[28px] border border-slate-800 bg-slate-900/55 p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.20)]">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-slate-700 bg-slate-950/80">
+            <Users className="h-10 w-10 text-slate-500" />
+          </div>
+          <h2 className="mb-4 text-2xl font-bold text-white">No governed agents yet</h2>
+          <p className="mx-auto mb-8 max-w-md text-slate-400">
+            Add your first agent to unlock live risk, spend, reliability, and incident telemetry across the overview.
+          </p>
+          <button
+            onClick={onAddAgent}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white transition hover:from-cyan-400 hover:to-blue-400"
+          >
+            <Bot className="h-5 w-5" />
+            Add your first agent
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
+  const latestCostAt = [...costData]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date;
+  const activeAgents = agents.filter((agent) => agent.status === 'active');
+  const terminatedAgents = agents.filter((agent) => agent.status === 'terminated');
+  const agentsWithoutBudget = agents.filter((agent) => Number(agent.budget_limit || 0) <= 0);
+  const openIncidents = incidents.filter((incident) => ['open', 'investigating'].includes((incident.status || '').toLowerCase()));
+  const severeIncidents = openIncidents.filter((incident) => ['high', 'critical'].includes((incident.severity || '').toLowerCase()));
+  const avgRiskScore = Math.round(agents.reduce((sum, agent) => sum + agent.risk_score, 0) / Math.max(agents.length, 1));
+  const totalConversations = agents.reduce((sum, agent) => sum + agent.conversations, 0);
+  const averageSpendPerAgent = totalCost / Math.max(agents.length, 1);
+  const averageSpendPerConversation = totalCost / Math.max(totalConversations, 1);
+  const now = Date.now();
+  const fallbackLast24hIncidents = incidents.filter((incident) => now - new Date(incident.created_at).getTime() <= 24 * 60 * 60 * 1000);
+  const fallbackPrevious24hIncidents = incidents.filter((incident) => {
+    const age = now - new Date(incident.created_at).getTime();
+    return age > 24 * 60 * 60 * 1000 && age <= 48 * 60 * 60 * 1000;
+  });
+  const fallbackLast24hSpend = costData
+    .filter((entry) => now - new Date(entry.date).getTime() <= 24 * 60 * 60 * 1000)
+    .reduce((sum, entry) => sum + entry.cost, 0);
+  const fallbackPrevious24hSpend = costData
+    .filter((entry) => {
+      const age = now - new Date(entry.date).getTime();
+      return age > 24 * 60 * 60 * 1000 && age <= 48 * 60 * 60 * 1000;
+    })
+    .reduce((sum, entry) => sum + entry.cost, 0);
+  const fallbackLast24hConversations = costData
+    .filter((entry) => now - new Date(entry.date).getTime() <= 24 * 60 * 60 * 1000)
+    .reduce((sum, entry) => sum + entry.requests, 0);
+  const fallbackPrevious24hConversations = costData
+    .filter((entry) => {
+      const age = now - new Date(entry.date).getTime();
+      return age > 24 * 60 * 60 * 1000 && age <= 48 * 60 * 60 * 1000;
+    })
+    .reduce((sum, entry) => sum + entry.requests, 0);
+
+  const last24hIncidents = telemetry?.movement.incidentsCurrent24h ?? fallbackLast24hIncidents.length;
+  const previous24hIncidents = telemetry?.movement.incidentsPrevious24h ?? fallbackPrevious24hIncidents.length;
+  const last24hSpend = telemetry?.movement.spendCurrentDay ?? fallbackLast24hSpend;
+  const previous24hSpend = telemetry?.movement.spendPreviousDay ?? fallbackPrevious24hSpend;
+  const last24hConversations = telemetry?.movement.requestsCurrentDay ?? fallbackLast24hConversations;
+  const previous24hConversations = telemetry?.movement.requestsPreviousDay ?? fallbackPrevious24hConversations;
+  const costTrend = telemetry?.trends.cost.map((entry) => entry.value)
+    ?? [...costData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-7).map((entry) => entry.cost);
+  const incidentTrend = telemetry?.trends.incidents.map((entry) => entry.value)
+    ?? [...incidents].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).slice(-7).map(() => 1);
+  const requestTrend = telemetry?.trends.requests.map((entry) => entry.value)
+    ?? [...costData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-7).map((entry) => entry.requests);
+
+  const heroTone =
+    severeIncidents.length > 0 ? 'risk' :
+      openIncidents.length > 0 ? 'warn' :
+        'good';
+
+  const nowCards = [
+    {
+      label: 'Open incidents',
+      value: `${openIncidents.length}`,
+      note: severeIncidents.length > 0 ? `${severeIncidents.length} high severity` : 'Queue under control',
+      tone: severeIncidents.length > 0 ? 'text-rose-300' : 'text-white',
+    },
+    {
+      label: 'Governed agents',
+      value: `${activeAgents.length}/${agents.length}`,
+      note: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
+      tone: 'text-cyan-300',
+    },
+    {
+      label: 'Month spend',
+      value: formatCurrency(totalCost),
+      note: latestCostAt ? `Last cost signal ${formatRelative(latestCostAt)}` : 'No cost signal yet',
+      tone: 'text-emerald-300',
+    },
+    {
+      label: 'Average risk',
+      value: `${avgRiskScore}/100`,
+      note: avgRiskScore >= 70 ? 'Elevated governance risk' : avgRiskScore >= 40 ? 'Monitor risk posture' : 'Risk posture stable',
+      tone: avgRiskScore >= 70 ? 'text-rose-300' : avgRiskScore >= 40 ? 'text-amber-300' : 'text-violet-300',
+    },
+  ];
+
+  const movementCards = [
+    {
+      label: 'Spend last 24h',
+      value: formatCompactCurrency(last24hSpend),
+      delta: previous24hSpend > 0 ? `${last24hSpend >= previous24hSpend ? '+' : ''}${Math.round(((last24hSpend - previous24hSpend) / previous24hSpend) * 100)}% vs prior day` : 'No prior-day baseline',
+      tone: last24hSpend > previous24hSpend ? 'warn' : 'good',
+      trend: costTrend,
+      stroke: last24hSpend > previous24hSpend ? 'text-amber-300' : 'text-emerald-300',
+    },
+    {
+      label: 'Incidents last 24h',
+      value: `${last24hIncidents}`,
+      delta: previous24hIncidents > 0 ? `${last24hIncidents - previous24hIncidents >= 0 ? '+' : ''}${last24hIncidents - previous24hIncidents} vs prior day` : 'No prior-day baseline',
+      tone: last24hIncidents > previous24hIncidents ? 'risk' : 'good',
+      trend: incidentTrend,
+      stroke: last24hIncidents > previous24hIncidents ? 'text-rose-300' : 'text-cyan-300',
+    },
+    {
+      label: 'Requests last 24h',
+      value: `${last24hConversations.toLocaleString()}`,
+      delta: previous24hConversations > 0 ? `${last24hConversations >= previous24hConversations ? '+' : ''}${Math.round(((last24hConversations - previous24hConversations) / previous24hConversations) * 100)}% vs prior day` : 'No prior-day baseline',
+      tone: 'info',
+      trend: requestTrend,
+      stroke: 'text-cyan-300',
+    },
+    {
+      label: 'Active agents',
+      value: `${activeAgents.length}`,
+      delta: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
+      tone: terminatedAgents.length > 0 ? 'warn' : 'good',
+      trend: [],
+      stroke: terminatedAgents.length > 0 ? 'text-amber-300' : 'text-emerald-300',
+    },
+  ];
+
+  const actionQueue = [
+    severeIncidents.length > 0
+      ? {
+        id: 'incidents-critical',
+        title: 'Review high-severity incident evidence',
+        description: `${severeIncidents.length} incident(s) are still high or critical.`,
+        tone: 'risk' as const,
+        action: () => onNavigate?.('blackbox'),
+      }
+      : null,
+    agentsWithoutBudget.length > 0
+      ? {
+        id: 'agents-budget',
+        title: 'Add budget caps to unguarded agents',
+        description: `${agentsWithoutBudget.length} agent(s) still run without a budget limit.`,
+        tone: 'warn' as const,
+        action: () => onNavigate?.('fleet'),
+      }
+      : null,
+    totalConversations === 0
+      ? {
+        id: 'traffic-none',
+        title: 'Generate live traffic',
+        description: 'No governed conversations have been recorded yet, so reliability and cost baselines are still cold.',
+        tone: 'info' as const,
+        action: () => onNavigate?.('fleet'),
+      }
+      : null,
+  ].filter(Boolean) as Array<{ id: string; title: string; description: string; tone: 'warn' | 'risk' | 'info'; action: () => void }>;
+
+  const activityFeed = useMemo(() => {
+    const items: ActivityItem[] = [
+      ...incidents.slice(0, 6).map((incident): ActivityItem => ({
+        id: `incident-${incident.id}`,
+        at: incident.created_at,
+        title: incident.title,
+        detail: `${incident.agent_name} · ${incident.severity} · ${incident.status}`,
+        tone: ['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'risk' : 'warn',
+      })),
+      ...agents.slice(0, 6).map((agent): ActivityItem => ({
+        id: `agent-${agent.id}`,
+        at: agent.created_at,
+        title: `${agent.name} added to fleet`,
+        detail: `${agent.platform} · ${agent.model_name}`,
+        tone: agent.status === 'terminated' ? 'warn' : 'info',
+      })),
+      ...costData.slice(0, 6).map((entry): ActivityItem => ({
+        id: `cost-${entry.id}`,
+        at: entry.date,
+        title: `Cost recorded ${formatCurrency(entry.cost)}`,
+        detail: `${entry.requests.toLocaleString()} request(s) · ${entry.tokens.toLocaleString()} tokens`,
+        tone: 'info',
+      })),
+    ];
+
+    return items
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 6);
+  }, [agents, costData, incidents]);
+
+  return (
+    <div className="space-y-8">
+      <section className="rounded-[32px] border border-slate-800/90 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_28%),linear-gradient(135deg,rgba(12,20,38,0.98),rgba(6,12,24,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.24)]">
+        <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+          <div>
+            <SectionEyebrow label="Live command center" />
+            <div className="flex flex-wrap items-center gap-3">
+              <ActionPill
+                label={heroTone === 'risk' ? 'Needs intervention' : heroTone === 'warn' ? 'Watch closely' : 'Stable now'}
+                tone={heroTone}
+              />
+              <ActionPill label={`Risk score ${avgRiskScore}/100`} tone={avgRiskScore >= 70 ? 'risk' : avgRiskScore >= 40 ? 'warn' : 'good'} />
+            </div>
+            <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-[-0.04em] text-white xl:text-[3.6rem] xl:leading-[1.02]">Overview</h1>
+            <p className="mt-3 max-w-2xl text-[1.02rem] leading-8 text-slate-300">
+              A live command center for fleet health, open risk, spend, and governance readiness. This page now uses actual fleet, incident, and cost state instead of placeholder activity.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-400">
+              <div className="inline-flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400'} animate-pulse`} />
+                Live operational snapshot
+              </div>
+              <span className="text-slate-600">•</span>
+              <span>{telemetry?.generatedAt ? `Backend telemetry ${formatRelative(telemetry.generatedAt)}` : activityFeed.length > 0 ? `Latest signal ${formatRelative(activityFeed[0].at)}` : 'Awaiting recent activity'}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-500 text-xs">
+                {secondsSince < 5 ? 'Just refreshed' : `Updated ${secondsSince}s ago`} · auto-refresh in {Math.max(0, AUTO_REFRESH_INTERVAL - secondsSince)}s
+              </span>
+              <button
+                onClick={() => void loadOverviewState()}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-cyan-400 border border-cyan-400/20 hover:bg-cyan-400/10 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing…' : 'Refresh now'}
+              </button>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() => onNavigate?.('blackbox')}
+                className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(34,211,238,0.22)] transition hover:bg-cyan-400"
+              >
+                Review incident evidence
+              </button>
+              <button
+                onClick={() => onNavigate?.('fleet')}
+                className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:text-white"
+              >
+                Open fleet
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {nowCards.map((card) => (
+              <div key={card.label} className="rounded-2xl border border-slate-800/90 bg-[linear-gradient(180deg,rgba(2,6,23,0.28),rgba(2,6,23,0.62))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
+                <p className={`mt-3 text-3xl font-bold tabular-nums ${card.tone}`}>{card.value}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{card.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-800/80 pt-5 md:grid-cols-2 xl:grid-cols-4">
+          {movementCards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-slate-800/90 bg-slate-950/45 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-white">{card.value}</p>
+                  <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                    {card.delta}
+                  </p>
+                </div>
+                <TrendingUp className={`h-4 w-4 ${card.stroke}`} />
+              </div>
+              <div className="mt-3">
+                {card.trend.length > 1 ? (
+                  <Sparkline values={card.trend} strokeClass={card.stroke} />
+                ) : (
+                  <div className="flex h-9 items-center text-[11px] uppercase tracking-[0.18em] text-slate-500">Snapshot only</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.96fr_1.04fr]">
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <Siren className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <SectionEyebrow label="Resolve next" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Action Queue</h2>
+              <p className="mt-1 text-sm text-slate-400">The shortest path to reducing real risk right now.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {actionQueue.length > 0 ? (
+              actionQueue.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={item.action}
+                  className="group flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4 text-left transition hover:border-cyan-400/25 hover:bg-slate-950/75"
+                >
+                  <div>
+                    <p className="font-semibold text-white">{item.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <ActionPill label={item.tone === 'risk' ? 'Urgent' : item.tone === 'warn' ? 'Needs setup' : 'Next step'} tone={item.tone} />
+                    <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:text-cyan-300" />
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_45%),rgba(16,185,129,0.08)] p-5">
+                <p className="font-semibold text-emerald-200">No urgent queue items right now</p>
+                <p className="mt-2 text-sm leading-6 text-emerald-100/80">
+                  Fleet and incidents are not currently surfacing any high-priority setup or response gaps.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <Activity className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <SectionEyebrow label="Service telemetry" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Reliability</h2>
+              <p className="mt-1 text-sm text-slate-400">Operational metrics from live platform telemetry.</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <OperationalMetrics />
+          </div>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.92fr]">
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <Layers3 className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <SectionEyebrow label="Latest signals" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Recent Activity</h2>
+              <p className="mt-1 text-sm text-slate-400">Derived from actual incident, fleet, and cost records already in this org.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {activityFeed.length > 0 ? (
+              activityFeed.map((item, index) => (
+                <div
+                  key={item.id}
+                  className={`flex items-start gap-4 rounded-2xl border border-slate-800 p-4 ${index === 0
+                    ? 'bg-[linear-gradient(180deg,rgba(8,47,73,0.24),rgba(2,6,23,0.56))] shadow-[inset_0_1px_0_rgba(34,211,238,0.10)]'
+                    : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
+                    }`}
+                >
+                  <div className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="font-semibold text-white">{item.title}</p>
+                      <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(item.at)}</span>
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_42%),rgba(2,6,23,0.55)] p-5">
+                <p className="font-semibold text-white">No recent activity yet</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Once incidents, costs, or new fleet events land, the latest records will show up here automatically.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+              <Sparkles className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <SectionEyebrow label="Governance posture" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Coverage Snapshot</h2>
+              <p className="mt-1 text-sm text-slate-400">How much of the current stack is actually governed and cost-visible.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Budget coverage</p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-emerald-300">{agents.length === 0 ? '0%' : `${Math.round((agents.length - agentsWithoutBudget.length) / agents.length * 100)}%`}</p>
+              <p className="mt-2 text-sm text-slate-400">{agents.length - agentsWithoutBudget.length}/{agents.length} agents capped</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Open incidents</p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-cyan-300">{openIncidents.length}</p>
+              <p className="mt-2 text-sm text-slate-400">{severeIncidents.length} high severity</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Spend per agent</p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-violet-300">{formatCurrency(averageSpendPerAgent)}</p>
+              <p className="mt-2 text-sm text-slate-400">Current blended average</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Spend per conversation</p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-white">{formatCurrency(averageSpendPerConversation)}</p>
+              <p className="mt-2 text-sm text-slate-400">{totalConversations.toLocaleString()} total governed conversations</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <SectionEyebrow label="Fleet posture" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">AI Workforce</h2>
+              <p className="mt-1 text-sm text-slate-400">Fleet posture and risk by governed agent.</p>
+            </div>
+            <ActionPill label={`${activeAgents.length} active`} tone={activeAgents.length === agents.length ? 'good' : 'warn'} />
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {agents.map((agent) => (
+              <div key={agent.id} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className={`h-3 w-3 rounded-full ${agent.status === 'active' ? 'bg-emerald-400' : agent.status === 'paused' ? 'bg-amber-400' : 'bg-rose-400'
+                    }`} />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{agent.name}</p>
+                    <p className="truncate text-sm text-slate-400">{agent.agent_type} · {agent.model_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ActionPill
+                    label={agent.risk_level === 'low' ? 'Stable' : agent.risk_level === 'medium' ? 'Watch' : 'High risk'}
+                    tone={agent.risk_level === 'low' ? 'good' : agent.risk_level === 'medium' ? 'warn' : 'risk'}
+                  />
+                  <span className="text-sm font-semibold tabular-nums text-slate-300">{formatCurrency(agent.current_spend || 0)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <SectionEyebrow label="Incident posture" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Black Box</h2>
+              <p className="mt-1 text-sm text-slate-400">Evidence trail for incident history, severity, and operational context.</p>
+            </div>
+            <button
+              onClick={() => onNavigate?.('blackbox')}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+            >
+              Open evidence
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_40%),rgba(2,6,23,0.55)] p-5">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/80">
+              <ShieldAlert className="h-5 w-5 text-cyan-300" />
+            </div>
+            <p className="font-semibold text-white">Incident evidence stays available</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Review recent incidents, severity distribution, and forensic evidence in Black Box while you rebuild the next workflow from a cleaner baseline.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      {severeIncidents.length > 0 ? (
+        <section className="rounded-[28px] border border-rose-500/20 bg-rose-500/10 p-5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 text-rose-300" />
+            <div>
+              <p className="font-semibold text-rose-200">Escalation notice</p>
+              <p className="mt-1 text-sm leading-6 text-rose-100/80">
+                High-severity incidents are still open. The overview is intentionally surfacing real risk instead of smoothing it away with cosmetic “healthy” states.
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}

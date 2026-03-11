@@ -1,0 +1,754 @@
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Copy, Key, Loader2, Rocket, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { api } from '../../lib/api-client';
+import { toast } from '../../lib/toast';
+import type { AIAgent } from '../../types';
+import { supabase } from '../../lib/supabase-client';
+
+type StepId = 'workspace' | 'key' | 'agent' | 'test' | 'verify';
+
+type LiveModel = { id: string; name?: string; provider?: string };
+
+function maskKey(value: string) {
+  if (!value) return '';
+  if (value.length <= 10) return value;
+  return `${value.slice(0, 3)}…${value.slice(-4)}`;
+}
+
+function nowPlusHours(hours: number) {
+  const dt = new Date(Date.now() + hours * 60 * 60 * 1000);
+  return dt.toISOString();
+}
+
+export default function GettingStartedPage(props: {
+  agents: AIAgent[];
+  onNavigate: (page: string) => void;
+  onRefresh: () => Promise<void>;
+  storageScope: string;
+}) {
+  const [step, setStep] = useState<StepId>('workspace');
+  const [isBusy, setIsBusy] = useState(false);
+
+  const [coverageLoading, setCoverageLoading] = useState(true);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<any | null>(null);
+
+  const [models, setModels] = useState<LiveModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  const [apiKeyId, setApiKeyId] = useState<string | null>(null);
+  const [apiKeySecret, setApiKeySecret] = useState<string | null>(null);
+  const [gatewayModelsLoading, setGatewayModelsLoading] = useState(false);
+  const [gatewayModelsOk, setGatewayModelsOk] = useState<boolean | null>(null);
+  const [gatewayModelsError, setGatewayModelsError] = useState<string | null>(null);
+  const [gatewayModelSample, setGatewayModelSample] = useState<string[]>([]);
+
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [newAgentName, setNewAgentName] = useState('HR Onboarding Assistant');
+  const [newAgentType, setNewAgentType] = useState<'hr' | 'support' | 'sales' | 'legal' | 'finance' | 'custom'>('hr');
+  const [newAgentPlatform, setNewAgentPlatform] = useState<'web' | 'slack' | 'whatsapp' | 'teams'>('web');
+  const [selectedModelId, setSelectedModelId] = useState('google/gemini-2.0-flash');
+
+  const [testPrompt, setTestPrompt] = useState('Write a short welcome message for a new employee joining today.');
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const selectedAgent = useMemo(() => {
+    return props.agents.find((agent) => agent.id === selectedAgentId) || null;
+  }, [props.agents, selectedAgentId]);
+
+  const canRunGatewayTest = Boolean(apiKeySecret && selectedModelId && (selectedAgentId || newAgentName.trim().length > 0));
+
+  const loadCoverage = async () => {
+    setCoverageLoading(true);
+    setCoverageError(null);
+    const res = await api.admin.getCoverageStatus();
+    if (res.success && res.data) {
+      setCoverage(res.data);
+      setCoverageLoading(false);
+      return;
+    }
+    setCoverage(null);
+    setCoverageError(res.error || 'Unable to load coverage status');
+    setCoverageLoading(false);
+  };
+
+  const loadModels = async () => {
+    setModelsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+      const res = await fetch(`${apiUrl}/models`, { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const mapped = (json.data as any[]).map((model) => ({
+            id: model.id,
+            name: model.name || model.id,
+            provider: model.provider || model.id.split('/')[0],
+          }));
+          setModels(mapped);
+        }
+      }
+    } catch {
+      // ignore and fallback below
+    }
+
+    setModels((prev) => (prev.length > 0 ? prev : [
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini', provider: 'openai' },
+      { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'anthropic' },
+      { id: 'google/gemini-2.0-flash', name: 'Gemini Flash', provider: 'google' },
+    ]));
+    setModelsLoading(false);
+  };
+
+  useEffect(() => {
+    loadCoverage();
+    loadModels();
+    if (props.agents.length > 0) {
+      setSelectedAgentId(props.agents[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label}`);
+    }
+  };
+
+  const loadGatewayModels = async (key: string) => {
+    setGatewayModelsLoading(true);
+    setGatewayModelsOk(null);
+    setGatewayModelsError(null);
+    setGatewayModelSample([]);
+    try {
+      const res = await api.gateway.listModels({ apiKey: key });
+      if (!res.success || !res.data) {
+        setGatewayModelsOk(false);
+        setGatewayModelsError(res.error || 'Unable to reach gateway /v1/models');
+        return;
+      }
+
+      const ids = Array.isArray(res.data?.data)
+        ? (res.data.data as any[]).map((item) => item?.id).filter(Boolean)
+        : [];
+
+      setGatewayModelsOk(true);
+      setGatewayModelSample(ids.slice(0, 6));
+    } finally {
+      setGatewayModelsLoading(false);
+    }
+  };
+
+  const explainGatewayError = (message: string) => {
+    const text = message || '';
+    if (text.toLowerCase().includes('provider key missing for openrouter')) {
+      return 'Missing OpenRouter runtime key. Set RASI_OPENROUTER_API_KEY (or OPENROUTER_API_KEY) in synthetic-hr-api/.env and restart the backend.';
+    }
+    if (text.toLowerCase().includes('provider key missing for openai')) {
+      return 'Missing OpenAI runtime key. Set RASI_OPENAI_API_KEY (or OPENAI_API_KEY) in synthetic-hr-api/.env and restart the backend.';
+    }
+    if (text.toLowerCase().includes('provider key missing for anthropic')) {
+      return 'Missing Anthropic runtime key. Set RASI_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) in synthetic-hr-api/.env and restart the backend.';
+    }
+    if (text.toLowerCase().includes('not authenticated')) {
+      return 'Not authenticated. Refresh the page and sign in again.';
+    }
+    if (text.toLowerCase().includes('invalid api key') || text.toLowerCase().includes('api key')) {
+      return 'The SyntheticHR API key may be invalid or revoked. Create a new temporary key and try again.';
+    }
+    return message;
+  };
+
+  const createTempKey = async () => {
+    setIsBusy(true);
+    setTestResult(null);
+    try {
+      const res = await api.apiKeys.create({
+        name: 'Onboarding smoke key',
+        environment: 'development',
+        preset: 'full_access',
+        description: 'Temporary key created by Getting Started wizard.',
+        expiresAt: nowPlusHours(12),
+        rateLimit: 120,
+      });
+
+      if (!res.success || !res.data) {
+        toast.error(res.error || 'Unable to create key');
+        return;
+      }
+
+      setApiKeyId((res.data as any).id);
+      setApiKeySecret((res.data as any).key);
+      toast.success('Temporary key created');
+      await loadGatewayModels((res.data as any).key);
+      setStep('agent');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const revokeTempKey = async () => {
+    if (!apiKeyId) return;
+    setIsBusy(true);
+    try {
+      const res = await api.apiKeys.revoke(apiKeyId);
+      if (!res.success) {
+        toast.error(res.error || 'Unable to revoke key');
+        return;
+      }
+      toast.success('Key revoked');
+      setApiKeyId(null);
+      setApiKeySecret(null);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const ensureAgent = async (): Promise<AIAgent | null> => {
+    if (selectedAgent) return selectedAgent;
+
+    const name = newAgentName.trim();
+    if (!name) {
+      toast.error('Agent name is required');
+      return null;
+    }
+
+    const res = await api.agents.create({
+      name,
+      description: 'Created by Getting Started wizard.',
+      agent_type: newAgentType,
+      platform: newAgentPlatform,
+      model_name: selectedModelId,
+      system_prompt: 'You are an onboarding assistant for a company. Be concise, helpful, and policy-aware.',
+      budget_limit: 0,
+      config: {},
+    });
+
+    if (!res.success || !res.data) {
+      toast.error(res.error || 'Unable to create agent');
+      return null;
+    }
+
+    const created = res.data as any;
+    toast.success('Agent created');
+    await props.onRefresh();
+    setSelectedAgentId(created.id);
+    return created as AIAgent;
+  };
+
+  const runGatewayTest = async () => {
+    if (!apiKeySecret) return;
+    setIsBusy(true);
+    setTestResult(null);
+
+    try {
+      const agent = await ensureAgent();
+      if (!agent) return;
+
+      const res = await api.gateway.chatCompletions({
+        apiKey: apiKeySecret,
+        model: selectedModelId,
+        agentId: agent.id,
+        messages: [
+          { role: 'system', content: 'You are SyntheticHR. Respond as a helpful HR assistant.' },
+          { role: 'user', content: testPrompt },
+        ],
+        temperature: 0.3,
+      });
+
+      if (!res.success || !res.data) {
+        toast.error(explainGatewayError(res.error || 'Gateway test failed'));
+        return;
+      }
+
+      const content = res.data?.choices?.[0]?.message?.content || '';
+      setTestResult(content || '(No text returned)');
+      toast.success('Gateway test succeeded');
+      setStep('verify');
+      await loadCoverage();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const finishSetup = async () => {
+    setIsBusy(true);
+    try {
+      if (apiKeyId) {
+        await api.apiKeys.revoke(apiKeyId);
+      }
+      localStorage.setItem(`synthetic_hr_onboarding_completed:${props.storageScope}`, new Date().toISOString());
+      toast.success('Setup complete');
+      props.onNavigate('overview');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const StepPill = (p: { id: StepId; label: string; icon: any; done?: boolean }) => {
+    const active = step === p.id;
+    return (
+      <button
+        type="button"
+        onClick={() => setStep(p.id)}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
+          active
+            ? 'bg-cyan-500/10 border-cyan-500/30 text-white'
+            : 'bg-slate-900/20 border-slate-700 text-slate-300 hover:bg-slate-800/40'
+        }`}
+        aria-current={active ? 'step' : undefined}
+      >
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+          active ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-300'
+        }`}>
+          <p.icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">{p.label}</span>
+            {p.done ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : null}
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  const hasGatewayTraffic = Boolean(coverage?.telemetry?.gatewayObserved);
+  const hasAnyAgent = (coverage?.agents?.total ?? props.agents.length) > 0;
+  const hasAnyKey = (coverage?.apiKeys?.total ?? 0) > 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Getting Started</h1>
+          <p className="text-slate-400 mt-1 max-w-2xl">
+            Connect the runtime path, generate a temporary key, send one tracked request, and verify coverage.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => props.onNavigate('coverage')}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm border border-slate-700"
+          >
+            Open Coverage
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem(`synthetic_hr_onboarding_dismissed:${props.storageScope}`, new Date().toISOString());
+              props.onNavigate('overview');
+            }}
+            className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-4 space-y-3">
+          <StepPill id="workspace" label="Workspace status" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
+          <StepPill id="key" label="Create temporary key" icon={Key} done={Boolean(apiKeySecret) || hasAnyKey} />
+          <StepPill id="agent" label="Create or select agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
+          <StepPill id="test" label="Send test request" icon={Rocket} done={Boolean(testResult)} />
+          <StepPill id="verify" label="Verify coverage" icon={CheckCircle2} done={hasGatewayTraffic} />
+        </div>
+
+        <div className="lg:col-span-8">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/30 p-6">
+            {step === 'workspace' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">Workspace status</h2>
+                  <button
+                    type="button"
+                    onClick={loadCoverage}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                    disabled={coverageLoading}
+                  >
+                    {coverageLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                </div>
+
+                {coverageLoading ? (
+                  <div className="flex items-center gap-3 text-slate-300">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading coverage status…
+                  </div>
+                ) : coverageError ? (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
+                    {coverageError}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                      <div className="text-xs text-slate-400">Agents</div>
+                      <div className="text-2xl font-bold text-white">{coverage?.agents?.total ?? props.agents.length}</div>
+                      <div className="text-xs text-slate-400 mt-1">Active: {coverage?.agents?.active ?? 0}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                      <div className="text-xs text-slate-400">Gateway observed</div>
+                      <div className={`text-2xl font-bold ${hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}`}>
+                        {hasGatewayTraffic ? 'Yes' : 'No'}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1">Score: {coverage?.telemetry?.coverageScore ?? 0}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                      <div className="text-xs text-slate-400">API keys</div>
+                      <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.total ?? 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('key')}
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'key' && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-white">Create a temporary key</h2>
+                <p className="text-slate-400">
+                  This wizard creates a short-lived key to send one tracked request through the gateway. It will be revoked at the end.
+                </p>
+
+                {apiKeySecret ? (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-slate-400">Temporary key</div>
+                        <div className="font-mono text-slate-100">{maskKey(apiKeySecret)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(apiKeySecret, 'Key')}
+                        className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm border border-slate-700 flex items-center gap-2"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStep('agent')}
+                        className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
+                      >
+                        Continue
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadGatewayModels(apiKeySecret)}
+                        disabled={gatewayModelsLoading}
+                        className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                      >
+                        {gatewayModelsLoading ? 'Checking gateway…' : 'Check /v1/models'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={revokeTempKey}
+                        disabled={isBusy}
+                        className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700 flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Revoke
+                      </button>
+                    </div>
+
+                    {gatewayModelsOk !== null ? (
+                      <div className={`rounded-xl border p-3 text-sm ${
+                        gatewayModelsOk
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                          : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                      }`}>
+                        {gatewayModelsOk ? (
+                          <div className="space-y-1">
+                            <div className="font-semibold">Gateway reachable</div>
+                            <div className="text-emerald-100/90">
+                              Sample models: <span className="font-mono">{gatewayModelSample.join(', ') || 'n/a'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="font-semibold">Gateway check failed</div>
+                            <div className="text-rose-100/90">{explainGatewayError(gatewayModelsError || 'Unable to reach /v1/models')}</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={createTempKey}
+                    disabled={isBusy}
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
+                  >
+                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                    Create temporary key
+                  </button>
+                )}
+              </div>
+            )}
+
+            {step === 'agent' && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-white">Create or select an agent</h2>
+                <p className="text-slate-400">Associate the test request with an agent so costs and coverage link correctly.</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
+                    <div className="text-sm font-semibold text-white">Select existing</div>
+                    <select
+                      id="getting_started_agent_select"
+                      name="getting_started_agent_select"
+                      value={selectedAgentId}
+                      onChange={(event) => setSelectedAgentId(event.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    >
+                      <option value="">Create a new agent</option>
+                      {props.agents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>{agent.name}</option>
+                      ))}
+                    </select>
+                    {selectedAgent ? (
+                      <div className="text-xs text-slate-400">
+                        Using: <span className="text-slate-200">{selectedAgent.name}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
+                    <div className="text-sm font-semibold text-white">New agent details</div>
+                    <input
+                      id="getting_started_agent_name"
+                      name="getting_started_agent_name"
+                      value={newAgentName}
+                      onChange={(event) => setNewAgentName(event.target.value)}
+                      placeholder="Agent name"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      disabled={Boolean(selectedAgentId)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        id="getting_started_agent_type"
+                        name="getting_started_agent_type"
+                        value={newAgentType}
+                        onChange={(event) => setNewAgentType(event.target.value as any)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                        disabled={Boolean(selectedAgentId)}
+                      >
+                        <option value="hr">HR</option>
+                        <option value="support">Support</option>
+                        <option value="sales">Sales</option>
+                        <option value="legal">Legal</option>
+                        <option value="finance">Finance</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                      <select
+                        id="getting_started_agent_platform"
+                        name="getting_started_agent_platform"
+                        value={newAgentPlatform}
+                        onChange={(event) => setNewAgentPlatform(event.target.value as any)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                        disabled={Boolean(selectedAgentId)}
+                      >
+                        <option value="web">Web</option>
+                        <option value="slack">Slack</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="teams">Teams</option>
+                      </select>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Model is chosen below and will be attached to the agent record.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-white">Model</div>
+                    <button
+                      type="button"
+                      onClick={loadModels}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs border border-slate-700"
+                      disabled={modelsLoading}
+                    >
+                      {modelsLoading ? 'Loading…' : 'Reload'}
+                    </button>
+                  </div>
+                  <select
+                    id="getting_started_model"
+                    name="getting_started_model"
+                    value={selectedModelId}
+                    onChange={(event) => setSelectedModelId(event.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    disabled={modelsLoading}
+                  >
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {(model.provider ? `${model.provider} · ` : '')}{model.name || model.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('test')}
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
+                    disabled={!apiKeySecret}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'test' && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-white">Send a test request</h2>
+                <p className="text-slate-400">
+                  This sends a single tracked request via `POST /v1/chat/completions` using the temporary key. It should populate Costs, Usage, and Coverage.
+                </p>
+
+                <textarea
+                  id="getting_started_test_prompt"
+                  name="getting_started_test_prompt"
+                  value={testPrompt}
+                  onChange={(event) => setTestPrompt(event.target.value)}
+                  className="w-full min-h-[140px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={runGatewayTest}
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
+                    disabled={isBusy || !canRunGatewayTest}
+                  >
+                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                    Run gateway test
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep('verify')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                  >
+                    Skip test
+                  </button>
+                </div>
+
+                {testResult ? (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100 whitespace-pre-wrap">
+                    {testResult}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {step === 'verify' && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-white">Verify coverage</h2>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-white">Status</div>
+                    <button
+                      type="button"
+                      onClick={loadCoverage}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs border border-slate-700"
+                      disabled={coverageLoading}
+                    >
+                      {coverageLoading ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Gateway observed: <span className={hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}>{hasGatewayTraffic ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Last tracked: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedAt ? new Date(coverage.telemetry.lastTrackedAt).toLocaleString() : 'Not yet'}</span>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Last model: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedModel || 'Unknown'}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={finishSetup}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm flex items-center gap-2"
+                    disabled={isBusy}
+                  >
+                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Finish setup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onNavigate('costs')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                  >
+                    Open Costs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onNavigate('usage')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                  >
+                    Open Usage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onNavigate('fleet')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                  >
+                    Open Fleet
+                  </button>
+                </div>
+
+                {apiKeySecret ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <Key className="w-4 h-4" />
+                      Temporary key still active
+                    </div>
+                    <p className="text-sm text-amber-100/90 mt-1">
+                      It will expire automatically, but you can revoke it now.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={revokeTempKey}
+                      className="mt-3 px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                      disabled={isBusy}
+                    >
+                      Revoke key
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

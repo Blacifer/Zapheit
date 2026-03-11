@@ -1,0 +1,25 @@
+image:
+  repository: synthetic-hr-runtime
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+env:
+  SYNTHETICHR_CONTROL_PLANE_URL: "https://api.your-synthetichr.com"
+  SYNTHETICHR_GATEWAY_URL: ""
+  SYNTHETICHR_RUNTIME_ID: ""
+  SYNTHETICHR_ENROLLMENT_TOKEN: ""
+  SYNTHETICHR_RUNTIME_SECRET: ""
+  SYNTHETICHR_RUNTIME_SECRET_FILE: "/data/runtime_secret"
+  SYNTHETICHR_API_KEY: ""
+  SYNTHETICHR_POLL_INTERVAL_MS: "2000"
+  SYNTHETICHR_HEARTBEAT_INTERVAL_MS: "15000"
+  SYNTHETICHR_MODEL: "openai/gpt-4o-mini"
+  SYNTHETICHR_STREAM_MODE: "poll"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
