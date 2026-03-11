@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Scale, Settings, X, Play, Link2,
@@ -188,6 +188,17 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
   const [role, setRole] = useState<string>('super_admin');
   const [coverageStatus, setCoverageStatus] = useState<CoverageNotificationPayload | null>(null);
 
+  const hasUserNavigatedRef = useRef(false);
+  const hasAutoRedirectedRef = useRef(false);
+
+  const navigateTo = useCallback((page: string, options?: { userInitiated?: boolean }) => {
+    const userInitiated = options?.userInitiated ?? true;
+    if (userInitiated) {
+      hasUserNavigatedRef.current = true;
+    }
+    setCurrentPage(page);
+  }, []);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -363,10 +374,13 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
   useEffect(() => {
     if (!mounted) return;
     if (loading) return;
-    if (needsOnboarding && currentPage === 'overview') {
-      setCurrentPage('getting-started');
+    // Auto-route to onboarding only once on first load.
+    // Never override explicit user navigation (e.g. clicking "Overview").
+    if (!hasAutoRedirectedRef.current && !hasUserNavigatedRef.current && needsOnboarding && currentPage === 'overview') {
+      hasAutoRedirectedRef.current = true;
+      navigateTo('getting-started', { userInitiated: false });
     }
-  }, [mounted, loading, needsOnboarding, currentPage]);
+  }, [mounted, loading, needsOnboarding, currentPage, navigateTo]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -394,7 +408,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
         timestamp: notification.timestamp,
       }));
     }
-    setCurrentPage('coverage');
+    navigateTo('coverage', { userInitiated: false });
     setShowNotificationPanel(false);
   };
 
@@ -668,17 +682,17 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
               { id: 'limits', icon: Scale, label: 'Limits' },
               { id: 'coverage', icon: Eye, label: 'Coverage' },
               { id: 'settings', icon: Settings, label: 'Settings' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setCurrentPage(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentPage === item.id
-                  ? 'bg-cyan-500/20 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                  }`}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
+	            ].map((item) => (
+	              <button
+	                key={item.id}
+	                onClick={() => navigateTo(item.id)}
+	                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentPage === item.id
+	                  ? 'bg-cyan-500/20 text-cyan-400'
+	                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+	                  }`}
+	                aria-current={currentPage === item.id ? 'page' : undefined}
+	                aria-label={item.label}
+	              >
                 <item.icon className="w-5 h-5" aria-hidden="true" />
                 <span className="flex-1 min-w-0 text-left">{item.label}</span>
                 {item.badge ? (
@@ -840,50 +854,50 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                 'model-comparison', 'webhooks', 'batch',
                 'fine-tuning', 'caching', 'pricing', 'legal'
               ].includes(currentPage) && (
-                  <div className="mb-6">
-                    <button
-                      onClick={() => setCurrentPage('settings')}
-                      className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Back to Settings
-                    </button>
-                  </div>
-                )}
+	                  <div className="mb-6">
+	                    <button
+	                      onClick={() => navigateTo('settings')}
+	                      className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+	                    >
+	                      <ChevronLeft className="w-4 h-4" />
+	                      Back to Settings
+	                    </button>
+	                  </div>
+	                )}
               <ErrorBoundary variant="local" fallbackMessage={`Failed to load the ${currentPage} page`}>
-                {currentPage === 'getting-started' && (
-                  <GettingStartedPage
-                    agents={agents}
-                    onNavigate={(page) => setCurrentPage(page)}
-                    onRefresh={refreshData}
-                    storageScope={onboardingStorageScope}
-                  />
-                )}
-                {currentPage === 'connect' && (
-                  <ConnectAgentPage
-                    agents={agents}
-                    onNavigate={(page) => setCurrentPage(page)}
-                    onRefresh={refreshData}
-                  />
-                )}
-                {currentPage === 'overview' && (
-                  <DashboardOverview
-                    agents={agents}
-                    incidents={incidents}
-                    costData={costData}
-                    onAddAgent={() => setCurrentPage('fleet')}
-                    onNavigate={(page) => setCurrentPage(page)}
-                  />
-                )}
+	                {currentPage === 'getting-started' && (
+	                  <GettingStartedPage
+	                    agents={agents}
+	                    onNavigate={(page) => navigateTo(page)}
+	                    onRefresh={refreshData}
+	                    storageScope={onboardingStorageScope}
+	                  />
+	                )}
+	                {currentPage === 'connect' && (
+	                  <ConnectAgentPage
+	                    agents={agents}
+	                    onNavigate={(page) => navigateTo(page)}
+	                    onRefresh={refreshData}
+	                  />
+	                )}
+	                {currentPage === 'overview' && (
+	                  <DashboardOverview
+	                    agents={agents}
+	                    incidents={incidents}
+	                    costData={costData}
+	                    onAddAgent={() => navigateTo('fleet')}
+	                    onNavigate={(page) => navigateTo(page)}
+	                  />
+	                )}
                 {currentPage === 'fleet' && (
                   <FleetPage agents={agents} setAgents={saveAgents} />
                 )}
-                {currentPage === 'incidents' && (
-                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={agents} onNavigate={setCurrentPage} />
-                )}
-                {currentPage === 'conversations' && (
-                  <ConversationsPage agents={agents} onNavigate={setCurrentPage} />
-                )}
+	                {currentPage === 'incidents' && (
+	                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={agents} onNavigate={navigateTo} />
+	                )}
+	                {currentPage === 'conversations' && (
+	                  <ConversationsPage agents={agents} onNavigate={navigateTo} />
+	                )}
                 {currentPage === 'integrations' && <IntegrationsPage />}
                 {currentPage === 'templates' && (
                   <AgentTemplatesPage onDeploy={async (template) => {
@@ -923,23 +937,23 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                           };
                           setAgents(prev => [...prev, newAgent]);
                           addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
-                          setCurrentPage('fleet');
-                        }
-                      } else {
-                        throw new Error('Agent creation rejected by server');
-                      }
+	                          navigateTo('fleet', { userInitiated: false });
+	                        }
+	                      } else {
+	                        throw new Error('Agent creation rejected by server');
+	                      }
                     } catch (err) {
                       console.error("Template deploy error:", err);
                       setError("Failed to add agent from template.");
                     }
                   }} />
                 )}
-                {currentPage === 'costs' && (
-                  <CostsPage costData={costData} setCostData={saveCostData} agents={agents} incidents={incidents} onNavigate={setCurrentPage} />
-                )}
+	                {currentPage === 'costs' && (
+	                  <CostsPage costData={costData} setCostData={saveCostData} agents={agents} incidents={incidents} onNavigate={navigateTo} />
+	                )}
                 {currentPage === 'persona' && <PersonaPage agents={agents} />}
                 {currentPage === 'shadow' && <ShadowModePage />}
-                {currentPage === 'blackbox' && <BlackBoxPage incidents={incidents} onNavigate={setCurrentPage} />}
+	                {currentPage === 'blackbox' && <BlackBoxPage incidents={incidents} onNavigate={navigateTo} />}
                 {currentPage === 'team' && <TeamPage />}
                 {currentPage === 'keys' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />}
                 {currentPage === 'usage' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="usage" />}
@@ -951,13 +965,13 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                 {currentPage === 'batch' && <BatchProcessingPage />}
                 {currentPage === 'fine-tuning' && <ModelFineTuningPage />}
                 {currentPage === 'caching' && <CachingPage />}
-                {currentPage === 'pricing' && <PricingPage onNavigate={setCurrentPage} />}
-                {currentPage === 'legal' && <SafeHarborPage onNavigate={setCurrentPage} userRole={role} />}
-                {currentPage === 'settings' && <SettingsPage onNavigate={setCurrentPage} isDemoMode={!!isDemoMode} />}
-              </ErrorBoundary>
-            </Suspense>
-          )}
-        </main>
+	                {currentPage === 'pricing' && <PricingPage onNavigate={navigateTo} />}
+	                {currentPage === 'legal' && <SafeHarborPage onNavigate={navigateTo} userRole={role} />}
+	                {currentPage === 'settings' && <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />}
+	              </ErrorBoundary>
+	            </Suspense>
+	          )}
+	        </main>
       </div>
     </div>
   );
