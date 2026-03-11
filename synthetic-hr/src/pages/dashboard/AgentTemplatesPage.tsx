@@ -135,7 +135,6 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   };
 
   // Monthly cost estimator
-  const [monthlyTokens, setMonthlyTokens] = useState(500_000); // default 500K tokens/month
   const USD_TO_INR = 93;
 
   const calcMonthlyCost = (model: LiveModel | null, tokens: number) => {
@@ -149,15 +148,8 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     return { usd: costUSD, inr: costINR };
   };
 
-  const monthlyCost = calcMonthlyCost(selectedModel, monthlyTokens);
-
-  const TOKEN_PRESETS = [
-    { label: '100K', value: 100_000 },
-    { label: '500K', value: 500_000 },
-    { label: '1M', value: 1_000_000 },
-    { label: '5M', value: 5_000_000 },
-    { label: '10M', value: 10_000_000 },
-  ];
+  const estimatedMonthlyTokens = estimatedTokens * 1_000_000;
+  const monthlyCost = calcMonthlyCost(selectedModel, estimatedMonthlyTokens);
 
   const templates: AgentTemplate[] = [
     {

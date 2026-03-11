@@ -335,6 +335,14 @@ export default function ApiKeysPage({
     toast.success('Copied');
   };
 
+  const handleCopyKey = async (key: ApiKey) => {
+    if (key.key) {
+      await copyToClipboard(key.key);
+      return;
+    }
+    toast.info('Full secret is shown only once at creation.');
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1480px]">
       <div className="min-w-0 space-y-6">
@@ -464,7 +472,12 @@ export default function ApiKeysPage({
                           <td className="px-4 py-5">
                             <div className="flex items-center gap-2">
                               <code className="rounded-xl bg-slate-950/80 px-3 py-2 font-mono text-xs text-slate-300">{key.masked_key || key.key || 'Hidden'}</code>
-                              <button type="button" onClick={() => void copyToClipboard(key.masked_key || key.key || '')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-900 hover:text-white">
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyKey(key)}
+                                className={`rounded-lg p-2 transition ${key.key ? 'text-slate-500 hover:bg-slate-900 hover:text-white' : 'text-slate-600 hover:bg-slate-900/60 hover:text-slate-400'}`}
+                                title={key.key ? 'Copy full secret' : 'Full secret shown once at creation'}
+                              >
                                 <Copy className="h-4 w-4" />
                               </button>
                             </div>

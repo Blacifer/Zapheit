@@ -33,16 +33,18 @@ interface CostsPageProps {
 }
 
 // Custom tooltip for the spending chart
-const SpendingTooltip = ({ active, payload, label }: any) => {
+const SpendingTooltip = ({ active, payload, label, mode }: any) => {
   if (!active || !payload) return null;
-  const cost = payload[0]?.value ?? 0;
+  const value = payload[0]?.value ?? 0;
+  const formatValue = () => {
+    if (mode === 'cost') return `₹${Number(value).toFixed(2)}`;
+    if (mode === 'tokens') return `${Number(value).toLocaleString()} tokens`;
+    return `${Number(value).toLocaleString()} requests`;
+  };
   return (
     <div className="bg-slate-900/95 border border-slate-700/60 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-sm">
       <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className="text-lg font-bold text-emerald-400">₹{cost.toFixed(2)}</p>
-      {payload[1] && (
-        <p className="text-xs text-blue-400 mt-0.5">{payload[1].value.toLocaleString()} tokens</p>
-      )}
+      <p className="text-lg font-bold text-emerald-400">{formatValue()}</p>
     </div>
   );
 };
@@ -337,7 +339,7 @@ export default function CostsPage({ costData, setCostData, agents, incidents, on
                 tickFormatter={(v) => chartMode === 'cost' ? `₹${v}` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v)}
                 domain={totalCost === 0 && chartMode === 'cost' ? [0, 10] : undefined}
               />
-              <Tooltip content={<SpendingTooltip />} />
+              <Tooltip content={<SpendingTooltip mode={chartMode} />} />
               <Area
                 type="monotone"
                 dataKey={chartKey}
