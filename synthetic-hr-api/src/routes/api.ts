@@ -595,10 +595,13 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
       return errorResponse(res, new Error('Agent not found'), 404);
     }
     const agent = agentData[0];
+    if (!agent?.model_name) {
+      return errorResponse(res, new Error('Agent model_name is missing'), 400);
+    }
 
     // Build the OpenRouter call
     const key = process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '';
-    if (!key) throw new Error('OpenRouter API key missing');
+    if (!key) return errorResponse(res, new Error('OpenRouter API key missing'), 400);
 
     const modelName = agent.model_name.includes('/') ? agent.model_name : `openai/${agent.model_name}`;
 
@@ -622,7 +625,10 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
     if (!orRes.ok) {
       const errBody = await orRes.text();
       logger.error('Test Model request failed', { status: orRes.status, errBody });
-      return errorResponse(res, new Error(`Upstream LLM error: ${orRes.statusText}`), 500);
+      const message = /payment required/i.test(errBody) || orRes.status === 402
+        ? 'Upstream LLM error: Payment Required'
+        : `Upstream LLM error: ${orRes.statusText}`;
+      return errorResponse(res, new Error(message), orRes.status || 502);
     }
 
     const orData = await orRes.json() as any;
