@@ -1,123 +1,23 @@
-# 📚 DOCUMENTATION INDEX - CRITICAL BLOCKERS IMPLEMENTATION
+# Documentation Index
 
-**Generated:** March 5, 2026  
-**Status:** ✅ **ALL 6 CRITICAL BLOCKERS FIXED**  
-**Total Documentation:** 2,500+ lines across 11 comprehensive guides
+Primary docs:
 
----
+- Root overview: `./README.md`
+- Org rollout & governance: `./ORGANIZATION_AGENT_ROLLOUT.md`
+- Support/Sales/IT “internal connectors”: `./INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md`
+- Ops guide: `./OPERATIONS_GUIDE.md`
+- Deployment quick reference: `./DEPLOYMENT_QUICK_REFERENCE.md`
+- Incident response: `./INCIDENT_RESPONSE_PLAYBOOK.md`
+- SLOs: `./SLO_DEFINITIONS.md`
 
-## Quick Start (Read These First)
+Product/service docs:
 
-### 1. **IMMEDIATE_ACTION_REPORT.md** (Executive Summary)
-- What was fixed in 7.5 hours
-- Build status and verification
-- Next steps (database deployment)
-- Risk assessment
-- **Read Time:** 5 minutes
-- **Who:** Tech leads, managers
+- Frontend: `./synthetic-hr/README.md`
+- Database deployment: `./synthetic-hr-database/DEPLOYMENT_GUIDE.md`
 
-### 2. **BLOCKERS_FIXED_CHECKLIST.md** (Quick Reference)
-- All 6 blockers at a glance
-- How to verify each fix
-- Environment setup commands
-- Build verification
-- **Read Time:** 10 minutes
-- **Who:** Developers, DevOps
+Archive:
 
-### 3. **BLOCKERS_FIXED_SUMMARY.md** (Detailed Explanation)
-- Before/after code comparisons
-- File changes documented
-- Why each fix matters
-- Timeline and impact analysis
-- **Read Time:** 20 minutes
-- **Who:** Code reviewers, architects
-
-### 4. **ORGANIZATION_AGENT_ROLLOUT.md** (How To Use Agents Org-Wide)
-- Recommended roles (Viewer/Manager/Admin)
-- Playbooks → Jobs & Approvals → Runtime execution flow
-- Governance defaults and metrics to track value
-- **Read Time:** 5 minutes
-- **Who:** HR ops leads, managers, implementers
-
-### 5. **INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md** (Support/Sales/IT Connectors)
-- Internal “connector actions” that create tickets/leads/access requests inside the app
-- Required DB migration + API endpoints
-- Runtime execution path and what gets audited
-- **Read Time:** 5 minutes
-- **Who:** Implementers, ops leads
-
----
-
-## Implementation Guides (How-To)
-
-### 4. **DEPLOYMENT_GUIDE.md** (Database Schema)
-- 3 deployment options (Supabase, psql, Docker)
-- Step-by-step instructions
-- Verification procedures
-- Rollback procedures
-- **When:** Deploy database schema (next 24 hours)
-- **Time:** 2-3 minutes
-- **Who:** Database administrators, DevOps
-
-### 5. **OBSERVABILITY_SETUP.md** (Tracing & Metrics)
-- Setup for 5 different platforms:
-  - Jaeger (local development)
-  - Datadog (production)
-  - New Relic (alternative production)
-  - Grafana Stack (self-hosted)
-  - Console (debugging)
-- Configuration examples
-- Troubleshooting guide
-- Performance tuning tips
-- **When:** Setup observability (next 1 week)
-- **Time:** 5 minutes (local) to 30 minutes (production)
-- **Who:** DevOps, SRE, monitoring
-
----
-
-## Existing Documentation (Previously Created)
-
-### 6. **CTO_SCORECARD.md** (Visual Summary)
-- Component grades (A- to C+)
-- What's working vs. broken
-- Before/after comparison
-- Go/no-go decision criteria
-- **Read Time:** 10 minutes
-- **Who:** Leadership, stakeholders
-
-### 7. **CTO_TECHNICAL_REVIEW.md** (Full Analysis)
-- Comprehensive technical assessment
-- 6 blockers explained in detail
-- Risk assessment and mitigation
-- 2-week timeline to production
-- Operational readiness checklist
-- **Read Time:** 30 minutes
-- **Who:** CTO, architects, senior devs
-
-### 8. **CTO_EXECUTIVE_SUMMARY.md** (Leadership Brief)
-- Bottom-line assessment
-- Business impact analysis
-- Resource requirements and costs
-- Production Go/No-Go criteria
-- **Read Time:** 15 minutes
-- **Who:** Leadership, stakeholders, board
-
-### 9. **CRITICAL_BLOCKERS_ACTION_PLAN.md** (Implementation Plan)
-- Step-by-step fixes for each blocker
-- Code examples with before/after
-- SQL migration scripts
-- Verification checklist
-- Parallel work strategy
-- **Read Time:** 25 minutes
-- **Who:** Development teams, tech leads
-
----
-
-## Code Changes (What Was Modified)
-
-### Configuration Files
-```
-✅ synthetic-hr-api/.env                     (Updated)
+- Older planning/status docs: `./docs/archive/2026-03-12/`
 ✅ synthetic-hr-api/.env.local               (New)
 ✅ synthetic-hr-api/.env.test                (New)
 ✅ synthetic-hr-api/.env.staging             (New)
