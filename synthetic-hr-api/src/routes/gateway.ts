@@ -236,7 +236,8 @@ const fetchOpenRouterModels = async (): Promise<GatewayModel[]> => {
 
 const routeViaOpenRouter = async (
   model: string,
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: string }>,
+  options: { temperature?: number; maxTokens?: number } = {}
 ): Promise<{ content: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number; latency: number }> => {
   const key = getProviderKey('openrouter');
   if (!key) {
@@ -257,6 +258,8 @@ const routeViaOpenRouter = async (
       model,
       messages,
       stream: false,
+      ...(typeof options.temperature === 'number' ? { temperature: options.temperature } : {}),
+      ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
     }),
   });
 
@@ -1116,7 +1119,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
   if (idem.handled) return;
 
   try {
-    const { model, messages, stream } = req.body ?? {};
+    const { model, messages, stream, temperature, max_tokens } = req.body ?? {};
 
     if (!model || typeof model !== 'string') {
       return res.status(400).json({ error: { message: 'model is required', type: 'invalid_request_error' } });
@@ -1151,6 +1154,11 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
 
+    const chatOptions = {
+      temperature: typeof temperature === 'number' ? temperature : undefined,
+      maxTokens: typeof max_tokens === 'number' ? max_tokens : undefined,
+    };
+
     let completion: {
       content: string;
       inputTokens: number;
@@ -1161,7 +1169,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     };
 
     if (modelConfig.provider === 'openai') {
-      const aiResponse = await new OpenAIService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel);
+      const aiResponse = await new OpenAIService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
       completion = {
         content: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1171,7 +1179,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else if (modelConfig.provider === 'anthropic') {
-      const aiResponse = await new AnthropicService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel);
+      const aiResponse = await new AnthropicService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
       completion = {
         content: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1181,7 +1189,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else {
-      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, normalizedMessages);
+      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, normalizedMessages, chatOptions);
       completion = {
         content: aiResponse.content,
         inputTokens: aiResponse.inputTokens,
@@ -1269,7 +1277,7 @@ router.post('/completions', async (req: Request, res: Response) => {
   if (idem.handled) return;
 
   try {
-    const { model, prompt, max_tokens, stream } = req.body ?? {};
+    const { model, prompt, max_tokens, stream, temperature } = req.body ?? {};
 
     if (!model || typeof model !== 'string') {
       return res.status(400).json({ error: { message: 'model is required', type: 'invalid_request_error' } });
@@ -1292,6 +1300,10 @@ router.post('/completions', async (req: Request, res: Response) => {
     }
 
     const messages = [{ role: 'user', content: promptText }];
+    const chatOptions = {
+      temperature: typeof temperature === 'number' ? temperature : undefined,
+      maxTokens: typeof max_tokens === 'number' ? max_tokens : undefined,
+    };
 
     let completion: {
       text: string;
@@ -1303,7 +1315,7 @@ router.post('/completions', async (req: Request, res: Response) => {
     };
 
     if (modelConfig.provider === 'openai') {
-      const aiResponse = await new OpenAIService(providerKey).chat(messages, modelConfig.upstreamModel);
+      const aiResponse = await new OpenAIService(providerKey).chat(messages, modelConfig.upstreamModel, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1313,7 +1325,7 @@ router.post('/completions', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else if (modelConfig.provider === 'anthropic') {
-      const aiResponse = await new AnthropicService(providerKey).chat(messages, modelConfig.upstreamModel);
+      const aiResponse = await new AnthropicService(providerKey).chat(messages, modelConfig.upstreamModel, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1323,7 +1335,7 @@ router.post('/completions', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else {
-      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, messages);
+      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, messages, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.inputTokens,
@@ -1543,7 +1555,7 @@ router.post('/responses', async (req: Request, res: Response) => {
   if (idem.handled) return;
 
   try {
-    const { model, input, stream } = req.body ?? {};
+    const { model, input, stream, temperature, max_tokens } = req.body ?? {};
 
     if (!model || typeof model !== 'string') {
       return res.status(400).json({ error: { message: 'model is required', type: 'invalid_request_error' } });
@@ -1586,6 +1598,11 @@ router.post('/responses', async (req: Request, res: Response) => {
       return res.status(400).json({ error: { message: 'input must be a string or message array', type: 'invalid_request_error' } });
     }
 
+    const chatOptions = {
+      temperature: typeof temperature === 'number' ? temperature : undefined,
+      maxTokens: typeof max_tokens === 'number' ? max_tokens : undefined,
+    };
+
     let completion: {
       text: string;
       inputTokens: number;
@@ -1596,7 +1613,7 @@ router.post('/responses', async (req: Request, res: Response) => {
     };
 
     if (modelConfig.provider === 'openai') {
-      const aiResponse = await new OpenAIService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel);
+      const aiResponse = await new OpenAIService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1606,7 +1623,7 @@ router.post('/responses', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else if (modelConfig.provider === 'anthropic') {
-      const aiResponse = await new AnthropicService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel);
+      const aiResponse = await new AnthropicService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.tokenCount.input,
@@ -1616,7 +1633,7 @@ router.post('/responses', async (req: Request, res: Response) => {
         latency: aiResponse.latency,
       };
     } else {
-      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, normalizedMessages);
+      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, normalizedMessages, chatOptions);
       completion = {
         text: aiResponse.content,
         inputTokens: aiResponse.inputTokens,

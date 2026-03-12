@@ -95,6 +95,14 @@ export class AnthropicService {
     this.client = new Anthropic({ apiKey });
   }
 
+  private static extractTextBlocks(content: any): string {
+    if (!Array.isArray(content)) return '';
+    return content
+      .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+      .map((block) => block.text)
+      .join('');
+  }
+
   async chat(
     messages: { role: string; content: string }[],
     model: string = 'claude-3-sonnet',
@@ -124,7 +132,8 @@ export class AnthropicService {
 
     // Calculate tokens (Anthropic doesn't provide exact counts in response)
     const inputTokens = Math.ceil(messages.reduce((acc, m) => acc + m.content.length / 4, 0));
-    const outputTokens = Math.ceil(response.content[0].type === 'text' ? response.content[0].text.length / 4 : 0);
+    const outputText = AnthropicService.extractTextBlocks(response?.content);
+    const outputTokens = Math.ceil(outputText.length / 4);
     const totalTokens = inputTokens + outputTokens;
 
     // Calculate cost
@@ -132,10 +141,10 @@ export class AnthropicService {
     const costUSD = ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
 
     return {
-      content: response.content[0].type === 'text' ? response.content[0].text : '',
+      content: outputText,
       tokenCount: { input: inputTokens, output: outputTokens, total: totalTokens },
       costUSD,
-      model: response.model,
+      model: response?.model || model,
       latency,
     };
   }
