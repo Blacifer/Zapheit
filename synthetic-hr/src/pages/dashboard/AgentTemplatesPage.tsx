@@ -37,7 +37,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   const WORKLOAD_PRESETS = useMemo(() => [1_000_000, 10_000_000, 100_000_000], []);
   const MIN_MONTHLY_TOKENS = 1_000_000;
   const MAX_MONTHLY_TOKENS = 100_000_000;
-  const [monthlyTokens, setMonthlyTokens] = useState<number>(10_000_000);
+  const [monthlyTokensMillions, setMonthlyTokensMillions] = useState<number>(10);
 
   // Fetch live model list on mount
   useEffect(() => {
@@ -167,6 +167,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     return { status: 'priced', usd: costUSD, inr: costINR };
   };
 
+  const monthlyTokens = clampMonthlyTokens(monthlyTokensMillions * 1_000_000);
   const monthlyCost = calcMonthlyCost(selectedModel, monthlyTokens);
   const templates = AGENT_TEMPLATES;
   const industries = [...AGENT_TEMPLATE_INDUSTRIES];
@@ -557,116 +558,154 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                     </div>
 
 	                    {/* Footer Configuration Metrics */}
-	                    <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
-	                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
-	                        <div className="flex items-center justify-between gap-3">
-	                          <h4 className="text-white font-semibold">Workload Parameters</h4>
-	                          <span className="text-xs font-semibold text-slate-400">Selected: {formatTokensShort(monthlyTokens)}</span>
+	                    <div className="mt-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/40 to-slate-800/50 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]">
+	                      <div className="flex items-center justify-between mb-4">
+	                        <div>
+	                          <h4 className="text-white font-semibold">Workload</h4>
+	                          <p className="text-xs text-slate-500 mt-0.5">Adjust volume to estimate monthly spend</p>
 	                        </div>
-
-	                        <div className="grid grid-cols-1 sm:grid-cols-[auto,1fr,auto] items-center gap-3 w-full">
-	                          <span className="text-slate-400 text-sm whitespace-nowrap">Monthly tokens</span>
-
-	                          <div className="flex flex-col gap-1 min-w-0">
-	                            <div className="flex flex-wrap items-center gap-2">
-	                              {WORKLOAD_PRESETS.map((preset) => {
-	                                const active = monthlyTokens === preset;
-	                                return (
-	                                  <button
-	                                    key={preset}
-	                                    type="button"
-	                                    onClick={() => setMonthlyTokens(preset)}
-	                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-	                                      active
-	                                        ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
-	                                        : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-600'
-	                                    }`}
-	                                  >
-	                                    {formatTokensShort(preset).toUpperCase()}
-	                                  </button>
-	                                );
-	                              })}
-	                              <span className="text-[11px] text-slate-500 ml-1">
-	                                Min {formatTokensShort(MIN_MONTHLY_TOKENS).toUpperCase()} · Max {formatTokensShort(MAX_MONTHLY_TOKENS).toUpperCase()}
-	                              </span>
-	                            </div>
-	                            <input
-	                              type="range"
-	                              min={MIN_MONTHLY_TOKENS}
-	                              max={MAX_MONTHLY_TOKENS}
-	                              step={1_000_000}
-	                              value={monthlyTokens}
-	                              onChange={(e) => setMonthlyTokens(clampMonthlyTokens(Number(e.target.value)))}
-	                              className="w-full accent-cyan-500 mt-2"
-	                            />
-	                          </div>
-
-	                          <div className="flex items-center gap-2 justify-self-start sm:justify-self-end">
-	                            <input
-	                              type="number"
-	                              min={MIN_MONTHLY_TOKENS}
-	                              max={MAX_MONTHLY_TOKENS}
-	                              step={1_000_000}
-	                              value={monthlyTokens}
-	                              onChange={(e) => {
-	                                const next = Number(e.target.value);
-	                                if (!Number.isFinite(next)) return;
-	                                setMonthlyTokens(clampMonthlyTokens(next));
-	                              }}
-	                              className="w-36 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-	                            />
-	                            <span className="text-xs text-slate-500 whitespace-nowrap">tokens</span>
-	                          </div>
+	                        <div className="flex items-center gap-2">
+	                          <span className="px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-700 text-xs text-slate-200 font-semibold">
+	                            {formatTokensShort(monthlyTokens).toUpperCase()} tokens/mo
+	                          </span>
 	                        </div>
 	                      </div>
 
-	                      {/* Cost display */}
-	                      {!selectedModel ? (
-	                        <p className="text-slate-500 text-xs text-center py-2">Select a model above to see estimated cost</p>
-	                      ) : monthlyCost.status === 'free' ? (
-	                        <div className="flex items-center justify-between py-2">
-	                          <span className="text-slate-400 text-sm">Estimated monthly cost</span>
-	                          <span className="text-emerald-400 font-semibold">Free / Open source</span>
-	                        </div>
-	                      ) : monthlyCost.status === 'unknown' ? (
-	                        <div className="flex items-center justify-between py-2">
-	                          <span className="text-slate-400 text-sm">Estimated monthly cost</span>
-	                          <span className="text-slate-400 font-semibold">Pricing unavailable</span>
-	                        </div>
-	                      ) : (
-	                        <div className="grid grid-cols-3 gap-3 mt-1">
-	                          <div className="text-center">
-	                            <p className="text-xs text-slate-500 mb-1">USD / month</p>
-	                            <p className="text-white font-bold text-base">${monthlyCost.usd.toFixed(2)}</p>
-                          </div>
-                          <div className="text-center border-x border-slate-700">
-                            <p className="text-xs text-slate-500 mb-1">INR / month <span className="text-slate-600">(1$=₹{USD_TO_INR})</span></p>
-                            <p className="text-cyan-400 font-bold text-base">₹{Math.round(monthlyCost.inr).toLocaleString('en-IN')}</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-slate-500 mb-1">Budget limit</p>
-                            <p className="text-slate-300 font-bold text-base">₹{selectedTemplate.budget.toLocaleString('en-IN')}</p>
-                          </div>
-                        </div>
-	                      )}
-                      {selectedModel && (
-                        <p className="text-xs text-slate-500 text-center mt-2">
-                          Pricing for <span className="text-slate-300">{selectedModel.name}</span> (<span className="text-slate-400">{selectedModel.provider}</span>)
-                        </p>
-                      )}
-	                      {selectedModel && monthlyCost.status === 'priced' && (
-	                        <p className="text-xs text-slate-600 text-center mt-2">
-	                          Assumes 50/50 prompt/completion split · $1 = ₹{USD_TO_INR} · Pricing from RasiAI Gateway
-	                        </p>
-	                      )}
+	                      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr,0.8fr] gap-4">
+	                        {/* Controls */}
+	                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/30 p-3">
+	                          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+	                            <div className="flex items-center gap-2">
+	                              <span className="text-sm font-semibold text-slate-200">Monthly tokens</span>
+	                              <span className="text-xs text-slate-500">min 1M · max 100M</span>
+	                            </div>
+	                            <div className="flex items-center gap-2">
+	                              <input
+	                                aria-label="Monthly tokens (millions)"
+	                                type="number"
+	                                min={1}
+	                                max={100}
+	                                step={1}
+	                                value={monthlyTokensMillions}
+	                                onChange={(e) => {
+	                                  const next = Number(e.target.value);
+	                                  if (!Number.isFinite(next)) return;
+	                                  setMonthlyTokensMillions(Math.min(100, Math.max(1, Math.round(next))));
+	                                }}
+	                                className="w-16 bg-slate-950/50 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+	                              />
+	                              <span className="text-xs text-slate-500">M</span>
+	                            </div>
+	                          </div>
 
-                      {/* Over-budget warning */}
+	                          <div className="flex flex-wrap gap-2 mb-3">
+	                            {[1, 10, 100].map((m) => {
+	                              const active = monthlyTokensMillions === m;
+	                              return (
+	                                <button
+	                                  key={m}
+	                                  type="button"
+	                                  onClick={() => setMonthlyTokensMillions(m)}
+	                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+	                                    active
+	                                      ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
+	                                      : 'bg-slate-950/30 border-slate-700 text-slate-300 hover:border-slate-600'
+	                                  }`}
+	                                >
+	                                  {m}M
+	                                </button>
+	                              );
+	                            })}
+	                          </div>
+
+	                          <div className="relative">
+	                            <input
+	                              aria-label="Monthly tokens slider"
+	                              type="range"
+	                              min={1}
+	                              max={100}
+	                              step={1}
+	                              value={monthlyTokensMillions}
+	                              onChange={(e) => setMonthlyTokensMillions(Math.min(100, Math.max(1, Number(e.target.value))))}
+	                              className="w-full accent-cyan-500"
+	                            />
+	                            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+	                              <span>1M</span>
+	                              <span>50M</span>
+	                              <span>100M</span>
+	                            </div>
+	                          </div>
+	                        </div>
+
+	                        {/* Cost summary */}
+	                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/30 p-3">
+	                          {!selectedModel ? (
+	                            <p className="text-slate-500 text-xs text-center py-8">Select a model above to see estimated cost</p>
+	                          ) : monthlyCost.status === 'free' ? (
+	                            <div className="flex items-center justify-between py-2">
+	                              <span className="text-slate-400 text-sm">Estimated monthly cost</span>
+	                              <span className="text-emerald-400 font-semibold">Free / Open source</span>
+	                            </div>
+	                          ) : monthlyCost.status === 'unknown' ? (
+	                            <div className="flex items-center justify-between py-2">
+	                              <span className="text-slate-400 text-sm">Estimated monthly cost</span>
+	                              <span className="text-slate-400 font-semibold">Pricing unavailable</span>
+	                            </div>
+	                          ) : (
+	                            <>
+	                              <div className="grid grid-cols-3 gap-3">
+	                                <div className="text-center">
+	                                  <p className="text-[11px] text-slate-500 mb-1">USD / mo</p>
+	                                  <p className="text-white font-bold text-base">${monthlyCost.usd.toFixed(2)}</p>
+	                                </div>
+	                                <div className="text-center border-x border-slate-700/60">
+	                                  <p className="text-[11px] text-slate-500 mb-1">INR / mo <span className="text-slate-600">(₹{USD_TO_INR}/$)</span></p>
+	                                  <p className="text-cyan-300 font-bold text-base">₹{Math.round(monthlyCost.inr).toLocaleString('en-IN')}</p>
+	                                </div>
+	                                <div className="text-center">
+	                                  <p className="text-[11px] text-slate-500 mb-1">Budget</p>
+	                                  <p className="text-slate-200 font-bold text-base">₹{selectedTemplate.budget.toLocaleString('en-IN')}</p>
+	                                </div>
+	                              </div>
+
+	                              {selectedTemplate.budget > 0 && (
+	                                <div className="mt-3">
+	                                  <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+	                                    <span>Budget usage</span>
+	                                    <span>
+	                                      {Math.min(999, Math.round((monthlyCost.inr / selectedTemplate.budget) * 100))}%</span>
+	                                  </div>
+	                                  <div className="h-2 rounded-full bg-slate-800 border border-slate-700/60 overflow-hidden">
+	                                    <div
+	                                      className={`h-full ${monthlyCost.inr > selectedTemplate.budget ? 'bg-amber-400' : 'bg-cyan-500'}`}
+	                                      style={{ width: `${Math.min(100, (monthlyCost.inr / selectedTemplate.budget) * 100)}%` }}
+	                                    />
+	                                  </div>
+	                                </div>
+	                              )}
+	                            </>
+	                          )}
+
+	                          {selectedModel && (
+	                            <p className="text-[11px] text-slate-500 text-center mt-3">
+	                              Pricing for <span className="text-slate-300">{selectedModel.name}</span> (<span className="text-slate-400">{selectedModel.provider}</span>)
+	                            </p>
+	                          )}
+	                          {selectedModel && monthlyCost.status === 'priced' && (
+	                            <p className="text-[11px] text-slate-600 text-center mt-2">
+	                              Assumes 50/50 prompt/completion split · Pricing from RasiAI Gateway
+	                            </p>
+	                          )}
+	                        </div>
+	                      </div>
+
+	                      {/* Over-budget warning */}
 	                      {monthlyCost.status === 'priced' && selectedTemplate.budget > 0 && monthlyCost.inr > selectedTemplate.budget && (
-	                        <div className="mt-3 flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-	                          <span className="text-amber-400 text-xs">⚠️ Estimated cost exceeds budget limit — consider fewer tokens or a cheaper model.</span>
+	                        <div className="mt-4 flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+	                          <span className="text-amber-300 text-xs">⚠️ Estimated cost exceeds budget — reduce tokens or choose a cheaper model.</span>
 	                        </div>
 	                      )}
-                    </div>
+	                    </div>
 
                     <div className="flex gap-3 mt-6">
                       <button
