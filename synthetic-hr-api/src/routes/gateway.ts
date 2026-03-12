@@ -151,7 +151,11 @@ const normalizeModel = (model: string): GatewayModel | null => {
 
   if (model.startsWith('anthropic/')) {
     const upstream = model.slice('anthropic/'.length);
-    return { id: model, provider: 'anthropic', upstreamModel: upstream, ownedBy: 'anthropic' };
+    // Backwards-compat model aliases (older UI/agent configs used dot notation).
+    const normalizedUpstream = upstream
+      .replace('claude-3.5-sonnet', 'claude-3-5-sonnet')
+      .replace('claude-3.5-haiku', 'claude-3-haiku');
+    return { id: `anthropic/${normalizedUpstream}`, provider: 'anthropic', upstreamModel: normalizedUpstream, ownedBy: 'anthropic' };
   }
 
   if (model.startsWith('openrouter/')) {

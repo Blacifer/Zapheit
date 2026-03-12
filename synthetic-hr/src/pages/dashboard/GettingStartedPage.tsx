@@ -98,7 +98,7 @@ export default function GettingStartedPage(props: {
 
     setModels((prev) => (prev.length > 0 ? prev : [
       { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini', provider: 'openai' },
-      { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'anthropic' },
+      { id: 'anthropic/claude-3-haiku', name: 'Claude Haiku', provider: 'anthropic' },
       { id: 'google/gemini-2.0-flash', name: 'Gemini Flash', provider: 'google' },
     ]));
     setModelsLoading(false);
