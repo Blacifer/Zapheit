@@ -28,6 +28,8 @@ function normalizeErrorPayload(response: Response, payload: any): ApiResponse<ne
 
   const candidateErrors = [
     payload?.error,
+    payload?.error?.message,
+    payload?.error?.error,
     payload?.message,
     payload?.details,
   ].filter((value) => typeof value === 'string' && value.trim().length > 0) as string[];

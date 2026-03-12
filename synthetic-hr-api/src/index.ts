@@ -245,6 +245,9 @@ app.use('/auth', protectMutationsFromCsrf);
 // Setup Swagger API documentation
 setupSwagger(app);
 
+const connectorsEnabled =
+  process.env.CONNECTORS_ENABLED ? process.env.CONNECTORS_ENABLED === 'true' : process.env.LEGACY_CONNECTORS_ENABLED !== 'false';
+
 // Public auth routes (no authentication required)
 app.use('/auth', authRoutes);
 
@@ -277,8 +280,7 @@ app.use((req, res, next) => {
     return authenticateToken(req, res, next);
   }
 
-  const legacyConnectorsEnabled = process.env.LEGACY_CONNECTORS_ENABLED === 'true';
-  if (legacyConnectorsEnabled && req.path.startsWith('/api/connectors/integrations/oauth/callback')) {
+  if (connectorsEnabled && req.path.startsWith('/api/connectors/integrations/oauth/callback')) {
     return next();
   }
   if (req.path.startsWith('/api/integrations/oauth/callback')) {
@@ -306,7 +308,7 @@ app.use('/api/playbooks', playbooksRoutes);
 app.use('/api/action-policies', actionPoliciesRoutes);
 app.use('/api', escalationsRoutes);
 app.use('/api', invitesRoutes);
-if (process.env.LEGACY_CONNECTORS_ENABLED === 'true') {
+if (connectorsEnabled) {
   app.use('/api/connectors', connectorsRoutes);
 }
 app.use('/api/integrations', integrationsRoutes);
