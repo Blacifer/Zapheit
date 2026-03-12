@@ -550,46 +550,49 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                         </div>
                     </div>
 
-                    {/* Footer Configuration Metrics */}
-                    <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
-	                      <div className="flex items-center justify-between mb-4">
-	                        <h4 className="text-white font-semibold">Workload Parameters</h4>
-	                        <div className="flex items-center gap-2">
-	                          <span className="text-slate-400 text-sm">Monthly Volume Est:</span>
-	                          <div className="flex items-center gap-3">
-	                            <div className="flex flex-col gap-1">
-	                              <div className="flex items-center justify-between text-[11px] text-slate-500">
-	                                <span>1k</span>
-	                                <span>100M</span>
-	                              </div>
-	                              <input
-	                                type="range"
-	                                min={1_000}
-	                                max={100_000_000}
-	                                step={1_000}
-	                                value={monthlyTokens}
-	                                onChange={(e) => setMonthlyTokens(Number(e.target.value))}
-	                                className="w-56 accent-cyan-500"
-	                              />
-	                            </div>
-	                            <div className="flex items-center gap-2">
-	                              <input
-	                                type="number"
-	                                min={1_000}
-	                                max={100_000_000}
-	                                step={1_000}
-	                                value={monthlyTokens}
-	                                onChange={(e) => {
-	                                  const next = Number(e.target.value);
-	                                  if (!Number.isFinite(next)) return;
-	                                  setMonthlyTokens(Math.min(100_000_000, Math.max(1_000, next)));
-	                                }}
-	                                className="w-32 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-	                              />
-	                              <span className="text-xs text-slate-500">tokens</span>
-	                            </div>
-	                          </div>
+	                    {/* Footer Configuration Metrics */}
+	                    <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
+	                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
+	                        <div className="flex items-center justify-between gap-3">
+	                          <h4 className="text-white font-semibold">Workload Parameters</h4>
 	                          <span className="text-xs font-semibold text-slate-400">Selected: {formatTokensShort(monthlyTokens)}</span>
+	                        </div>
+
+	                        <div className="grid grid-cols-1 sm:grid-cols-[auto,1fr,auto] items-center gap-3 w-full">
+	                          <span className="text-slate-400 text-sm whitespace-nowrap">Monthly tokens</span>
+
+	                          <div className="flex flex-col gap-1 min-w-0">
+	                            <div className="flex items-center justify-between text-[11px] text-slate-500">
+	                              <span>1k</span>
+	                              <span>100M</span>
+	                            </div>
+	                            <input
+	                              type="range"
+	                              min={1_000}
+	                              max={100_000_000}
+	                              step={1_000}
+	                              value={monthlyTokens}
+	                              onChange={(e) => setMonthlyTokens(Number(e.target.value))}
+	                              className="w-full accent-cyan-500"
+	                            />
+	                          </div>
+
+	                          <div className="flex items-center gap-2 justify-self-start sm:justify-self-end">
+	                            <input
+	                              type="number"
+	                              min={1_000}
+	                              max={100_000_000}
+	                              step={1_000}
+	                              value={monthlyTokens}
+	                              onChange={(e) => {
+	                                const next = Number(e.target.value);
+	                                if (!Number.isFinite(next)) return;
+	                                setMonthlyTokens(Math.min(100_000_000, Math.max(1_000, next)));
+	                              }}
+	                              className="w-36 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+	                            />
+	                            <span className="text-xs text-slate-500 whitespace-nowrap">tokens</span>
+	                          </div>
 	                        </div>
 	                      </div>
 
