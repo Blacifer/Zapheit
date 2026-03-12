@@ -131,7 +131,7 @@ router.post('/assign-role', requireRole('super_admin'), async (req: Request, res
  * Get all users in organization with roles (admin+)
  * GET /admin/users
  */
-router.get('/users', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/users', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
 
@@ -169,7 +169,7 @@ router.get('/users', requireRole('admin'), async (req: Request, res: Response) =
  * Get organization coverage and readiness status (admin only)
  * GET /admin/coverage-status
  */
-router.get('/coverage-status', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/coverage-status', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
 
@@ -400,7 +400,7 @@ router.get('/coverage-status', requireRole('admin'), async (req: Request, res: R
   }
 });
 
-router.put('/provider-sync-config', requireRole('admin'), async (req: Request, res: Response) => {
+router.put('/provider-sync-config', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) {
@@ -470,7 +470,7 @@ router.put('/provider-sync-config', requireRole('admin'), async (req: Request, r
   }
 });
 
-router.put('/reconciliation-alert-config', requireRole('admin'), async (req: Request, res: Response) => {
+router.put('/reconciliation-alert-config', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) {
@@ -535,7 +535,7 @@ router.put('/reconciliation-alert-config', requireRole('admin'), async (req: Req
   }
 });
 
-router.post('/provider-sync/openai/test', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/openai/test', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -551,7 +551,7 @@ router.post('/provider-sync/openai/test', requireRole('admin'), async (req: Requ
   }
 });
 
-router.post('/provider-sync/openai/sync', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/openai/sync', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -575,7 +575,7 @@ router.post('/provider-sync/openai/sync', requireRole('admin'), async (req: Requ
   }
 });
 
-router.post('/provider-sync/anthropic/test', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/anthropic/test', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -591,7 +591,7 @@ router.post('/provider-sync/anthropic/test', requireRole('admin'), async (req: R
   }
 });
 
-router.post('/provider-sync/anthropic/sync', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/anthropic/sync', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -615,7 +615,7 @@ router.post('/provider-sync/anthropic/sync', requireRole('admin'), async (req: R
   }
 });
 
-router.post('/provider-sync/openrouter/test', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/openrouter/test', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -631,7 +631,7 @@ router.post('/provider-sync/openrouter/test', requireRole('admin'), async (req: 
   }
 });
 
-router.post('/provider-sync/openrouter/sync', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/openrouter/sync', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
@@ -655,7 +655,7 @@ router.post('/provider-sync/openrouter/sync', requireRole('admin'), async (req: 
   }
 });
 
-router.post('/provider-sync/run', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/provider-sync/run', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const days = Math.min(90, Math.max(1, Number(req.body?.days || 30)));
     const result = await syncEnabledProviderCostsForAllOrganizations(days, 'manual');
@@ -676,7 +676,7 @@ router.post('/provider-sync/run', requireRole('admin'), async (req: Request, res
  * Upsert provider reconciliation spend for the organization (admin only)
  * PUT /admin/provider-reconciliation
  */
-router.put('/provider-reconciliation', requireRole('admin'), async (req: Request, res: Response) => {
+router.put('/provider-reconciliation', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
 
@@ -765,7 +765,7 @@ router.put('/provider-reconciliation', requireRole('admin'), async (req: Request
  * Remove provider reconciliation spend entry for the organization (admin only)
  * DELETE /admin/provider-reconciliation/:provider
  */
-router.delete('/provider-reconciliation/:provider', requireRole('admin'), async (req: Request, res: Response) => {
+router.delete('/provider-reconciliation/:provider', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
 
@@ -841,7 +841,7 @@ router.delete('/provider-reconciliation/:provider', requireRole('admin'), async 
  * Remove user from organization (admin+)
  * DELETE /admin/users/:userId
  */
-router.delete('/users/:userId', requireRole('admin'), async (req: Request, res: Response) => {
+router.delete('/users/:userId', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const orgId = req.user?.organization_id;
@@ -906,7 +906,7 @@ router.delete('/users/:userId', requireRole('admin'), async (req: Request, res: 
  * Get current metrics snapshot (admin only)
  * GET /admin/monitoring/metrics
  */
-router.get('/monitoring/metrics', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/monitoring/metrics', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const { getMetricsSnapshot } = await import('../middleware/metrics');
     const { monitoring } = await import('../lib/monitoring');
@@ -933,7 +933,7 @@ router.get('/monitoring/metrics', requireRole('admin'), async (req: Request, res
  * Get active alerts (admin only)
  * GET /admin/monitoring/alerts/active
  */
-router.get('/monitoring/alerts/active', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/monitoring/alerts/active', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const { monitoring } = await import('../lib/monitoring');
     const activeAlerts = monitoring.getActiveAlerts();
@@ -957,7 +957,7 @@ router.get('/monitoring/alerts/active', requireRole('admin'), async (req: Reques
  * Get alert history (admin only)
  * GET /admin/monitoring/alerts/history
  */
-router.get('/monitoring/alerts/history', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/monitoring/alerts/history', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const { monitoring } = await import('../lib/monitoring');
     const limit = parseInt(req.query.limit as string) || 100;
@@ -982,7 +982,7 @@ router.get('/monitoring/alerts/history', requireRole('admin'), async (req: Reque
  * Get alert rules (admin only)
  * GET /admin/monitoring/alerts/rules
  */
-router.get('/monitoring/alerts/rules', requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/monitoring/alerts/rules', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   try {
     const { monitoring } = await import('../lib/monitoring');
     const rules = monitoring.getAlertRules();
