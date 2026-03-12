@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Zap, Headphones, Target, Users, FlaskConical, RefreshCw, ShieldAlert, Wallet, Server, ShieldCheck, UserPlus, Search, Loader2, CheckCircle2, Plus, LineChart, Code, Briefcase, BarChart, Shield, MessageSquare, PenTool, Database, Settings, Terminal, User, Play } from 'lucide-react';
+import { X, Zap, Headphones, Users, RefreshCw, Server, Search, Loader2, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
+import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
 
 interface LiveModel {
   id: string;
@@ -8,23 +9,6 @@ interface LiveModel {
   provider: string;
   pricing?: { prompt?: string; completion?: string };
   context_length?: number;
-}
-
-interface AgentTemplate {
-  id: string;
-  name: string;
-  type: string;
-  industry: string;
-  description: string;
-  features: string[];
-  model: string;
-  platform: string;
-  budget: number;
-  price: string;
-  icon: React.ElementType;
-  color: string;
-  roi?: string;
-  complexity?: 'Basic' | 'Advanced' | 'Expert';
 }
 
 interface AgentTemplatesPageProps {
@@ -82,10 +66,14 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     load().finally(() => setModelsLoading(false));
   }, []);
 
+  const resolveModel = (modelId: string) =>
+    liveModels.find(m => m.id === modelId) ??
+    liveModels.find(m => m.id.includes(modelId) || modelId.includes(m.id));
+
   // Update selected model when template changes or live models load
   useEffect(() => {
     if (selectedTemplate && liveModels.length > 0) {
-      const def = liveModels.find(m => m.id.includes(selectedTemplate.model));
+      const def = resolveModel(selectedTemplate.model);
       if (def) setSelectedModel(def);
 
       // Reset selection filters when template opens
@@ -150,217 +138,8 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
   const estimatedMonthlyTokens = estimatedTokens * 1_000_000;
   const monthlyCost = calcMonthlyCost(selectedModel, estimatedMonthlyTokens);
-
-  const templates: AgentTemplate[] = [
-    {
-      id: '1',
-      name: 'Support Agent',
-      type: 'customer_support',
-      industry: 'E-commerce',
-      description: 'AI-powered customer support agent for handling inquiries, order tracking, and common questions.',
-      features: ['Order Status Lookup', 'Refund Processing', 'Product Information', 'FAQ Automation', 'Escalation Routing'],
-      model: 'gpt-4o',
-      platform: 'OpenAI',
-      budget: 2000,
-      price: '₹25,000/month',
-      icon: Headphones,
-      color: 'blue',
-    },
-    {
-      id: '2',
-      name: 'Sales Agent',
-      type: 'sales',
-      industry: 'B2B',
-      description: 'Intelligent sales assistant for lead qualification, demo scheduling, and product recommendations.',
-      features: ['Lead Qualification', 'Demo Scheduling', 'Product Recommendations', 'CRM Integration', 'Follow-up Automation'],
-      model: 'gpt-4',
-      platform: 'OpenAI',
-      budget: 3000,
-      price: '₹35,000/month',
-      icon: Target,
-      color: 'green',
-    },
-    {
-      id: '3',
-      name: 'HR Agent',
-      type: 'hr',
-      industry: 'Enterprise',
-      description: 'HR assistant for employee onboarding, policy queries, and leave management.',
-      features: ['Employee Onboarding', 'Policy FAQ', 'Leave Management', 'Benefits Information', 'Performance Reviews'],
-      model: 'claude-3-sonnet',
-      platform: 'Anthropic',
-      budget: 1500,
-      price: '₹20,000/month',
-      icon: Users,
-      color: 'purple',
-    },
-    {
-      id: '4',
-      name: 'Legal Agent',
-      type: 'legal',
-      industry: 'Legal',
-      description: 'Legal document assistant for contract review, compliance checking, and risk assessment.',
-      features: ['Contract Review', 'Compliance Check', 'Risk Assessment', 'Document Summarization', 'Clause Analysis'],
-      model: 'claude-3-opus',
-      platform: 'Anthropic',
-      budget: 5000,
-      price: '₹50,000/month',
-      icon: ShieldCheck,
-      color: 'red',
-    },
-    {
-      id: '5',
-      name: 'Finance Agent',
-      type: 'finance',
-      industry: 'Banking',
-      description: 'Financial services bot for account queries, loan applications, and transaction support.',
-      features: ['Account Queries', 'Loan Applications', 'Transaction Support', 'Fraud Detection', 'Compliance Verification'],
-      model: 'gpt-4-turbo',
-      platform: 'OpenAI',
-      budget: 4000,
-      price: '₹45,000/month',
-      icon: Wallet,
-      color: 'amber',
-    },
-    {
-      id: '6',
-      name: 'IT Support Agent',
-      type: 'it_support',
-      industry: 'Technology',
-      description: 'IT helpdesk agent for ticket creation, troubleshooting, and knowledge base access.',
-      features: ['Ticket Creation', 'Troubleshooting Guide', 'Password Reset', 'System Status', 'Knowledge Base'],
-      model: 'gpt-4o',
-      platform: 'OpenAI',
-      budget: 1800,
-      price: '₹22,000/month',
-      icon: Server,
-      color: 'cyan',
-    },
-    {
-      id: '7',
-      name: 'Healthcare Agent',
-      type: 'healthcare',
-      industry: 'Healthcare',
-      description: 'Patient triage assistant for appointment scheduling, symptom assessment, and provider matching.',
-      features: ['Appointment Scheduling', 'Symptom Triage', 'Provider Matching', 'Insurance Verification', 'Follow-up Care'],
-      model: 'claude-3-sonnet',
-      platform: 'Anthropic',
-      budget: 4500,
-      price: '₹55,000/month',
-      icon: FlaskConical,
-      color: 'emerald',
-    },
-    {
-      id: '8',
-      name: 'Refund Agent',
-      type: 'refund',
-      industry: 'E-commerce',
-      description: 'Specialized refund processing agent with fraud detection and approval workflows.',
-      features: ['Fraud Detection', 'Refund Approval', 'Policy Enforcement', 'Manual Review Queue', 'Audit Trail'],
-      model: 'gpt-4',
-      platform: 'OpenAI',
-      budget: 2500,
-      price: '₹30,000/month',
-      icon: RefreshCw,
-      color: 'orange',
-    },
-    {
-      id: '9',
-      name: 'Onboarding Agent',
-      type: 'onboarding',
-      industry: 'Enterprise',
-      description: 'New employee onboarding agent for paperwork, training, and welcome communications.',
-      features: ['Document Collection', 'Training Modules', 'Welcome Sequences', 'Progress Tracking', 'Manager Alerts'],
-      model: 'claude-3-haiku',
-      platform: 'Anthropic',
-      budget: 1000,
-      price: '₹15,000/month',
-      icon: UserPlus,
-      color: 'teal',
-    },
-    {
-      id: '10',
-      name: 'Compliance Agent',
-      type: 'compliance',
-      industry: 'Finance',
-      description: 'Regulatory compliance monitor for KYC/AML, audit trails, and policy enforcement.',
-      features: ['KYC Verification', 'AML Screening', 'Audit Trails', 'Policy Enforcement', 'Risk Alerts'],
-      model: 'claude-3-opus',
-      platform: 'Anthropic',
-      budget: 6000,
-      price: '₹65,000/month',
-      icon: ShieldAlert,
-      color: 'rose',
-      roi: 'Reduces compliance risk by 95%',
-      complexity: 'Advanced',
-    },
-    {
-      id: '11',
-      name: 'Marketing & Content Agent',
-      type: 'marketing',
-      industry: 'E-commerce',
-      description: 'Creative assistant for SEO optimization, social media drafting, and blog post generation.',
-      features: ['SEO Optimization', 'Social Media Drafting', 'Blog Post Generation', 'Copy Reviewing', 'Keyword Research'],
-      model: 'claude-3-5-sonnet',
-      platform: 'Anthropic',
-      budget: 3000,
-      price: '₹35,000/month',
-      icon: PenTool,
-      color: 'pink',
-      roi: 'Boosts content pipeline output by 3x',
-      complexity: 'Basic',
-    },
-    {
-      id: '12',
-      name: 'Data Analyst Agent',
-      type: 'data_analysis',
-      industry: 'Enterprise',
-      description: 'Analytical engine for SQL querying, data visualization, and predictive modeling.',
-      features: ['SQL Querying', 'Data Visualization', 'Report Generation', 'Trend Analysis', 'Predictive Modeling'],
-      model: 'gpt-4o',
-      platform: 'OpenAI',
-      budget: 5000,
-      price: '₹50,000/month',
-      icon: Database,
-      color: 'indigo',
-      roi: 'Accelerates data reporting to real-time',
-      complexity: 'Expert',
-    },
-    {
-      id: '13',
-      name: 'Software Developer Agent',
-      type: 'engineering',
-      industry: 'Technology',
-      description: 'Coding assistant for PR reviews, bug detection, and code scaffolding.',
-      features: ['PR Reviews', 'Bug Detection', 'Documentation Generation', 'Code Scaffolding', 'Refactoring'],
-      model: 'claude-3-5-sonnet',
-      platform: 'Anthropic',
-      budget: 6000,
-      price: '₹60,000/month',
-      icon: Code,
-      color: 'sky',
-      roi: 'Increases developer throughput by 40%',
-      complexity: 'Expert',
-    },
-    {
-      id: 'custom',
-      name: 'Create Custom Agent',
-      type: 'custom',
-      industry: 'All',
-      description: 'Build your own specialized AI agent from scratch with custom instructions, tools, and selected models.',
-      features: ['Custom System Prompt', 'Any Supported Model', 'Custom Tool Integrations', 'Domain Specific Knowledge', 'Custom Sandbox'],
-      model: 'gpt-4o-mini',
-      platform: 'OpenAI',
-      budget: 0,
-      price: 'Pay as you go',
-      icon: Plus,
-      color: 'slate',
-      roi: 'Tailored perfectly for your use case',
-      complexity: 'Advanced',
-    }
-  ];
-
-  const industries = ['all', 'E-commerce', 'B2B', 'Enterprise', 'Legal', 'Banking', 'Technology', 'Healthcare', 'Finance'];
+  const templates = AGENT_TEMPLATES;
+  const industries = [...AGENT_TEMPLATE_INDUSTRIES];
 
   const filteredTemplates = useMemo(() => {
     let result = templates;
@@ -454,6 +233,8 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
         {filteredTemplates.map(template => {
           const colors = getColorClasses(template.color);
           const Icon = template.icon;
+          const baseModel = resolveModel(template.model);
+          const baseModelLabel = baseModel ? `${baseModel.name} (${baseModel.provider})` : template.model;
 
           return (
             <div
@@ -473,6 +254,9 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
                 <h3 className="text-lg font-semibold text-white mb-2">{template.name}</h3>
                 <p className="text-slate-400 text-sm mb-3 line-clamp-2">{template.description}</p>
+                <p className="text-xs text-slate-500 mb-3">
+                  Default model: <span className="text-slate-300">{baseModelLabel}</span>
+                </p>
 
                 {template.roi && (
                   <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-2 mb-4">
@@ -507,7 +291,6 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                         <p className="text-lg font-bold text-white">
                           {liveModels.length > 0 ? (
                             (() => {
-                              const baseModel = liveModels.find(m => m.id.includes(template.model));
                               const cost = calcMonthlyCost(baseModel || null, 500_000);
                               return cost ? `₹${Math.round(cost.inr).toLocaleString('en-IN')}/month` : 'Free / Open Source';
                             })()
@@ -515,7 +298,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                             'Pricing Unavailable'
                           )}
                         </p>
-                        <p className="text-xs text-slate-400 mt-1">Based on ~500k tokens per month</p>
+                        <p className="text-xs text-slate-400 mt-1">Based on ~500k tokens/month on {baseModel?.name ?? template.model}</p>
                       </>
                     )}
                   </div>
@@ -547,6 +330,9 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                   <div>
                     <h2 className="text-2xl font-bold text-white">{selectedTemplate.name}</h2>
                     <p className="text-slate-400">{selectedTemplate.industry} • {selectedTemplate.type.replace('_', ' ').toUpperCase()}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Default model: <span className="text-slate-300">{resolveModel(selectedTemplate.model)?.name ?? selectedTemplate.model}</span>
+                    </p>
                   </div>
                 </div>
                 <button
@@ -777,6 +563,11 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                             <p className="text-slate-300 font-bold text-base">₹{selectedTemplate.budget.toLocaleString('en-IN')}</p>
                           </div>
                         </div>
+                      )}
+                      {selectedModel && (
+                        <p className="text-xs text-slate-500 text-center mt-2">
+                          Pricing for <span className="text-slate-300">{selectedModel.name}</span> (<span className="text-slate-400">{selectedModel.provider}</span>)
+                        </p>
                       )}
                       {monthlyCost && (
                         <p className="text-xs text-slate-600 text-center mt-2">
