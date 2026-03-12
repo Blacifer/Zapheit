@@ -276,29 +276,29 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 overflow-hidden">
+    <div className="min-h-screen app-bg overflow-hidden text-slate-50">
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled 
-          ? 'bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/30' 
+          ? 'bg-slate-950/70 backdrop-blur-xl border-b border-white/10' 
           : 'bg-transparent'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
                 <Brain className="w-7 h-7 text-white" />
               </div>
               <div>
                 <span className="text-xl font-bold text-white">RASI</span>
-                <span className="text-xs text-cyan-400 block -mt-1">Synthetic HR</span>
+                <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
               </div>
             </div>
             <div className="hidden md:flex items-center gap-8">
-              <a href="#how-it-works" className="text-slate-300 hover:text-cyan-400 transition-colors text-sm">How it works</a>
-              <a href="#stats" className="text-slate-300 hover:text-cyan-400 transition-colors text-sm">Results</a>
-              <a href="#pillars" className="text-slate-300 hover:text-cyan-400 transition-colors text-sm">Features</a>
-              <a href="#pricing" className="text-slate-300 hover:text-cyan-400 transition-colors text-sm">Pricing</a>
+              <a href="#how-it-works" className="text-slate-300 hover:text-white transition-colors text-sm">How it works</a>
+              <a href="#stats" className="text-slate-300 hover:text-white transition-colors text-sm">Results</a>
+              <a href="#pillars" className="text-slate-300 hover:text-white transition-colors text-sm">Features</a>
+              <a href="#pricing" className="text-slate-300 hover:text-white transition-colors text-sm">Pricing</a>
               <button
                 onClick={onLogin}
                 className="px-4 py-2 text-slate-300 hover:text-white transition-colors text-sm"
@@ -307,7 +307,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               </button>
               <button
                 onClick={onSignUp}
-                className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/30 transition-all text-sm"
+                className="btn-primary text-sm px-5 py-2.5"
               >
                 Start Free Trial
               </button>
@@ -320,35 +320,35 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
         {/* Animated background elements */}
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-40 right-10 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-20 left-10 w-80 h-80 bg-blue-500/14 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-40 right-10 w-96 h-96 bg-indigo-500/12 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-sky-500/8 rounded-full blur-3xl" />
         </div>
 
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900/80 to-slate-900" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/30 bg-cyan-500/10 backdrop-blur-md">
-            <Sparkles className="w-4 h-4 text-cyan-400" />
-            <span className="text-sm text-cyan-300">Enterprise AI Governance Platform</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md">
+            <Sparkles className="w-4 h-4 text-blue-300" />
+            <span className="text-sm text-slate-200">Enterprise AI Governance Platform</span>
           </div>
 
           <h1 className="text-6xl md:text-7xl font-black text-white mb-6 leading-tight">
             The HR Department
             <br />
-            <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">for your AI Workforce</span>
+            <span className="gradient-text">for your AI Workforce</span>
           </h1>
 
           <p className="text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
             Most companies treat AI agents like tools. We treat them like employees.
             <br className="hidden md:block" />
-            <span className="text-cyan-400 font-semibold">Manage, monitor, govern, and optimize</span> your digital workforce with enterprise-grade controls.
+            <span className="text-slate-100 font-semibold">Manage, monitor, govern, and optimize</span> your digital workforce with enterprise-grade controls.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <button
               onClick={onSignUp}
-              className="group px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all flex items-center gap-2 transform hover:scale-105"
+              className="btn-primary group w-full sm:w-auto"
             >
               Start Free Trial
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -356,7 +356,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             {onDemo ? (
               <button
                 onClick={onDemo}
-                className="group px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold rounded-xl hover:bg-white/20 transition-all flex items-center gap-2 hover:border-cyan-400/50"
+                className="btn-secondary group w-full sm:w-auto"
               >
                 <Play className="w-5 h-5" />
                 Watch Demo

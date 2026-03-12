@@ -606,14 +606,14 @@ function AddCostModal({ onClose, onAdd, agents }: { onClose: () => void; onAdd: 
     const model = (agent?.model_name || '').toLowerCase();
 
     // Base requests
-    let baseRequests = Math.floor(Math.random() * 800) + 150;
+    const baseRequests = Math.floor(Math.random() * 800) + 150;
 
     // Approx tokens per request (depends on agent type vaguely)
     let tokensPerReq = 400;
     if (agent?.agent_type === 'support') tokensPerReq = 1200;
     if (agent?.agent_type === 'sales') tokensPerReq = 800;
 
-    let totalTokens = baseRequests * tokensPerReq;
+    const totalTokens = baseRequests * tokensPerReq;
 
     // GPT4 / Opus pricing vs cheaper ones
     let ratePer1k = 0.05; // cheap base

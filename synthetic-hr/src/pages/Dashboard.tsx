@@ -8,6 +8,7 @@ import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api-client';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { cn } from '../lib/utils';
 
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
@@ -48,7 +49,7 @@ interface DashboardProps {
 function DashboardSectionLoading() {
   return (
     <div className="min-h-[40vh] flex items-center justify-center">
-      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-cyan-500"></div>
+      <div className="animate-spin rounded-full h-10 w-10 border-2 border-white/15 border-t-blue-300"></div>
     </div>
   );
 }
@@ -635,8 +636,8 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
   // Prevent hydration mismatch
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+      <div className="min-h-screen app-bg flex items-center justify-center text-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-white/15 border-t-blue-300"></div>
       </div>
     );
   }
@@ -644,7 +645,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
   // Removed full-page loading block to render layout skeleton immediately
 
   return (
-    <div className="min-h-screen bg-slate-900 flex">
+    <div className="min-h-screen app-bg flex text-slate-50">
       {/* Error Banner */}
       {error && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-red-500/90 text-white px-4 py-2 flex items-center justify-between">
@@ -657,14 +658,14 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
 
       <div className={`flex flex-1 w-full min-h-screen ${error ? 'pt-12' : ''}`}>
         {/* Sidebar */}
-        <aside className="w-64 bg-slate-800/50 border-r border-slate-700 p-4 flex flex-col min-h-screen">
+        <aside className="w-64 sidebar-surface p-4 flex flex-col min-h-screen">
           <div className="flex items-center gap-3 mb-8 px-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <Brain className="w-6 h-6 text-white" />
             </div>
             <div>
               <span className="text-lg font-bold text-white">RASI</span>
-              <span className="text-xs text-cyan-400 block">Synthetic HR</span>
+              <span className="text-xs text-blue-300 block">Synthetic HR</span>
             </div>
           </div>
 
@@ -694,10 +695,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
 	              <button
 	                key={item.id}
 	                onClick={() => navigateTo(item.id)}
-	                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentPage === item.id
-	                  ? 'bg-cyan-500/20 text-cyan-400'
-	                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-	                  }`}
+	                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
 	                aria-current={currentPage === item.id ? 'page' : undefined}
 	                aria-label={item.label}
 	              >
@@ -712,7 +710,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
             ))}
           </nav>
 
-          <div className="pt-4 border-t border-slate-700">
+          <div className="pt-4 border-t border-white/10">
             {/* Demo Mode Badge */}
             {isDemoMode && (
               <div className="flex items-center gap-2 px-2 mb-3">
@@ -767,7 +765,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
         {showNotificationPanel && (
           <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-black/50" onClick={() => setShowNotificationPanel(false)} />
-            <div className="relative w-96 bg-slate-800 border-l border-slate-700 p-6 overflow-auto">
+            <div className="relative w-96 h-full border-l border-white/10 bg-white/[0.03] backdrop-blur-xl p-6 overflow-auto">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white">Notifications</h2>
                 <button
@@ -785,7 +783,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                   <div className="flex gap-2 mb-4">
                     <button
                       onClick={markAllAsRead}
-                      className="text-sm text-cyan-400 hover:text-cyan-300"
+                      className="text-sm text-slate-300 hover:text-white transition-colors"
                     >
                       Mark all read
                     </button>
@@ -799,7 +797,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                   </div>
                   <div className="space-y-3">
                     {notifications.some((notification) => !notification.read) ? (
-                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-200">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-200">
                         Unread items are pinned first. Critical reconciliation alerts stay above lower-severity updates.
                       </div>
                     ) : null}
@@ -808,8 +806,8 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                         key={notification.id}
                         onClick={() => void openCoverageFromNotification(notification)}
                         className={`p-4 rounded-lg border cursor-pointer transition-all ${notification.read
-                          ? 'bg-slate-900/50 border-slate-700'
-                          : 'bg-slate-700/50 border-slate-600'
+                          ? 'bg-white/[0.02] border-white/10 hover:bg-white/[0.04]'
+                          : 'bg-white/[0.06] border-white/15 hover:bg-white/[0.08]'
                           }`}
                       >
                         <div className="flex items-start gap-3">
@@ -827,7 +825,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                                   : notification.type === 'warning'
                                     ? 'bg-amber-500/15 text-amber-100'
                                     : notification.type === 'info'
-                                      ? 'bg-cyan-500/15 text-cyan-200'
+                                      ? 'bg-blue-500/15 text-blue-100'
                                       : 'bg-emerald-500/15 text-emerald-200'
                               }`}>
                                 {notification.type}

@@ -375,7 +375,7 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-cyan-500 transition-all flex items-center gap-2"
+          className="btn-primary px-4 py-2 text-sm flex items-center gap-2"
           aria-label="Add new AI agent"
         >
           <Plus className="w-4 h-4" />
@@ -395,7 +395,7 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
               placeholder="Search agents by name, model, or description…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800/60 border border-slate-700 text-white text-sm rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 placeholder-slate-500"
+              className="input-field pl-9 py-2.5 text-sm focus:ring-blue-500/30"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
@@ -409,7 +409,7 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
                 key={s}
                 onClick={() => setFilterStatus(s)}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold capitalize transition-all border ${filterStatus === s
-                  ? s === 'all' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                  ? s === 'all' ? 'bg-white/[0.06] text-white border-white/10'
                     : s === 'active' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                       : s === 'paused' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                         : 'bg-rose-500/20 text-rose-300 border-rose-500/30'

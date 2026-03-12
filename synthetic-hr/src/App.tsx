@@ -13,8 +13,8 @@ const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 // Loading spinner component
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+    <div className="min-h-screen app-bg flex items-center justify-center text-slate-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-2 border-white/20 border-t-blue-400"></div>
     </div>
   );
 }

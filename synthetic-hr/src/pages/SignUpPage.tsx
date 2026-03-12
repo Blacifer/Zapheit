@@ -59,14 +59,14 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
   // Show verification success screen
   if (emailVerified) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+      <div className="min-h-screen app-bg flex items-center justify-center p-6 text-slate-50">
         <div className="w-full max-w-md">
-          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors">
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors">
             <ArrowRight className="w-4 h-4 rotate-180" />
             Back to Home
           </button>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 text-center">
+          <div className="card-surface p-8 text-center">
             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <Mail className="w-10 h-10 text-green-400" />
             </div>
@@ -85,7 +85,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
 
             <button
               onClick={onSignIn}
-              className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-cyan-500 transition-all"
+              className="btn-primary w-full"
             >
               Go to Sign In
             </button>
@@ -96,21 +96,21 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+    <div className="min-h-screen app-bg flex items-center justify-center p-6 text-slate-50">
       <div className="w-full max-w-md">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors">
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors">
           <ArrowRight className="w-4 h-4 rotate-180" />
           Back to Home
         </button>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8">
+        <div className="card-surface p-8">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <Brain className="w-7 h-7 text-white" />
             </div>
             <div>
               <span className="text-xl font-bold text-white">RASI</span>
-              <span className="text-xs text-cyan-400 block -mt-1">Synthetic HR</span>
+              <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
             </div>
           </div>
 
@@ -131,7 +131,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                 type="text"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                className="input-field"
                 placeholder="Acme Inc."
               />
             </div>
@@ -142,7 +142,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                className="input-field"
                 placeholder="you@company.com"
               />
             </div>
@@ -153,7 +153,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                className="input-field"
                 placeholder="••••••••"
               />
             </div>
@@ -161,7 +161,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-cyan-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="btn-primary w-full disabled:opacity-50 disabled:pointer-events-none"
             >
               {loading ? (
                 <>
@@ -176,7 +176,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
 
           <div className="mt-6 text-center">
             <span className="text-slate-400">Already have an account? </span>
-            <button onClick={onSignIn} className="text-cyan-400 hover:text-cyan-300 font-medium">
+            <button onClick={onSignIn} className="text-blue-300 hover:text-blue-200 font-medium">
               Sign in
             </button>
           </div>

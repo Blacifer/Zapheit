@@ -64,8 +64,8 @@ export default function AcceptInvitePage(props: Props) {
   }, [inviteToken]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur p-8 shadow-2xl">
+    <div className="min-h-screen app-bg text-slate-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-lg card-surface p-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold">Accept invite</h1>
@@ -77,7 +77,7 @@ export default function AcceptInvitePage(props: Props) {
           <button
             type="button"
             onClick={props.onBack}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:bg-slate-800/50"
+            className="rounded-xl border border-white/15 bg-white/[0.02] px-3 py-2 text-slate-100 hover:bg-white/[0.06]"
           >
             Close
           </button>
@@ -95,14 +95,14 @@ export default function AcceptInvitePage(props: Props) {
             <button
               type="button"
               onClick={props.onLogin}
-              className="w-full rounded-xl bg-cyan-500/90 hover:bg-cyan-500 text-slate-950 font-semibold py-3"
+              className="btn-primary w-full"
             >
               Sign in
             </button>
             <button
               type="button"
               onClick={props.onSignUp}
-              className="w-full rounded-xl border border-slate-700 hover:bg-slate-800/50 text-white font-semibold py-3"
+              className="btn-secondary w-full"
             >
               Create account
             </button>
@@ -118,14 +118,14 @@ export default function AcceptInvitePage(props: Props) {
               <button
                 type="button"
                 onClick={props.onLogin}
-                className="w-full rounded-xl bg-cyan-500/90 hover:bg-cyan-500 text-slate-950 font-semibold py-3"
+                className="btn-primary w-full"
               >
                 Sign in
               </button>
               <button
                 type="button"
                 onClick={props.onBack}
-                className="w-full rounded-xl border border-slate-700 hover:bg-slate-800/50 text-white font-semibold py-3"
+                className="btn-secondary w-full"
               >
                 Back
               </button>

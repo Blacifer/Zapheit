@@ -139,7 +139,7 @@ export default function BatchProcessingPage() {
           if (typeof item === 'string') return { prompt: item };
           if (!item || typeof item !== 'object') return item;
 
-          let normalized = { ...item };
+          const normalized = { ...item };
 
           // Auto-map variations into standard "prompt"
           if (!normalized.prompt) {

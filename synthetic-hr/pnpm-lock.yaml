@@ -131,9 +131,6 @@ importers:
       playwright:
         specifier: 1.57.0
         version: 1.57.0
-      pnpm-store:
-        specifier: link:/tmp/pnpm-store
-        version: link:../../../../../tmp/pnpm-store
       react:
         specifier: ^18.3.1
         version: 18.3.1

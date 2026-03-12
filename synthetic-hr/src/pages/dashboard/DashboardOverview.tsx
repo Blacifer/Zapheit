@@ -91,7 +91,7 @@ function statusToneClasses(tone: 'good' | 'warn' | 'risk' | 'info') {
   if (tone === 'good') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
   if (tone === 'warn') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
   if (tone === 'risk') return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
-  return 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300';
+  return 'border-white/10 bg-white/[0.04] text-slate-200';
 }
 
 function ActionPill({
@@ -158,7 +158,7 @@ function Sparkline({
 }
 
 function SectionEyebrow({ label }: { label: string }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300/80">{label}</p>;
+  return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">{label}</p>;
 }
 
 export default function DashboardOverview({
@@ -208,6 +208,37 @@ export default function DashboardOverview({
 
   const hasData = agents.length > 0;
 
+  const activityFeed = useMemo(() => {
+    const items: ActivityItem[] = [
+      ...incidents.slice(0, 6).map((incident): ActivityItem => ({
+        id: `incident-${incident.id}`,
+        at: incident.created_at,
+        title: incident.title,
+        detail: `${incident.agent_name} · ${incident.severity} · ${incident.status}`,
+        tone: ['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'risk' : 'warn',
+      })),
+      ...agents.slice(0, 6).map((agent): ActivityItem => ({
+        id: `agent-${agent.id}`,
+        at: agent.created_at,
+        title: `${agent.name} added to fleet`,
+        detail: `${agent.platform} · ${agent.model_name}`,
+        tone: agent.status === 'terminated' ? 'warn' : 'info',
+      })),
+      ...costData.slice(0, 6).map((entry): ActivityItem => ({
+        id: `cost-${entry.id}`,
+        at: entry.date,
+        title: `Cost recorded ${formatCurrency(entry.cost)}`,
+        detail: `${entry.requests.toLocaleString()} request(s) · ${entry.tokens.toLocaleString()} tokens`,
+        tone: 'info',
+      })),
+    ];
+
+    return items
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 6);
+  }, [agents, costData, incidents]);
+
   if (!hasData) {
     return (
       <div className="space-y-8">
@@ -216,8 +247,8 @@ export default function DashboardOverview({
           <p className="mt-2 text-slate-400">Your command center wakes up after the first governed agent is added to fleet.</p>
         </div>
 
-        <div className="rounded-[28px] border border-slate-800 bg-slate-900/55 p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.20)]">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-slate-700 bg-slate-950/80">
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.25)]">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
             <Users className="h-10 w-10 text-slate-500" />
           </div>
           <h2 className="mb-4 text-2xl font-bold text-white">No governed agents yet</h2>
@@ -226,7 +257,7 @@ export default function DashboardOverview({
           </p>
           <button
             onClick={onAddAgent}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white transition hover:from-cyan-400 hover:to-blue-400"
+            className="btn-primary"
           >
             <Bot className="h-5 w-5" />
             Add your first agent
@@ -302,7 +333,7 @@ export default function DashboardOverview({
       label: 'Governed agents',
       value: `${activeAgents.length}/${agents.length}`,
       note: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
-      tone: 'text-cyan-300',
+      tone: 'text-slate-100',
     },
     {
       label: 'Month spend',
@@ -333,7 +364,7 @@ export default function DashboardOverview({
       delta: previous24hIncidents > 0 ? `${last24hIncidents - previous24hIncidents >= 0 ? '+' : ''}${last24hIncidents - previous24hIncidents} vs prior day` : 'No prior-day baseline',
       tone: last24hIncidents > previous24hIncidents ? 'risk' : 'good',
       trend: incidentTrend,
-      stroke: last24hIncidents > previous24hIncidents ? 'text-rose-300' : 'text-cyan-300',
+      stroke: last24hIncidents > previous24hIncidents ? 'text-rose-300' : 'text-blue-200',
     },
     {
       label: 'Requests last 24h',
@@ -341,7 +372,7 @@ export default function DashboardOverview({
       delta: previous24hConversations > 0 ? `${last24hConversations >= previous24hConversations ? '+' : ''}${Math.round(((last24hConversations - previous24hConversations) / previous24hConversations) * 100)}% vs prior day` : 'No prior-day baseline',
       tone: 'info',
       trend: requestTrend,
-      stroke: 'text-cyan-300',
+      stroke: 'text-blue-200',
     },
     {
       label: 'Active agents',
@@ -383,40 +414,9 @@ export default function DashboardOverview({
       : null,
   ].filter(Boolean) as Array<{ id: string; title: string; description: string; tone: 'warn' | 'risk' | 'info'; action: () => void }>;
 
-  const activityFeed = useMemo(() => {
-    const items: ActivityItem[] = [
-      ...incidents.slice(0, 6).map((incident): ActivityItem => ({
-        id: `incident-${incident.id}`,
-        at: incident.created_at,
-        title: incident.title,
-        detail: `${incident.agent_name} · ${incident.severity} · ${incident.status}`,
-        tone: ['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'risk' : 'warn',
-      })),
-      ...agents.slice(0, 6).map((agent): ActivityItem => ({
-        id: `agent-${agent.id}`,
-        at: agent.created_at,
-        title: `${agent.name} added to fleet`,
-        detail: `${agent.platform} · ${agent.model_name}`,
-        tone: agent.status === 'terminated' ? 'warn' : 'info',
-      })),
-      ...costData.slice(0, 6).map((entry): ActivityItem => ({
-        id: `cost-${entry.id}`,
-        at: entry.date,
-        title: `Cost recorded ${formatCurrency(entry.cost)}`,
-        detail: `${entry.requests.toLocaleString()} request(s) · ${entry.tokens.toLocaleString()} tokens`,
-        tone: 'info',
-      })),
-    ];
-
-    return items
-      .filter((item) => item.at)
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 6);
-  }, [agents, costData, incidents]);
-
   return (
     <div className="space-y-8">
-      <section className="rounded-[32px] border border-slate-800/90 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_28%),linear-gradient(135deg,rgba(12,20,38,0.98),rgba(6,12,24,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.24)]">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_28%),linear-gradient(135deg,rgba(2,6,23,0.90),rgba(2,6,23,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.26)]">
         <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
           <div>
             <SectionEyebrow label="Live command center" />
@@ -445,7 +445,7 @@ export default function DashboardOverview({
               <button
                 onClick={() => void loadOverviewState()}
                 disabled={refreshing}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-cyan-400 border border-cyan-400/20 hover:bg-cyan-400/10 transition-all disabled:opacity-50"
+                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-50 disabled:pointer-events-none"
               >
                 <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing ? 'Refreshing…' : 'Refresh now'}
@@ -454,13 +454,13 @@ export default function DashboardOverview({
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 onClick={() => onNavigate?.('blackbox')}
-                className="rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(34,211,238,0.22)] transition hover:bg-cyan-400"
+                className="btn-primary px-4 py-2.5 text-sm"
               >
                 Review incident evidence
               </button>
               <button
                 onClick={() => onNavigate?.('fleet')}
-                className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:text-white"
+                className="btn-secondary px-4 py-2.5 text-sm"
               >
                 Open fleet
               </button>
@@ -484,7 +484,7 @@ export default function DashboardOverview({
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
                   <p className="mt-2 text-2xl font-bold tabular-nums text-white">{card.value}</p>
-                  <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                  <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {card.delta}
                   </p>
                 </div>
@@ -506,7 +506,7 @@ export default function DashboardOverview({
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Siren className="h-5 w-5 text-cyan-300" />
+              <Siren className="h-5 w-5 text-blue-200" />
             </div>
             <div>
               <SectionEyebrow label="Resolve next" />
@@ -521,7 +521,7 @@ export default function DashboardOverview({
                 <button
                   key={item.id}
                   onClick={item.action}
-                  className="group flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4 text-left transition hover:border-cyan-400/25 hover:bg-slate-950/75"
+                  className="group flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4 text-left transition hover:border-white/15 hover:bg-slate-950/75"
                 >
                   <div>
                     <p className="font-semibold text-white">{item.title}</p>
@@ -529,7 +529,7 @@ export default function DashboardOverview({
                   </div>
                   <div className="flex items-center gap-3">
                     <ActionPill label={item.tone === 'risk' ? 'Urgent' : item.tone === 'warn' ? 'Needs setup' : 'Next step'} tone={item.tone} />
-                    <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:text-cyan-300" />
+                    <ArrowRight className="h-4 w-4 text-slate-500 transition group-hover:text-blue-200" />
                   </div>
                 </button>
               ))
@@ -547,7 +547,7 @@ export default function DashboardOverview({
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Activity className="h-5 w-5 text-cyan-300" />
+              <Activity className="h-5 w-5 text-blue-200" />
             </div>
             <div>
               <SectionEyebrow label="Service telemetry" />
@@ -565,7 +565,7 @@ export default function DashboardOverview({
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Layers3 className="h-5 w-5 text-cyan-300" />
+              <Layers3 className="h-5 w-5 text-blue-200" />
             </div>
             <div>
               <SectionEyebrow label="Latest signals" />
@@ -584,7 +584,7 @@ export default function DashboardOverview({
                     : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
                     }`}
                 >
-                  <div className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+                  <div className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-blue-300'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <p className="font-semibold text-white">{item.title}</p>
@@ -608,7 +608,7 @@ export default function DashboardOverview({
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Sparkles className="h-5 w-5 text-cyan-300" />
+              <Sparkles className="h-5 w-5 text-blue-200" />
             </div>
             <div>
               <SectionEyebrow label="Governance posture" />
@@ -625,7 +625,7 @@ export default function DashboardOverview({
             </div>
             <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Open incidents</p>
-              <p className="mt-3 text-3xl font-bold tabular-nums text-cyan-300">{openIncidents.length}</p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-slate-100">{openIncidents.length}</p>
               <p className="mt-2 text-sm text-slate-400">{severeIncidents.length} high severity</p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
@@ -685,7 +685,7 @@ export default function DashboardOverview({
             </div>
             <button
               onClick={() => onNavigate?.('blackbox')}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-slate-200 transition hover:text-white"
             >
               Open evidence
               <ArrowRight className="h-4 w-4" />
@@ -694,7 +694,7 @@ export default function DashboardOverview({
 
           <div className="mt-6 rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_40%),rgba(2,6,23,0.55)] p-5">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/80">
-              <ShieldAlert className="h-5 w-5 text-cyan-300" />
+              <ShieldAlert className="h-5 w-5 text-blue-200" />
             </div>
             <p className="font-semibold text-white">Incident evidence stays available</p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
