@@ -9,7 +9,7 @@ import { validateRequestBody, agentSchemas, incidentSchemas, costSchemas } from 
 import { z } from 'zod';
 import { requirePermission, requireRole } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { SupabaseRestError, supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
+import { SupabaseRestError, supabaseRestAsService, supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent, getWebhookRelaySettings } from '../lib/webhook-relay';
 import { getPromptCachingState, updatePromptCachingPolicy } from '../lib/prompt-caching';
 import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingConfig } from '../lib/pricing';
@@ -419,16 +419,31 @@ router.delete('/agents/:id', requirePermission('agents.delete'), async (req: Req
 
     logger.info('Deleting agent', { agent_id: id, org_id: orgId, user_id: req.user?.id });
 
+    // First confirm the agent exists for this org under the user's auth context.
+    // This avoids a "false 404" when PostgREST returns an empty body for DELETE/PATCH
+    // or when RLS prevents returning representations.
+    const existsQuery = new URLSearchParams();
+    existsQuery.set('id', eq(id));
+    existsQuery.set('organization_id', eq(orgId));
+    existsQuery.set('select', 'id');
+    existsQuery.set('limit', '1');
+    const existing = (await supabaseRestAsUser(getUserJwt(req), 'ai_agents', existsQuery)) as any[] | null;
+    if (!existing || existing.length === 0) {
+      return errorResponse(res, new Error('Agent not found'), 404);
+    }
+
     const deleteQuery = new URLSearchParams();
     deleteQuery.set('id', eq(id));
     deleteQuery.set('organization_id', eq(orgId));
 
+    // Try user-scoped delete first (preferred; respects RLS).
+    // If it returns no representation, fall back to service-role delete scoped by org.
     const deleted = (await supabaseRestAsUser(getUserJwt(req), 'ai_agents', deleteQuery, {
       method: 'DELETE',
-    })) as any[];
+    })) as any[] | null;
 
     if (!deleted || deleted.length === 0) {
-      return errorResponse(res, new Error('Agent not found'), 404);
+      await supabaseRestAsService('ai_agents', deleteQuery, { method: 'DELETE' });
     }
 
     await auditLog.agentDeleted(

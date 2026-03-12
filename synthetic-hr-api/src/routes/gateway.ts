@@ -139,7 +139,14 @@ const getProviderKey = (provider: 'openai' | 'anthropic' | 'openrouter'): string
     return process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || null;
   }
 
-  return process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || null;
+  // Accept legacy/mistyped env var names for resilience in hosted deployments.
+  return (
+    process.env.RASI_ANTHROPIC_API_KEY ||
+    process.env.RASI_ANTHROPIC_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.ANTHROPIC_KEY ||
+    null
+  );
 };
 
 const normalizeModel = (model: string): GatewayModel | null => {
