@@ -34,11 +34,10 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   const [sandboxMessage, setSandboxMessage] = useState('');
   const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
   const [deploymentStep, setDeploymentStep] = useState<'configure' | 'channel'>('configure');
-  const WORKLOAD_STEPS = useMemo(() => [1_000, 10_000, 100_000, 500_000, 1_000_000, 10_000_000, 100_000_000], []);
-  const [monthlyTokensStep, setMonthlyTokensStep] = useState<number>(() => {
-    const idx = WORKLOAD_STEPS.indexOf(10_000_000);
-    return idx >= 0 ? idx : 0;
-  });
+  const WORKLOAD_PRESETS = useMemo(() => [1_000_000, 10_000_000, 100_000_000], []);
+  const MIN_MONTHLY_TOKENS = 1_000_000;
+  const MAX_MONTHLY_TOKENS = 100_000_000;
+  const [monthlyTokens, setMonthlyTokens] = useState<number>(10_000_000);
 
   // Fetch live model list on mount
   useEffect(() => {
@@ -147,21 +146,8 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     return `${Math.round(tokens)}`;
   };
 
-  const monthlyTokens = WORKLOAD_STEPS[Math.min(WORKLOAD_STEPS.length - 1, Math.max(0, monthlyTokensStep))] ?? WORKLOAD_STEPS[0]!;
-
-  const nearestWorkloadStepIndex = (tokens: number) => {
-    const t = Math.min(WORKLOAD_STEPS[WORKLOAD_STEPS.length - 1]!, Math.max(WORKLOAD_STEPS[0]!, tokens));
-    let bestIdx = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < WORKLOAD_STEPS.length; i++) {
-      const d = Math.abs(WORKLOAD_STEPS[i]! - t);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
-    }
-    return bestIdx;
-  };
+  const clampMonthlyTokens = (tokens: number) =>
+    Math.min(MAX_MONTHLY_TOKENS, Math.max(MIN_MONTHLY_TOKENS, Math.round(tokens)));
 
   // Monthly cost estimator
   const USD_TO_INR = 93;
@@ -582,48 +568,50 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 	                          <span className="text-slate-400 text-sm whitespace-nowrap">Monthly tokens</span>
 
 	                          <div className="flex flex-col gap-1 min-w-0">
-	                            <div className="relative">
-	                              <div className="absolute inset-x-1 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
-	                                {WORKLOAD_STEPS.map((_, idx) => (
-	                                  <div
-	                                    key={idx}
-	                                    className={`w-px h-2 ${idx <= monthlyTokensStep ? 'bg-cyan-500/70' : 'bg-slate-600/60'}`}
-	                                  />
-	                                ))}
-	                              </div>
-	                              <input
-	                                type="range"
-	                                min={0}
-	                                max={WORKLOAD_STEPS.length - 1}
-	                                step={1}
-	                                value={monthlyTokensStep}
-	                                onChange={(e) => setMonthlyTokensStep(Number(e.target.value))}
-	                                className="relative z-10 w-full accent-cyan-500"
-	                              />
+	                            <div className="flex flex-wrap items-center gap-2">
+	                              {WORKLOAD_PRESETS.map((preset) => {
+	                                const active = monthlyTokens === preset;
+	                                return (
+	                                  <button
+	                                    key={preset}
+	                                    type="button"
+	                                    onClick={() => setMonthlyTokens(preset)}
+	                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+	                                      active
+	                                        ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
+	                                        : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-600'
+	                                    }`}
+	                                  >
+	                                    {formatTokensShort(preset).toUpperCase()}
+	                                  </button>
+	                                );
+	                              })}
+	                              <span className="text-[11px] text-slate-500 ml-1">
+	                                Min {formatTokensShort(MIN_MONTHLY_TOKENS).toUpperCase()} · Max {formatTokensShort(MAX_MONTHLY_TOKENS).toUpperCase()}
+	                              </span>
 	                            </div>
-	                            <div className="mt-1 grid grid-cols-7 text-[10px] text-slate-500">
-	                              {WORKLOAD_STEPS.map((v, idx) => (
-	                                <span
-	                                  key={v}
-	                                  className={`text-center ${idx === monthlyTokensStep ? 'text-cyan-300' : ''}`}
-	                                >
-	                                  {formatTokensShort(v).toUpperCase()}
-	                                </span>
-	                              ))}
-	                            </div>
+	                            <input
+	                              type="range"
+	                              min={MIN_MONTHLY_TOKENS}
+	                              max={MAX_MONTHLY_TOKENS}
+	                              step={1_000_000}
+	                              value={monthlyTokens}
+	                              onChange={(e) => setMonthlyTokens(clampMonthlyTokens(Number(e.target.value)))}
+	                              className="w-full accent-cyan-500 mt-2"
+	                            />
 	                          </div>
 
 	                          <div className="flex items-center gap-2 justify-self-start sm:justify-self-end">
 	                            <input
 	                              type="number"
-	                              min={WORKLOAD_STEPS[0]}
-	                              max={WORKLOAD_STEPS[WORKLOAD_STEPS.length - 1]}
-	                              step={1}
+	                              min={MIN_MONTHLY_TOKENS}
+	                              max={MAX_MONTHLY_TOKENS}
+	                              step={1_000_000}
 	                              value={monthlyTokens}
 	                              onChange={(e) => {
 	                                const next = Number(e.target.value);
 	                                if (!Number.isFinite(next)) return;
-	                                setMonthlyTokensStep(nearestWorkloadStepIndex(next));
+	                                setMonthlyTokens(clampMonthlyTokens(next));
 	                              }}
 	                              className="w-36 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
 	                            />
