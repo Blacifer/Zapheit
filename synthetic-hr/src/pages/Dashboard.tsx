@@ -844,8 +844,8 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
               { id: 'fleet', icon: Users, label: 'Fleet' },
               { id: 'templates', icon: Zap, label: 'Templates' },
               { id: 'integrations', icon: Link2, label: 'Integrations' },
-              { id: 'conversations', icon: MessageSquare, label: 'Operations' },
-              { id: 'incidents', icon: AlertTriangle, label: 'Governance' },
+              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
+              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
               { id: 'costs', icon: DollarSign, label: 'Costs' },
               { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
               { id: 'api-access', icon: Key, label: 'API Access' },
@@ -869,7 +869,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
             ))}
 
             <div className="px-2 pt-5 pb-2">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">More Tools</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Advanced Tools</div>
             </div>
             {[
               { id: 'playbooks', icon: FileText, label: 'Playbooks' },
