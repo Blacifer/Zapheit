@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // RBAC (Role-Based Access Control) Hook
 // Enforces permission checking throughout the application
 

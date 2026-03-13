@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MessageSquare, Search, Filter, Bot, User, Clock,
   CheckCircle, AlertTriangle, Eye, Download, X, Loader2
@@ -214,15 +214,7 @@ export default function ConversationsPage({ agents, onNavigate }: ConversationsP
     }
   }, []);
 
-  useEffect(() => {
-    if (!incidentContext?.agentId || filteredConversations.length === 0 || selectedConversation) return;
-    const matchingConversation = filteredConversations.find((conversation) => conversation.agentId === incidentContext.agentId);
-    if (matchingConversation) {
-      void openConversation(matchingConversation.id);
-    }
-  }, [filteredConversations, incidentContext, selectedConversation]);
-
-  async function openConversation(id: string) {
+  const openConversation = useCallback(async (id: string) => {
     const cached = conversationCache[id];
     if (cached) {
       setSelectedConversation(cached);
@@ -242,7 +234,15 @@ export default function ConversationsPage({ agents, onNavigate }: ConversationsP
     setConversationCache((current) => ({ ...current, [detail.id]: detail }));
     setConversationList((current) => current.map((conversation) => conversation.id === detail.id ? detail : conversation));
     setSelectedConversation(detail);
-  }
+  }, [agents, conversationCache]);
+
+  useEffect(() => {
+    if (!incidentContext?.agentId || filteredConversations.length === 0 || selectedConversation) return;
+    const matchingConversation = filteredConversations.find((conversation) => conversation.agentId === incidentContext.agentId);
+    if (matchingConversation) {
+      void openConversation(matchingConversation.id);
+    }
+  }, [filteredConversations, incidentContext, openConversation, selectedConversation]);
 
   const clearIncidentFocus = () => {
     setIncidentContext(null);

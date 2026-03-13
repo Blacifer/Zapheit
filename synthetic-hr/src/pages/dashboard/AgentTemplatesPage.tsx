@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Zap, Headphones, Users, RefreshCw, Server, Search, Loader2, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
@@ -75,7 +75,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     load().finally(() => setModelsLoading(false));
   }, []);
 
-  const resolveModel = (modelId: string) =>
+  const resolveModel = useCallback((modelId: string) =>
     (() => {
       const direct = liveModels.find(m => m.id === modelId);
       if (direct) return direct;
@@ -84,7 +84,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
       const key = normalize(modelId);
 
       return liveModels.find(m => normalize(m.id).includes(key) || key.includes(normalize(m.id)));
-    })();
+    })(), [liveModels]);
 
   // Update selected model when template changes or live models load
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
       setSandboxMessage('');
       setDeploymentStep('configure');
     }
-  }, [selectedTemplate, liveModels]);
+  }, [selectedTemplate, liveModels, resolveModel]);
 
   // Unique providers derived from live model list
   const providers = useMemo(() => {
@@ -170,11 +170,10 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
   const monthlyTokens = clampMonthlyTokens(monthlyTokensMillions * 1_000_000);
   const monthlyCost = calcMonthlyCost(selectedModel, monthlyTokens);
-  const templates = AGENT_TEMPLATES;
   const industries = [...AGENT_TEMPLATE_INDUSTRIES];
 
   const filteredTemplates = useMemo(() => {
-    let result = templates;
+    let result = AGENT_TEMPLATES;
     if (selectedIndustry !== 'all') {
       result = result.filter(t => t.industry === selectedIndustry);
     }

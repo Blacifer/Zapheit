@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
   BarChart3,
@@ -201,7 +201,7 @@ export default function ApiKeysPage({
   const [savingLimitId, setSavingLimitId] = useState<string | null>(null);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
 
-  const loadKeys = async () => {
+  const loadKeys = useCallback(async () => {
     setFetching(true);
     try {
       const response = await api.apiKeys.list();
@@ -212,9 +212,9 @@ export default function ApiKeysPage({
     } finally {
       setFetching(false);
     }
-  };
+  }, [setApiKeys]);
 
-  const loadManagers = async () => {
+  const loadManagers = useCallback(async () => {
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -236,12 +236,12 @@ export default function ApiKeysPage({
     } catch {
       // Optional metadata only.
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadKeys();
     void loadManagers();
-  }, []);
+  }, [loadKeys, loadManagers]);
 
   useEffect(() => {
     setViewMode(initialView);
