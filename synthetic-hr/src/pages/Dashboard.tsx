@@ -842,9 +842,13 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
               { id: 'getting-started', icon: Sparkles, label: 'Getting Started', badge: needsOnboarding ? 'Recommended' : null },
               { id: 'overview', icon: BarChart3, label: 'Overview' },
               { id: 'fleet', icon: Users, label: 'Fleet' },
+              { id: 'templates', icon: Zap, label: 'Templates' },
               { id: 'integrations', icon: Link2, label: 'Integrations' },
               { id: 'conversations', icon: MessageSquare, label: 'Operations' },
               { id: 'incidents', icon: AlertTriangle, label: 'Governance' },
+              { id: 'costs', icon: DollarSign, label: 'Costs' },
+              { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
+              { id: 'api-access', icon: Key, label: 'API Access' },
               { id: 'settings', icon: Settings, label: 'Settings' },
             ].map((item) => (
 	              <button
@@ -861,6 +865,25 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                     {item.badge}
                   </span>
                 ) : null}
+              </button>
+            ))}
+
+            <div className="px-2 pt-5 pb-2">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">More Tools</div>
+            </div>
+            {[
+              { id: 'playbooks', icon: FileText, label: 'Playbooks' },
+              { id: 'blackbox', icon: Database, label: 'Black Box' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
               </button>
             ))}
           </nav>
