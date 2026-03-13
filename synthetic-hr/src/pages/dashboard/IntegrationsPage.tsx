@@ -307,6 +307,7 @@ export default function IntegrationsPage() {
     action: string;
     label: string;
     risk: 'low' | 'medium' | 'high' | 'money';
+    pack?: IntegrationPackId | null;
     enabled: boolean;
     requireApproval: boolean;
     requiredRole: string;
@@ -322,6 +323,8 @@ export default function IntegrationsPage() {
     const map = new Map<IntegrationPackId, IntegrationRow[]>();
     INTEGRATION_PACKS.forEach((p) => map.set(p.id, []));
     items.forEach((it) => {
+      // Built-in/internal provider is used to populate Action Catalog; keep it out of provider cards + pack stats to avoid confusion.
+      if (it.id === 'internal') return;
       const packId = guessPackForIntegration(it);
       const list = map.get(packId) || [];
       list.push(it);
@@ -667,7 +670,7 @@ export default function IntegrationsPage() {
     const map = new Map<IntegrationPackId, typeof actionCatalog>();
     INTEGRATION_PACKS.forEach((p) => map.set(p.id, []));
     actionCatalog.forEach((a) => {
-      const packId = guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
+      const packId = (a.pack as IntegrationPackId | null | undefined) || guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
       const list = map.get(packId) || [];
       list.push(a);
       map.set(packId, list);
@@ -686,7 +689,7 @@ export default function IntegrationsPage() {
     INTEGRATION_PACKS.forEach((p) => out.set(p.id, 0));
     actionCatalog.forEach((a) => {
       if (!a.enabled) return;
-      const packId = guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
+      const packId = (a.pack as IntegrationPackId | null | undefined) || guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
       out.set(packId, (out.get(packId) || 0) + 1);
     });
     return out;

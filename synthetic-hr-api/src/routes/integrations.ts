@@ -500,7 +500,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
 
   const data = IMPLEMENTED_INTEGRATIONS.map((spec) => {
     const row = byType.get(spec.id);
-    const lifecycleStatus = lifecycleFromRow(row);
+    const lifecycleStatus = spec.id === 'internal' ? 'connected' : lifecycleFromRow(row);
     const oauthKeys = spec.authType === 'oauth2' ? oauthEnvKeysForService(spec.id) : [];
     const oauthMissingEnv = oauthKeys.filter((k) => !(process.env[k] && String(process.env[k]).trim().length > 0));
     const oauthMeta = spec.authType === 'oauth2'
@@ -530,7 +530,20 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       detail: coreEnvReady ? null : `Missing: ${missingCoreEnv.join(', ')}`,
     });
 
-    if (spec.authType === 'oauth2') {
+    if (spec.id === 'internal') {
+      readiness.items.push({
+        id: 'credentials',
+        label: 'Credentials saved',
+        status: 'ok',
+        detail: 'Not required (built-in).',
+      });
+      readiness.items.push({
+        id: 'validated',
+        label: 'Connection validated',
+        status: 'ok',
+        detail: 'Built-in provider.',
+      });
+    } else if (spec.authType === 'oauth2') {
       readiness.items.push({
         id: 'oauth_app',
         label: 'OAuth app keys set',
@@ -587,7 +600,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       tokenExpired,
       tokenExpiresSoon,
       // Backwards-compatible field for older UIs.
-      status: row?.status || 'disconnected',
+      status: spec.id === 'internal' ? 'connected' : (row?.status || 'disconnected'),
       // New lifecycle field: use this in UIs to show "visible but disabled until configured".
       lifecycleStatus,
       lastSyncAt: row?.last_sync_at || null,
@@ -629,6 +642,7 @@ router.get('/actions', requirePermission('connectors.read'), async (req, res) =>
         action: w.id,
         label: w.label,
         risk: w.risk,
+        pack: w.pack || null,
         enabled: policy ? Boolean(policy.enabled) : false,
         requireApproval: policy ? Boolean(policy.require_approval) : true,
         requiredRole: policy?.required_role || 'manager',
