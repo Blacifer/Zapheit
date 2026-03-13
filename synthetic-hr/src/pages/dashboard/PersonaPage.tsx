@@ -221,7 +221,7 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
     setDraft(p ? { ...p } : { agentId: selectedAgentId, name: selectedAgent?.name || '', role: '', brandTone: '', guidelines: '', jailbreakDefense: '' });
     setIsDirty(false);
     setActiveTab('role');
-  }, [selectedAgentId, personas]);
+  }, [selectedAgentId, personas, selectedAgent?.name]);
 
   const handleFieldChange = (value: string) => {
     const tab = EDITOR_TABS.find(t => t.id === activeTab)!;

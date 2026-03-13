@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
@@ -340,9 +340,9 @@ export default function IntegrationsPage() {
 
   const activePackProviders = useMemo(() => providersByPack.get(activePack) || [], [providersByPack, activePack]);
 
-  const effectiveStatus = (it: IntegrationRow): string => it.lifecycleStatus || it.status || 'disconnected';
-  const isConfiguredLike = (it: IntegrationRow): boolean => effectiveStatus(it) !== 'not_configured';
-  const isConnectedLike = (it: IntegrationRow): boolean => effectiveStatus(it) === 'connected';
+  const effectiveStatus = useCallback((it: IntegrationRow): string => it.lifecycleStatus || it.status || 'disconnected', []);
+  const isConfiguredLike = useCallback((it: IntegrationRow): boolean => effectiveStatus(it) !== 'not_configured', [effectiveStatus]);
+  const isConnectedLike = useCallback((it: IntegrationRow): boolean => effectiveStatus(it) === 'connected', [effectiveStatus]);
 
   const packStats = useMemo(() => {
     const stats = new Map<IntegrationPackId, { total: number; configured: number; connected: number; needsAttention: number }>();
@@ -356,7 +356,7 @@ export default function IntegrationsPage() {
       });
     });
     return stats;
-  }, [providersByPack]);
+  }, [effectiveStatus, isConfiguredLike, isConnectedLike, providersByPack]);
 
   const selectedProviders = useMemo(() => {
     const list: string[] = [];
@@ -651,7 +651,7 @@ export default function IntegrationsPage() {
       .filter((p) => isConnectedLike(p))
       .filter((p) => (p.capabilities?.reads || []).some((r) => String(r).includes('candidate_profiles')))
       .map((p) => p.id);
-  }, [recruitmentProviders]);
+  }, [isConnectedLike, recruitmentProviders]);
 
   const defaultSampleProviderId = connectedCandidateSources[0] || null;
 

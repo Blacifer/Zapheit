@@ -12,6 +12,7 @@ type Props = {
 type Step = 'checking' | 'needs-auth' | 'claiming' | 'done' | 'error';
 
 export default function AcceptInvitePage(props: Props) {
+  const { onBack, onDone, onLogin, onSignUp } = props;
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const inviteToken = params.get('token') || params.get('invite') || '';
   const [step, setStep] = useState<Step>('checking');
@@ -57,11 +58,11 @@ export default function AcceptInvitePage(props: Props) {
       setMessage('Invite accepted. You have joined the workspace.');
 
       // Give the UI a tick to show the success state, then continue.
-      setTimeout(() => props.onDone(), 250);
+      setTimeout(() => onDone(), 250);
     };
 
     void run();
-  }, [inviteToken]);
+  }, [inviteToken, onDone]);
 
   return (
     <div className="min-h-screen app-bg text-slate-50 flex items-center justify-center p-6">
@@ -76,7 +77,7 @@ export default function AcceptInvitePage(props: Props) {
           </div>
           <button
             type="button"
-            onClick={props.onBack}
+            onClick={onBack}
             className="rounded-xl border border-white/15 bg-white/[0.02] px-3 py-2 text-slate-100 hover:bg-white/[0.06]"
           >
             Close
@@ -94,14 +95,14 @@ export default function AcceptInvitePage(props: Props) {
           <div className="mt-8 flex flex-col gap-3">
             <button
               type="button"
-              onClick={props.onLogin}
+              onClick={onLogin}
               className="btn-primary w-full"
             >
               Sign in
             </button>
             <button
               type="button"
-              onClick={props.onSignUp}
+              onClick={onSignUp}
               className="btn-secondary w-full"
             >
               Create account
@@ -117,14 +118,14 @@ export default function AcceptInvitePage(props: Props) {
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={props.onLogin}
+                onClick={onLogin}
                 className="btn-primary w-full"
               >
                 Sign in
               </button>
               <button
                 type="button"
-                onClick={props.onBack}
+                onClick={onBack}
                 className="btn-secondary w-full"
               >
                 Back

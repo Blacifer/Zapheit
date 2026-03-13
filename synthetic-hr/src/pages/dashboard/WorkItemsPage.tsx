@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LifeBuoy, Target, KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
@@ -27,7 +27,7 @@ export default function WorkItemsPage() {
     { id: 'it' as const, label: 'IT', icon: KeyRound },
   ]), []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setBusy(true);
     try {
       const [t, l, a] = await Promise.all([
@@ -48,12 +48,11 @@ export default function WorkItemsPage() {
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const applyFocus = () => {

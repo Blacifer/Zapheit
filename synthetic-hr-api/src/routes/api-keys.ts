@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
-import { supabaseRestAsService, supabaseRestAsUser, eq, in_ } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq, in_ } from '../lib/supabase-rest';
 import { requirePermission } from '../middleware/rbac';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
@@ -394,24 +394,11 @@ router.delete('/api-keys/:id', requirePermission('settings.update'), async (req:
       updated_at: new Date().toISOString(),
     }, userJwt);
 
-    // PostgREST can legally return an empty body for PATCH (204) depending on RLS/Prefer support.
-    // If the key exists but the user-scoped update returns no representation, fall back to
-    // a service-role update scoped by org.
     if (!updated) {
-      const query = new URLSearchParams();
-      query.set('id', eq(req.params.id));
-      query.set('organization_id', eq(orgId));
-      const rows = (await supabaseRestAsService('api_keys', query, {
-        method: 'PATCH',
-        body: {
-          status: 'revoked',
-          updated_at: new Date().toISOString(),
-        },
-      })) as any[] | null;
-
-      if (!rows || rows.length === 0) {
-        return res.status(500).json({ success: false, error: 'Failed to revoke API key' });
-      }
+      return res.status(403).json({
+        success: false,
+        error: 'API key revocation was not permitted by row-level security',
+      });
     }
 
     auditLog.log({
