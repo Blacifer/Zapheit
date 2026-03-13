@@ -9,7 +9,7 @@ import { validateRequestBody, agentSchemas, incidentSchemas, costSchemas } from 
 import { z } from 'zod';
 import { requirePermission, requireRole } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { SupabaseRestError, supabaseRestAsService, supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
+import { SupabaseRestError, supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent, getWebhookRelaySettings } from '../lib/webhook-relay';
 import { getPromptCachingState, updatePromptCachingPolicy } from '../lib/prompt-caching';
 import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingConfig } from '../lib/pricing';
@@ -491,14 +491,13 @@ router.delete('/agents/:id', requirePermission('agents.delete'), async (req: Req
     deleteQuery.set('id', eq(id));
     deleteQuery.set('organization_id', eq(orgId));
 
-    // Try user-scoped delete first (preferred; respects RLS).
-    // If it returns no representation, fall back to service-role delete scoped by org.
+    // Perform the delete only through the caller's auth context.
     const deleted = (await supabaseRestAsUser(getUserJwt(req), 'ai_agents', deleteQuery, {
       method: 'DELETE',
     })) as any[] | null;
 
     if (!deleted || deleted.length === 0) {
-      await supabaseRestAsService('ai_agents', deleteQuery, { method: 'DELETE' });
+      return errorResponse(res, new Error('Agent delete was not permitted by row-level security'), 403);
     }
 
     await auditLog.agentDeleted(

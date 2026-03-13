@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { AppContext, type AuthUser } from './context/AppContext';
 import { authHelpers } from './lib/supabase-client';
 import { getFrontendConfig } from './lib/config';
@@ -20,19 +20,20 @@ function LoadingSpinner() {
   );
 }
 
+const TIMEOUT_MS = 15 * 60 * 1000;
+
 function App() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'landing' | 'signup' | 'login' | 'dashboard' | 'accept-invite'>('landing');
-  const [retentionDays, setRetentionDays] = useState(90);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const config = getFrontendConfig();
   const demoEnabled = Boolean(config.demoModeEnabled);
   const pendingInviteStorageKey = 'synthetic_hr_pending_invite_token';
 
-  const claimInviteIfPending = async (accessToken: string | null | undefined) => {
+  const claimInviteIfPending = useCallback(async (accessToken: string | null | undefined) => {
     if (!accessToken) return;
     const token = localStorage.getItem(pendingInviteStorageKey);
     if (!token) return;
@@ -56,10 +57,7 @@ function App() {
     } catch {
       // Best-effort; user can retry from the invite link.
     }
-  };
-
-  // 15-minute idle timeout
-  const TIMEOUT_MS = 15 * 60 * 1000;
+  }, [config.apiUrl]);
 
   useEffect(() => {
     if (!mounted || view !== 'dashboard' || isDemoMode) return;
@@ -137,14 +135,7 @@ function App() {
     };
 
     loadSession();
-  }, [mounted]);
-
-  // Load retention days from localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem('synthetic_hr_retention_days');
-    if (saved) setRetentionDays(Number(saved));
-  }, []);
+  }, [mounted, claimInviteIfPending]);
 
   const enterDemoMode = () => {
     if (!demoEnabled) return;
@@ -240,39 +231,6 @@ function App() {
     setIsDemoMode(false);
   };
 
-  // Update retention days
-  const updateRetentionDays = (days: number) => {
-    setRetentionDays(days);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('synthetic_hr_retention_days', days.toString());
-    }
-  };
-
-  // Export data function
-  const exportData = (type: 'csv' | 'json', data: any[], filename: string) => {
-    let content: string;
-    let mimeType: string;
-
-    if (type === 'json') {
-      content = JSON.stringify(data, null, 2);
-      mimeType = 'application/json';
-    } else {
-      if (data.length === 0) return;
-      const headers = Object.keys(data[0]);
-      const rows = data.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','));
-      content = [headers.join(','), ...rows].join('\n');
-      mimeType = 'text/csv';
-    }
-
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.${type}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   // Prevent hydration mismatch
   if (!mounted || loading) {
     return <LoadingSpinner />;
@@ -304,9 +262,6 @@ function App() {
         )}
         {view === 'dashboard' && (
           <Dashboard
-            retentionDays={retentionDays}
-            updateRetentionDays={updateRetentionDays}
-            exportData={exportData}
             isDemoMode={isDemoMode}
           />
         )}

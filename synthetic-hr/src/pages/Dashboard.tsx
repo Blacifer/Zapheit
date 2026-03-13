@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
-  DollarSign, Eye, Database, Building2, Key, CreditCard, Scale, Settings, X, Play, Link2,
+  DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
   TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
@@ -25,7 +25,6 @@ const PersonaPage = lazy(() => import('./dashboard/PersonaPage'));
 const CostsPage = lazy(() => import('./dashboard/CostsPage'));
 const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
-const TeamPage = lazy(() => import('./dashboard/TeamPage'));
 const ApiKeysPage = lazy(() => import('./dashboard/ApiKeysPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
@@ -40,9 +39,6 @@ const ConversationsPage = lazy(() => import('./dashboard/ConversationsPage'));
 const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
 
 interface DashboardProps {
-  retentionDays: number;
-  updateRetentionDays: (days: number) => void;
-  exportData: (type: 'csv' | 'json', data: any[], filename: string) => void;
   isDemoMode?: boolean;
 }
 
@@ -177,7 +173,7 @@ function buildCoverageNotifications(
     .slice(0, 50);
 }
 
-export default function Dashboard({ retentionDays, updateRetentionDays, exportData, isDemoMode }: DashboardProps) {
+export default function Dashboard({ isDemoMode }: DashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState('overview');
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -207,13 +203,6 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    // Wait for mount to prevent hydration issues
-    // Initial mount flag
-    if (!mounted) return;
-    refreshData();
-  }, [mounted, isDemoMode]); // We moved loadData out to a useCallback
 
   const refreshData = useCallback(async () => {
     setLoading(true);
@@ -359,7 +348,12 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
     }
 
     setLoading(false);
-  }, [isDemoMode]);
+  }, [isDemoMode, user?.organizationName]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    void refreshData();
+  }, [mounted, refreshData]);
 
   const onboardingStorageScope = user?.organizationName || 'workspace';
   const onboardingDismissedKey = `synthetic_hr_onboarding_dismissed:${onboardingStorageScope}`;
@@ -686,9 +680,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
               { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
               { id: 'integrations', icon: Link2, label: 'Integrations' },
               { id: 'costs', icon: DollarSign, label: 'Costs' },
-              { id: 'keys', icon: Key, label: 'API Keys' },
-              { id: 'usage', icon: BarChart3, label: 'Usage' },
-              { id: 'limits', icon: Scale, label: 'Limits' },
+              { id: 'api-access', icon: Key, label: 'API Access' },
               { id: 'coverage', icon: Eye, label: 'Coverage' },
               { id: 'settings', icon: Settings, label: 'Settings' },
 	            ].map((item) => (
@@ -856,7 +848,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
           ) : (
             <Suspense fallback={<DashboardSectionLoading />}>
               {[
-                'persona', 'shadow', 'team', 'api-analytics',
+                'persona', 'shadow', 'api-analytics',
                 'model-comparison', 'webhooks', 'batch',
                 'fine-tuning', 'caching', 'pricing', 'legal'
               ].includes(currentPage) && (
@@ -975,10 +967,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                 {currentPage === 'persona' && <PersonaPage agents={agents} />}
                 {currentPage === 'shadow' && <ShadowModePage />}
 	                {currentPage === 'blackbox' && <BlackBoxPage incidents={incidents} onNavigate={navigateTo} />}
-                {currentPage === 'team' && <TeamPage />}
-                {currentPage === 'keys' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />}
-                {currentPage === 'usage' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="usage" />}
-                {currentPage === 'limits' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="limits" />}
+                {currentPage === 'api-access' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />}
                 {currentPage === 'coverage' && <CoverageStatusPage />}
                 {currentPage === 'api-analytics' && <ApiAnalyticsPage isDemoMode={!!isDemoMode} />}
                 {currentPage === 'model-comparison' && <ModelComparisonPage />}
