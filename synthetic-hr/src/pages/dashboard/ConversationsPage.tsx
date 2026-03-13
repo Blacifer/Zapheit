@@ -11,6 +11,7 @@ import { toast } from '../../lib/toast';
 interface ConversationsPageProps {
   agents: AIAgent[];
   onNavigate?: (page: string) => void;
+  initialAgentId?: string | null;
 }
 
 type ConversationRecord = {
@@ -40,6 +41,7 @@ type ConversationDetail = ConversationRecord & {
 };
 
 const INCIDENT_CONTEXT_STORAGE_KEY = 'synthetic_hr_incident_context';
+const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
 
 function getAgentName(agents: AIAgent[], agentId?: string | null) {
   return agents.find((agent) => agent.id === agentId)?.name || 'Unknown Agent';
@@ -118,7 +120,7 @@ function normalizeConversationDetail(raw: any, agents: AIAgent[]): ConversationD
   };
 }
 
-export default function ConversationsPage({ agents, onNavigate }: ConversationsPageProps) {
+export default function ConversationsPage({ agents, onNavigate, initialAgentId }: ConversationsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAgent, setFilterAgent] = useState('all');
   const [filterSentiment, setFilterSentiment] = useState('all');
@@ -213,6 +215,18 @@ export default function ConversationsPage({ agents, onNavigate }: ConversationsP
       setFilterSentiment('negative');
     }
   }, []);
+
+  useEffect(() => {
+    if (initialAgentId) {
+      setFilterAgent(initialAgentId);
+      return;
+    }
+
+    const workspaceFocus = loadFromStorage<{ agentId?: string } | null>(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, null);
+    if (workspaceFocus?.agentId) {
+      setFilterAgent(workspaceFocus.agentId);
+    }
+  }, [initialAgentId]);
 
   const openConversation = useCallback(async (id: string) => {
     const cached = conversationCache[id];

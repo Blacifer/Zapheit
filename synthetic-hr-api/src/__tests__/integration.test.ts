@@ -155,6 +155,96 @@ describe('API Integration Tests', () => {
 
       expect(response.status).toBe(403);
     });
+
+    it('should persist publish state for an agent', async () => {
+      mockedSupabaseRest.mockResolvedValueOnce([
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          organization_id: TEST_ORG_ID,
+          metadata: {},
+          config: {},
+        },
+      ]);
+      mockedSupabaseRest.mockResolvedValueOnce([
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          organization_id: TEST_ORG_ID,
+          metadata: {
+            publish: {
+              publish_status: 'live',
+              primary_pack: 'support',
+              integration_ids: ['zendesk'],
+            },
+          },
+          config: {},
+        },
+      ]);
+      mockedSupabaseRest.mockResolvedValueOnce([
+        {
+          id: 'integration-row-1',
+          service_type: 'zendesk',
+          service_name: 'Zendesk',
+          category: 'SUPPORT',
+          status: 'connected',
+          last_sync_at: '2026-03-13T10:00:00.000Z',
+        },
+      ]);
+
+      const response = await request(app)
+        .put('/api/agents/33333333-3333-4333-8333-333333333333/publish')
+        .set('Authorization', 'Bearer manager')
+        .send({
+          publish_status: 'live',
+          primary_pack: 'support',
+          integration_ids: ['zendesk'],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.publishStatus).toBe('live');
+      expect(response.body.data.integrationIds).toEqual(['zendesk']);
+      expect(response.body.data.connectedTargets).toHaveLength(1);
+    });
+
+    it('should include publish metadata when listing agents', async () => {
+      mockedSupabaseRest.mockResolvedValueOnce([
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          organization_id: TEST_ORG_ID,
+          name: 'Support Bot',
+          config: {},
+          metadata: {
+            publish: {
+              publish_status: 'live',
+              primary_pack: 'support',
+              integration_ids: ['zendesk'],
+            },
+          },
+        },
+      ]);
+      mockedSupabaseRest.mockResolvedValueOnce([]);
+      mockedSupabaseRest.mockResolvedValueOnce([
+        {
+          id: 'integration-row-1',
+          service_type: 'zendesk',
+          service_name: 'Zendesk',
+          category: 'SUPPORT',
+          status: 'connected',
+          last_sync_at: '2026-03-13T10:00:00.000Z',
+        },
+      ]);
+
+      const response = await request(app)
+        .get('/api/agents')
+        .set('Authorization', 'Bearer viewer');
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data[0].publishStatus).toBe('live');
+      expect(response.body.data[0].primaryPack).toBe('support');
+      expect(response.body.data[0].integrationIds).toEqual(['zendesk']);
+      expect(response.body.data[0].connectedTargets).toHaveLength(1);
+    });
   });
 
   describe('Incidents API', () => {

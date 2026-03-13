@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { INTEGRATION_PACKS, guessPackForIntegration, packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
+import type { AIAgent } from '../../types';
 import {
   AlertTriangle,
   ArrowRight,
@@ -87,6 +88,22 @@ type SampleCandidate = {
 };
 
 type SamplePullResponse = { candidates: SampleCandidate[]; jds: Array<{ id: string; title: string; location: string; seniority: string }> };
+type IntegrationsPageProps = {
+  selectedAgent?: AIAgent | null;
+  recommendedPackId?: IntegrationPackId | null;
+  entryMode?: 'publish' | 'browse';
+  onNavigate?: (page: string) => void;
+  onIntegrationConnected?: (payload: {
+    agentId: string;
+    integrationId: string;
+    integrationName: string;
+    packId: IntegrationPackId;
+    status: string;
+    lastSyncAt?: string | null;
+  }) => void;
+  onIntegrationDisconnected?: () => void;
+};
+const PUBLISH_CONTEXT_STORAGE_KEY = 'synthetic_hr_publish_context';
 
 function statusTone(status: string): 'connected' | 'pending' | 'error' | 'neutral' {
   if (status === 'connected') return 'connected';
@@ -134,7 +151,7 @@ function parseOAuthToastFromQuery() {
   const service = params.get('service');
   const message = params.get('message');
 
-  if (!status) return;
+  if (!status) return null;
 
   if (status === 'connected') {
     toast.success(`Connected ${service || 'integration'}.`);
@@ -151,6 +168,8 @@ function parseOAuthToastFromQuery() {
   } catch {
     // ignore
   }
+
+  return { status, service, message };
 }
 
 function readLabel(readId: string): { label: string; icon: any } {
@@ -262,7 +281,14 @@ function Drawer({
   );
 }
 
-export default function IntegrationsPage() {
+export default function IntegrationsPage({
+  selectedAgent,
+  recommendedPackId,
+  entryMode = 'browse',
+  onNavigate,
+  onIntegrationConnected,
+  onIntegrationDisconnected,
+}: IntegrationsPageProps) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<IntegrationRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -289,6 +315,7 @@ export default function IntegrationsPage() {
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
 
   const [activePack, setActivePack] = useState<IntegrationPackId>('recruitment');
+  const [persistedContext, setPersistedContext] = useState<{ agentId?: string; agentName?: string; recommendedPackId?: IntegrationPackId } | null>(null);
 
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultQuery, setVaultQuery] = useState('');
@@ -372,6 +399,10 @@ export default function IntegrationsPage() {
     if (!activeCandidateId) return null;
     return sampleCandidates.find((c) => c.id === activeCandidateId) || null;
   }, [sampleCandidates, activeCandidateId]);
+
+  const effectiveAgentContext = selectedAgent || persistedContext || null;
+  const effectiveAgentId = selectedAgent?.id || persistedContext?.agentId || null;
+  const effectiveAgentName = selectedAgent?.name || persistedContext?.agentName || null;
 
   async function load() {
     setLoading(true);
@@ -484,6 +515,13 @@ export default function IntegrationsPage() {
     setConnecting((prev) => ({ ...prev, [providerId]: true }));
     try {
       const returnTo = '/dashboard/integrations';
+      if (effectiveAgentContext) {
+        localStorage.setItem(PUBLISH_CONTEXT_STORAGE_KEY, JSON.stringify({
+          agentId: effectiveAgentId,
+          agentName: effectiveAgentName,
+          recommendedPackId: activePack,
+        }));
+      }
       const init = await api.integrations.initOAuth(providerId, returnTo);
       if (!init.success || !init.data?.url) {
         toast.error(init.error || 'Failed to start OAuth connection');
@@ -517,6 +555,17 @@ export default function IntegrationsPage() {
       toast.success(`Connected ${provider.name}.`);
       setCredentials((prev) => ({ ...prev, [providerId]: {} }));
       await load();
+      if (selectedAgent && onIntegrationConnected) {
+        onIntegrationConnected({
+          agentId: selectedAgent.id,
+          integrationId: providerId,
+          integrationName: provider.name,
+          packId: guessPackForIntegration(provider),
+          status: 'connected',
+          lastSyncAt: new Date().toISOString(),
+        });
+      }
+      setWizardStep(5);
     } finally {
       setConnecting((prev) => ({ ...prev, [providerId]: false }));
     }
@@ -579,6 +628,7 @@ export default function IntegrationsPage() {
       }
       toast.success('Disconnected.');
       await load();
+      onIntegrationDisconnected?.();
     } finally {
       setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
     }
@@ -639,10 +689,54 @@ export default function IntegrationsPage() {
   };
 
   useEffect(() => {
-    parseOAuthToastFromQuery();
+    const oauthResult = parseOAuthToastFromQuery();
+    if (oauthResult?.status === 'connected' && oauthResult.service && effectiveAgentId) {
+      void api.agents.updatePublishState(effectiveAgentId, {
+        publish_status: 'live',
+        primary_pack: activePack,
+        integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), oauthResult.service])),
+      });
+      onIntegrationConnected?.({
+        agentId: effectiveAgentId,
+        integrationId: oauthResult.service,
+        integrationName: oauthResult.service,
+        packId: activePack,
+        status: 'connected',
+        lastSyncAt: new Date().toISOString(),
+      });
+    }
     void load();
     void loadActionCatalog();
-  }, []);
+  }, [activePack, effectiveAgentId, onIntegrationConnected, selectedAgent?.integrationIds]);
+
+  useEffect(() => {
+    if (selectedAgent) {
+      const next = {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name,
+        recommendedPackId: recommendedPackId || selectedAgent.primaryPack || null,
+      };
+      setPersistedContext(next);
+      localStorage.setItem(PUBLISH_CONTEXT_STORAGE_KEY, JSON.stringify(next));
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(PUBLISH_CONTEXT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { agentId?: string; agentName?: string; recommendedPackId?: IntegrationPackId };
+      setPersistedContext(parsed);
+    } catch {
+      setPersistedContext(null);
+    }
+  }, [recommendedPackId, selectedAgent]);
+
+  useEffect(() => {
+    const preferredPack = recommendedPackId || selectedAgent?.primaryPack || persistedContext?.recommendedPackId;
+    if (preferredPack) {
+      setActivePack(preferredPack);
+    }
+  }, [persistedContext?.recommendedPackId, recommendedPackId, selectedAgent?.primaryPack]);
 
   const recruitmentProviders = useMemo(() => providersByPack.get('recruitment') || [], [providersByPack]);
 
@@ -735,7 +829,9 @@ export default function IntegrationsPage() {
             <h1 className="text-2xl font-bold text-white">Integration Hub</h1>
           </div>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Connect third-party apps with clear capabilities, safe defaults, and an immediate “see it” moment.
+            {entryMode === 'publish' && effectiveAgentContext
+              ? `Choose where ${effectiveAgentName || 'this agent'} should work. Connect the provider here, then manage the live agent back in Fleet.`
+              : 'Connect third-party apps with clear capabilities, safe defaults, and an immediate “see it” moment.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -747,13 +843,43 @@ export default function IntegrationsPage() {
             Credentials Vault
           </button>
           <button
-            onClick={() => openWizard(1)}
+            onClick={() => openWizard(entryMode === 'publish' ? 3 : 1)}
             className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
           >
-            Set up Recruitment pack
+            {entryMode === 'publish' && effectiveAgentContext
+              ? `Connect ${effectiveAgentName || 'agent'}`
+              : 'Set up a pack'}
           </button>
         </div>
       </div>
+
+      {entryMode === 'publish' && effectiveAgentContext ? (
+        <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/[0.07] p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.18em] text-blue-200/80">Publish flow</div>
+              <h2 className="text-lg font-semibold text-white mt-2">{effectiveAgentName || 'Selected agent'} is ready to connect</h2>
+              <p className="text-sm text-blue-100/75 mt-1 max-w-3xl">
+                Step 1: choose where it should work. Step 2: connect the provider. Step 3: go back to Fleet to supervise conversations, persona, analytics, and controls from one workspace.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => openWizard(3)}
+                className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-100 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+              >
+                Start guided setup
+              </button>
+              <button
+                onClick={() => onNavigate?.('fleet')}
+                className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm font-semibold"
+              >
+                Back to Fleet
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100 flex items-start gap-3">
@@ -837,7 +963,11 @@ export default function IntegrationsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Providers • {INTEGRATION_PACKS.find((p) => p.id === activePack)?.name || 'Pack'}</h2>
-            <p className="text-sm text-slate-400 mt-1">Visible to everyone. Disabled until credentials are configured.</p>
+            <p className="text-sm text-slate-400 mt-1">
+              {entryMode === 'publish' && effectiveAgentContext
+                ? `Recommended providers for ${effectiveAgentName || 'this agent'}. The main user flow stays code-free.`
+                : 'Visible to everyone. Disabled until credentials are configured.'}
+            </p>
           </div>
           {loading ? (
             <div className="text-sm text-slate-400 inline-flex items-center gap-2">
@@ -1658,8 +1788,31 @@ export default function IntegrationsPage() {
 
           {wizardStep === 5 ? (
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-              <div className="font-semibold text-white">Test + Sample pull</div>
-              <div className="text-sm text-slate-400 mt-1">Instantly see candidate cards inside SyntheticHR (no full sync required yet).</div>
+              <div className="font-semibold text-white">
+                {entryMode === 'publish' && effectiveAgentContext ? 'Connection complete' : 'Test + Sample pull'}
+              </div>
+              <div className="text-sm text-slate-400 mt-1">
+                {entryMode === 'publish' && effectiveAgentContext
+                  ? `${effectiveAgentName || 'This agent'} can now be operated from Fleet. You can still validate the connection here.`
+                  : 'Instantly see candidate cards inside SyntheticHR (no full sync required yet).'}
+              </div>
+
+              {entryMode === 'publish' && effectiveAgentContext ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onNavigate?.('fleet')}
+                    className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                  >
+                    Open agent workspace
+                  </button>
+                  <button
+                    onClick={() => closeWizard()}
+                    className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                  >
+                    Stay in Integrations
+                  </button>
+                </div>
+              ) : null}
 
               {defaultSampleProviderId ? (
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">

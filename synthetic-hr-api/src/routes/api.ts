@@ -45,6 +45,24 @@ const clampDays = (value: unknown, fallback = 7, min = 7, max = 30) => {
   return Math.max(min, Math.min(max, parsed));
 };
 
+type AgentPublishStatus = 'not_live' | 'ready' | 'live';
+type AgentPackId = 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance';
+
+type AgentPublishMetadata = {
+  publish_status?: AgentPublishStatus;
+  primary_pack?: AgentPackId | null;
+  integration_ids?: string[];
+};
+
+type IntegrationSummaryRow = {
+  id: string;
+  service_type: string;
+  service_name: string;
+  category: string;
+  status: string;
+  last_sync_at: string | null;
+};
+
 const toIsoDay = (value: Date) => value.toISOString().split('T')[0];
 
 const buildDaySeries = (days: number) => {
@@ -72,6 +90,97 @@ const errorResponse = (res: Response, error: any, statusCode = 500) => {
   res.status(resolvedStatusCode).json({
     success: false,
     error: errorMessage,
+  });
+};
+
+const sanitizeIntegrationIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)));
+};
+
+const packIdFromCategory = (category: string | null | undefined): AgentPackId => {
+  const normalized = String(category || '').toUpperCase();
+  if (normalized === 'COMPLIANCE') return 'compliance';
+  if (normalized === 'FINANCE' || normalized === 'PAYROLL' || normalized === 'GLOBAL_PAYROLL' || normalized === 'PAYMENTS') return 'finance';
+  if (normalized === 'SUPPORT' || normalized === 'ITSM' || normalized === 'COMMUNICATION') return 'support';
+  if (normalized === 'CRM') return 'sales';
+  if (normalized === 'IAM' || normalized === 'IDENTITY' || normalized === 'COLLABORATION' || normalized === 'PRODUCTIVITY') return 'it';
+  if (normalized === 'RECRUITMENT' || normalized === 'ATS' || normalized === 'HRMS') return 'recruitment';
+  return 'it';
+};
+
+const readAgentPublishMetadata = (agent: any): AgentPublishMetadata => {
+  const metadata = agent?.metadata && typeof agent.metadata === 'object' ? agent.metadata : {};
+  const publish = metadata.publish && typeof metadata.publish === 'object' ? metadata.publish : {};
+  return {
+    publish_status: publish.publish_status,
+    primary_pack: publish.primary_pack ?? null,
+    integration_ids: sanitizeIntegrationIds(publish.integration_ids),
+  };
+};
+
+const writeAgentPublishMetadata = (agent: any, updates: AgentPublishMetadata) => {
+  const metadata = agent?.metadata && typeof agent.metadata === 'object' ? { ...agent.metadata } : {};
+  const current = readAgentPublishMetadata(agent);
+  metadata.publish = {
+    publish_status: updates.publish_status ?? current.publish_status ?? 'not_live',
+    primary_pack: updates.primary_pack !== undefined ? updates.primary_pack : (current.primary_pack ?? null),
+    integration_ids: updates.integration_ids ?? current.integration_ids ?? [],
+  };
+  return metadata;
+};
+
+const enrichAgentRecords = async (
+  req: Request,
+  orgId: string,
+  rawAgents: any[],
+  conversationCounts?: Map<string, number>
+) => {
+  const integrationRows = (() => {
+    const query = new URLSearchParams();
+    query.set('organization_id', eq(orgId));
+    query.set('select', 'id,service_type,service_name,category,status,last_sync_at');
+    return supabaseRestAsUser(getUserJwt(req), 'integrations', query) as Promise<IntegrationSummaryRow[]>;
+  })();
+
+  let integrations: IntegrationSummaryRow[] = [];
+  try {
+    integrations = await integrationRows;
+  } catch (err: any) {
+    logger.warn('Failed to load integrations for agent enrichment', { error: err?.message || err, org_id: orgId });
+  }
+
+  const integrationByServiceType = new Map((integrations || []).map((row) => [row.service_type, row]));
+
+  return (rawAgents || []).map((agent) => {
+    const publish = readAgentPublishMetadata(agent);
+    const connectedTargets = (publish.integration_ids || [])
+      .map((integrationId) => integrationByServiceType.get(integrationId))
+      .filter(Boolean)
+      .map((integration) => ({
+        integrationId: integration!.service_type,
+        integrationName: integration!.service_name,
+        packId: packIdFromCategory(integration!.category),
+        status: integration!.status || 'disconnected',
+        lastSyncAt: integration!.last_sync_at || null,
+        lastActivityAt: integration!.last_sync_at || null,
+      }));
+
+    const publishStatus = publish.publish_status
+      || (connectedTargets.length === 0 ? 'not_live' : connectedTargets.some((target) => target.status === 'connected') ? 'live' : 'ready');
+
+    return {
+      ...agent,
+      budget_limit: agent.config?.budget_limit ?? 0,
+      current_spend: agent.config?.current_spend ?? 0,
+      auto_throttle: agent.config?.auto_throttle ?? false,
+      conversations: conversationCounts?.get(agent.id) || agent.conversations || 0,
+      publishStatus,
+      primaryPack: publish.primary_pack ?? null,
+      integrationIds: publish.integration_ids || [],
+      connectedTargets,
+      lastIntegrationSyncAt: connectedTargets[0]?.lastSyncAt || null,
+    };
   });
 };
 
@@ -126,14 +235,7 @@ router.get('/agents', requirePermission('agents.read'), async (req: Request, res
       logger.warn('Failed to compute agent conversation counts', { error: err?.message || err, org_id: orgId });
     }
 
-    // Map config fields to top-level properties as expected by the frontend
-    const data = rawData?.map((agent) => ({
-      ...agent,
-      budget_limit: agent.config?.budget_limit ?? 0,
-      current_spend: agent.config?.current_spend ?? 0,
-      auto_throttle: agent.config?.auto_throttle ?? false,
-      conversations: conversationCounts.get(agent.id) || 0,
-    })) || [];
+    const data = await enrichAgentRecords(req, orgId, rawData || [], conversationCounts);
 
     logger.info('Agents fetched successfully', { count: data?.length, org_id: orgId });
 
@@ -187,13 +289,7 @@ router.get('/agents/:id', requirePermission('agents.read'), async (req: Request,
       logger.warn('Failed to compute agent conversation count', { error: err?.message || err, org_id: orgId, agent_id: id });
     }
 
-    const data = {
-      ...agent,
-      budget_limit: agent.config?.budget_limit ?? 0,
-      current_spend: agent.config?.current_spend ?? 0,
-      auto_throttle: agent.config?.auto_throttle ?? false,
-      conversations,
-    };
+    const [data] = await enrichAgentRecords(req, orgId, [agent], new Map([[id, conversations]]));
 
     res.json({ success: true, data });
   } catch (error: any) {
@@ -262,7 +358,7 @@ router.post('/agents', requirePermission('agents.create'), async (req: Request, 
 
     logger.info('Creating agent', { org_id: orgId, agent_name: validatedData.name });
 
-    const { budget_limit, auto_throttle, config, ...restAgentData } = validatedData;
+    const { budget_limit, auto_throttle, publish_status, primary_pack, integration_ids, config, ...restAgentData } = validatedData;
 
     // Merge extra fields into config since they lack dedicated table columns
     const mergedConfig = {
@@ -270,6 +366,12 @@ router.post('/agents', requirePermission('agents.create'), async (req: Request, 
       budget_limit,
       auto_throttle,
     };
+
+    const metadata = writeAgentPublishMetadata({}, {
+      publish_status,
+      primary_pack: primary_pack ?? null,
+      integration_ids,
+    });
 
     const rawData = await supabaseRestAsUser(
       getUserJwt(req),
@@ -281,6 +383,7 @@ router.post('/agents', requirePermission('agents.create'), async (req: Request, 
           organization_id: orgId,
           ...restAgentData,
           config: mergedConfig,
+          metadata,
           status: 'active',
           risk_level: 'low',
           risk_score: 50,
@@ -305,16 +408,9 @@ router.post('/agents', requirePermission('agents.create'), async (req: Request, 
 
     logger.info('Agent created successfully', { agent_id: rawData?.[0]?.id, org_id: orgId });
 
-    let finalData = null;
-    if (rawData && rawData.length > 0) {
-      const agent = rawData[0];
-      finalData = {
-        ...agent,
-        budget_limit: agent.config?.budget_limit ?? 0,
-        current_spend: agent.config?.current_spend ?? 0,
-        auto_throttle: agent.config?.auto_throttle ?? false,
-      };
-    }
+    const [finalData] = rawData && rawData.length > 0
+      ? await enrichAgentRecords(req, orgId, rawData, new Map())
+      : [null];
 
     res.status(201).json({ success: true, data: finalData });
   } catch (error: any) {
@@ -380,18 +476,34 @@ router.put('/agents/:id', requirePermission('agents.update'), async (req: Reques
     agentUpdateQuery.set('id', eq(id));
     agentUpdateQuery.set('organization_id', eq(orgId));
 
-    const { budget_limit, current_spend, auto_throttle, config, ...restUpdateData } = validatedData;
+    const { budget_limit, current_spend, auto_throttle, publish_status, primary_pack, integration_ids, config, ...restUpdateData } = validatedData;
+
+    const existingQuery = new URLSearchParams();
+    existingQuery.set('id', eq(id));
+    existingQuery.set('organization_id', eq(orgId));
+    const existingRows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', existingQuery) as any[];
+    if (!existingRows || existingRows.length === 0) {
+      return errorResponse(res, new Error('Agent not found'), 404);
+    }
+    const existingAgent = existingRows[0];
 
     // The DB query doesn't have these as top level columns so we pull them into config 
     // Wait config might overwrite existing if we do not merge with existing, 
     // but the PUT endpoint typically receives the full updated object or only what's changed.
     // For now we just safely append them if they exist.
     const mergedConfig = {
+      ...(existingAgent.config || {}),
       ...config,
       ...(budget_limit !== undefined && { budget_limit }),
       ...(current_spend !== undefined && { current_spend }),
       ...(auto_throttle !== undefined && { auto_throttle }),
     };
+
+    const metadata = writeAgentPublishMetadata(existingAgent, {
+      publish_status,
+      primary_pack,
+      integration_ids,
+    });
 
     const rawData = await supabaseRestAsUser(
       getUserJwt(req),
@@ -402,6 +514,7 @@ router.put('/agents/:id', requirePermission('agents.update'), async (req: Reques
         body: {
           ...restUpdateData,
           ...(Object.keys(mergedConfig).length > 0 && { config: mergedConfig }),
+          metadata,
           updated_at: new Date().toISOString()
         },
       }
@@ -424,18 +537,95 @@ router.put('/agents/:id', requirePermission('agents.update'), async (req: Reques
 
     logger.info('Agent updated successfully', { agent_id: id });
 
-    let finalData = null;
-    if (rawData && rawData.length > 0) {
-      const agent = rawData[0];
-      finalData = {
-        ...agent,
-        budget_limit: agent.config?.budget_limit ?? 0,
-        current_spend: agent.config?.current_spend ?? 0,
-        auto_throttle: agent.config?.auto_throttle ?? false,
-      };
-    }
+    const [finalData] = await enrichAgentRecords(req, orgId, rawData, new Map());
 
     res.json({ success: true, data: finalData });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
+router.get('/agents/:id/publish', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const query = new URLSearchParams();
+    query.set('id', eq(id));
+    query.set('organization_id', eq(orgId));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', query) as any[];
+    if (!rows || rows.length === 0) {
+      return errorResponse(res, new Error('Agent not found'), 404);
+    }
+
+    const [data] = await enrichAgentRecords(req, orgId, rows, new Map());
+    return res.json({
+      success: true,
+      data: {
+        publishStatus: data.publishStatus,
+        primaryPack: data.primaryPack,
+        integrationIds: data.integrationIds,
+        connectedTargets: data.connectedTargets,
+        lastIntegrationSyncAt: data.lastIntegrationSyncAt,
+      },
+    });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
+router.put('/agents/:id/publish', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const { valid, data: validatedData, errors } = validateRequestBody<z.infer<typeof agentSchemas.publish>>(agentSchemas.publish, req.body);
+    if (!valid || !validatedData) {
+      logger.warn('Invalid agent publish update request', { errors, agent_id: id, org_id: orgId });
+      return res.status(400).json({ success: false, errors });
+    }
+
+    const query = new URLSearchParams();
+    query.set('id', eq(id));
+    query.set('organization_id', eq(orgId));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', query) as any[];
+    if (!rows || rows.length === 0) {
+      return errorResponse(res, new Error('Agent not found'), 404);
+    }
+
+    const existingAgent = rows[0];
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(id));
+    patchQuery.set('organization_id', eq(orgId));
+    const patched = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', patchQuery, {
+      method: 'PATCH',
+      body: {
+        metadata: writeAgentPublishMetadata(existingAgent, {
+          publish_status: validatedData.publish_status,
+          primary_pack: validatedData.primary_pack,
+          integration_ids: validatedData.integration_ids,
+        }),
+        updated_at: new Date().toISOString(),
+      },
+    }) as any[];
+
+    const [data] = await enrichAgentRecords(req, orgId, patched, new Map());
+    res.json({
+      success: true,
+      data: {
+        publishStatus: data.publishStatus,
+        primaryPack: data.primaryPack,
+        integrationIds: data.integrationIds,
+        connectedTargets: data.connectedTargets,
+        lastIntegrationSyncAt: data.lastIntegrationSyncAt,
+      },
+    });
   } catch (error: any) {
     errorResponse(res, error);
   }

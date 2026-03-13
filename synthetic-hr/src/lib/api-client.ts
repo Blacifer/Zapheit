@@ -209,6 +209,52 @@ export const agentApi = {
     });
   },
 
+  async getPublishState(id: string): Promise<ApiResponse<{
+    publishStatus: 'not_live' | 'ready' | 'live';
+    primaryPack: string | null;
+    integrationIds: string[];
+    connectedTargets: Array<{
+      integrationId: string;
+      integrationName: string;
+      packId: string;
+      status: string;
+      lastSyncAt?: string | null;
+      lastActivityAt?: string | null;
+    }>;
+    lastIntegrationSyncAt?: string | null;
+  }>> {
+    return authenticatedFetch(`/agents/${id}/publish`, {
+      method: 'GET',
+    });
+  },
+
+  async updatePublishState(
+    id: string,
+    updates: Partial<{
+      publish_status: 'not_live' | 'ready' | 'live';
+      primary_pack: 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance' | null;
+      integration_ids: string[];
+    }>
+  ): Promise<ApiResponse<{
+    publishStatus: 'not_live' | 'ready' | 'live';
+    primaryPack: string | null;
+    integrationIds: string[];
+    connectedTargets: Array<{
+      integrationId: string;
+      integrationName: string;
+      packId: string;
+      status: string;
+      lastSyncAt?: string | null;
+      lastActivityAt?: string | null;
+    }>;
+    lastIntegrationSyncAt?: string | null;
+  }>> {
+    return authenticatedFetch(`/agents/${id}/publish`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
   /**
    * Delete an agent permanently
    */

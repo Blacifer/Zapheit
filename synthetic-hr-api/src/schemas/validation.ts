@@ -46,6 +46,9 @@ export const agentSchemas = {
     system_prompt: z.string().optional(),
     budget_limit: z.number().nonnegative().optional(),
     auto_throttle: z.boolean().optional(),
+    publish_status: z.enum(['not_live', 'ready', 'live']).optional(),
+    primary_pack: z.enum(['recruitment', 'support', 'sales', 'it', 'finance', 'compliance']).optional(),
+    integration_ids: z.array(z.string().min(1)).max(50).optional(),
     config: z.record(z.any()).optional(),
   }),
 
@@ -58,7 +61,16 @@ export const agentSchemas = {
     budget_limit: z.number().nonnegative().optional(),
     current_spend: z.number().nonnegative().optional(),
     auto_throttle: z.boolean().optional(),
+    publish_status: z.enum(['not_live', 'ready', 'live']).optional(),
+    primary_pack: z.enum(['recruitment', 'support', 'sales', 'it', 'finance', 'compliance']).optional(),
+    integration_ids: z.array(z.string().min(1)).max(50).optional(),
     config: z.record(z.any()).optional(),
+  }),
+
+  publish: z.object({
+    publish_status: z.enum(['not_live', 'ready', 'live']).optional(),
+    primary_pack: z.enum(['recruitment', 'support', 'sales', 'it', 'finance', 'compliance']).nullable().optional(),
+    integration_ids: z.array(z.string().min(1)).max(50).optional(),
   }),
 
   filter: z.object({

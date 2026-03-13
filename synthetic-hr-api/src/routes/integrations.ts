@@ -82,6 +82,97 @@ type StoredActionPolicyRow = {
   updated_at: string;
 };
 
+type StoredAgentRow = {
+  id: string;
+  organization_id: string;
+  metadata?: Record<string, any> | null;
+};
+
+type AgentPublishStatus = 'not_live' | 'ready' | 'live';
+type AgentPackId = 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance';
+
+function sanitizeIntegrationIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)));
+}
+
+function packIdFromCategory(category: string | null | undefined): AgentPackId {
+  const normalized = String(category || '').toUpperCase();
+  if (normalized === 'COMPLIANCE') return 'compliance';
+  if (normalized === 'FINANCE' || normalized === 'PAYROLL' || normalized === 'GLOBAL_PAYROLL' || normalized === 'PAYMENTS') return 'finance';
+  if (normalized === 'SUPPORT' || normalized === 'ITSM' || normalized === 'COMMUNICATION') return 'support';
+  if (normalized === 'CRM') return 'sales';
+  if (normalized === 'IAM' || normalized === 'IDENTITY' || normalized === 'COLLABORATION' || normalized === 'PRODUCTIVITY') return 'it';
+  if (normalized === 'RECRUITMENT' || normalized === 'ATS' || normalized === 'HRMS') return 'recruitment';
+  return 'it';
+}
+
+function readAgentPublish(agent: StoredAgentRow) {
+  const metadata = agent?.metadata && typeof agent.metadata === 'object' ? agent.metadata : {};
+  const publish = metadata.publish && typeof metadata.publish === 'object' ? metadata.publish : {};
+  return {
+    publish_status: publish.publish_status as AgentPublishStatus | undefined,
+    primary_pack: (publish.primary_pack ?? null) as AgentPackId | null,
+    integration_ids: sanitizeIntegrationIds(publish.integration_ids),
+  };
+}
+
+function writeAgentPublish(agent: StoredAgentRow, updates: {
+  publish_status: AgentPublishStatus;
+  primary_pack: AgentPackId | null;
+  integration_ids: string[];
+}) {
+  const metadata = agent?.metadata && typeof agent.metadata === 'object' ? { ...agent.metadata } : {};
+  metadata.publish = updates;
+  return metadata;
+}
+
+async function pruneDisconnectedIntegrationFromAgents(rest: RestFn, orgId: string, serviceType: string) {
+  const agentsQuery = new URLSearchParams();
+  agentsQuery.set('organization_id', eq(orgId));
+  agentsQuery.set('select', 'id,organization_id,metadata');
+  const agents = await safeQuery<StoredAgentRow>(rest, 'ai_agents', agentsQuery);
+  if (!agents.length) return;
+
+  const integrationQuery = new URLSearchParams();
+  integrationQuery.set('organization_id', eq(orgId));
+  integrationQuery.set('select', 'service_type,status,category');
+  const integrations = await safeQuery<Array<{ service_type: string; status: string; category: string }>[number]>(rest, 'integrations', integrationQuery);
+  const integrationMap = new Map(integrations.map((row) => [row.service_type, row]));
+
+  await Promise.all(agents.map(async (agent) => {
+    const publish = readAgentPublish(agent);
+    if (!publish.integration_ids.includes(serviceType)) return;
+
+    const remainingIntegrationIds = publish.integration_ids.filter((integrationId) => integrationId !== serviceType);
+    const remainingRows = remainingIntegrationIds
+      .map((integrationId) => integrationMap.get(integrationId))
+      .filter(Boolean) as Array<{ service_type: string; status: string; category: string }>;
+
+    const publishStatus: AgentPublishStatus = remainingRows.length === 0
+      ? 'not_live'
+      : remainingRows.some((row) => row.status === 'connected')
+        ? 'live'
+        : 'ready';
+
+    const primaryPack = remainingRows[0] ? packIdFromCategory(remainingRows[0].category) : null;
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(agent.id));
+    patchQuery.set('organization_id', eq(orgId));
+    await rest('ai_agents', patchQuery, {
+      method: 'PATCH',
+      body: {
+        metadata: writeAgentPublish(agent, {
+          publish_status: publishStatus,
+          primary_pack: primaryPack,
+          integration_ids: remainingIntegrationIds,
+        }),
+        updated_at: new Date().toISOString(),
+      },
+    });
+  }));
+}
+
 async function safeQuery<T>(rest: RestFn, table: string, query: URLSearchParams): Promise<T[]> {
   try {
     return (await rest(table, query)) as T[];
@@ -1332,6 +1423,16 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
     actor_user_id: req.user?.id || null,
     actor_email: req.user?.email || null,
   });
+
+  try {
+    await pruneDisconnectedIntegrationFromAgents(rest, orgId, service);
+  } catch (err: any) {
+    logger.warn('Failed to prune disconnected integration from agent publish state', {
+      service,
+      org_id: orgId,
+      error: err?.message || String(err),
+    });
+  }
 
   return res.json({ success: true, message: 'Integration disconnected' });
 });

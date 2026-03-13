@@ -376,10 +376,10 @@ export default function ConnectAgentPage(props: {
     <div className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Connect Agent</h1>
+          <h1 className="text-3xl font-bold text-white">Advanced / Developer Setup</h1>
           <p className="mt-2 text-slate-400 max-w-3xl">
-            This page is for admins or developers. End users don’t need runtime tokens or code.
-            Route your existing agent traffic through the SyntheticHR gateway to capture costs, conversations, incidents, and evidence.
+            This is the fallback path for admins or developers connecting a custom system through the SyntheticHR gateway.
+            Non-technical users should publish agents from Fleet into Integrations instead of handling API keys or runtime code here.
           </p>
         </div>
         <div className="flex gap-2">

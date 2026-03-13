@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { api } from '../lib/api-client';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
+import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
 
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
@@ -61,11 +62,46 @@ type DashboardNotification = {
 };
 
 const COVERAGE_FOCUS_STORAGE_KEY = 'synthetic_hr_coverage_focus';
+const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
 
 type CoverageNotificationPayload = Awaited<ReturnType<typeof api.admin.getCoverageStatus>>['data'];
+type IntegrationSummaryRow = {
+  id: string;
+  name: string;
+  category: string;
+  tags?: string[];
+  status?: string;
+  lifecycleStatus?: string;
+  lastSyncAt?: string | null;
+};
+
+type AgentConnectionDraft = {
+  integrationIds: string[];
+  primaryPack: IntegrationPackId | null;
+};
 
 function getNotificationReadStorageKey(orgName?: string | null) {
   return `synthetic_hr_notification_reads:${orgName || 'workspace'}`;
+}
+
+function getAgentConnectionStorageKey(orgName?: string | null) {
+  return `synthetic_hr_agent_connections:${orgName || 'workspace'}`;
+}
+
+function readAgentConnectionState(orgName?: string | null) {
+  if (typeof window === 'undefined') return {} as Record<string, AgentConnectionDraft>;
+  try {
+    const raw = localStorage.getItem(getAgentConnectionStorageKey(orgName));
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, AgentConnectionDraft> : {};
+  } catch {
+    return {} as Record<string, AgentConnectionDraft>;
+  }
+}
+
+function writeAgentConnectionState(orgName: string | null | undefined, state: Record<string, AgentConnectionDraft>) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(getAgentConnectionStorageKey(orgName), JSON.stringify(state));
 }
 
 function readNotificationState(orgName?: string | null) {
@@ -177,6 +213,11 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState('overview');
   const [agents, setAgents] = useState<AIAgent[]>([]);
+  const [integrationRows, setIntegrationRows] = useState<IntegrationSummaryRow[]>([]);
+  const [agentConnections, setAgentConnections] = useState<Record<string, AgentConnectionDraft>>({});
+  const [fleetWorkspaceAgentId, setFleetWorkspaceAgentId] = useState<string | null>(null);
+  const [integrationAgentId, setIntegrationAgentId] = useState<string | null>(null);
+  const [integrationRecommendedPack, setIntegrationRecommendedPack] = useState<IntegrationPackId | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [costData, setCostData] = useState<CostData[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -200,21 +241,89 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     setCurrentPage(page);
   }, []);
 
+  const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
+    const type = String(agent.agent_type || '').toLowerCase();
+    const name = String(agent.name || '').toLowerCase();
+    const text = `${type} ${name}`;
+    if (text.includes('support') || text.includes('customer')) return 'support';
+    if (text.includes('sales') || text.includes('lead') || text.includes('revenue')) return 'sales';
+    if (text.includes('refund') || text.includes('finance') || text.includes('billing') || text.includes('payment')) return 'finance';
+    if (text.includes('recruit') || text.includes('talent') || text.includes('hiring') || text.includes('hr')) return 'recruitment';
+    if (text.includes('compliance') || text.includes('legal') || text.includes('policy')) return 'compliance';
+    return 'it';
+  }, []);
+
+  const openIntegrationsForAgent = useCallback((agent: AIAgent, packId?: IntegrationPackId | null) => {
+    setIntegrationAgentId(agent.id);
+    setFleetWorkspaceAgentId(agent.id);
+    setIntegrationRecommendedPack(packId || agent.primaryPack || suggestPackForAgent(agent));
+    navigateTo('integrations', { userInitiated: false });
+  }, [navigateTo, suggestPackForAgent]);
+
+  const handleIntegrationConnected = useCallback((payload: {
+    agentId: string;
+    integrationId: string;
+    integrationName: string;
+    packId: IntegrationPackId;
+    status: string;
+    lastSyncAt?: string | null;
+  }) => {
+    void api.agents.updatePublishState(payload.agentId, {
+      publish_status: payload.status === 'connected' ? 'live' : 'ready',
+      primary_pack: payload.packId,
+      integration_ids: Array.from(new Set([
+        ...(agentConnections[payload.agentId]?.integrationIds || agents.find((agent) => agent.id === payload.agentId)?.integrationIds || []),
+        payload.integrationId,
+      ])),
+    });
+    setAgentConnections((current) => {
+      const existing = current[payload.agentId] || { integrationIds: [], primaryPack: payload.packId };
+      const next = {
+        ...current,
+        [payload.agentId]: {
+          integrationIds: Array.from(new Set([...existing.integrationIds, payload.integrationId])),
+          primaryPack: existing.primaryPack || payload.packId,
+        },
+      };
+      writeAgentConnectionState(user?.organizationName, next);
+      return next;
+    });
+    setFleetWorkspaceAgentId(payload.agentId);
+  }, [agentConnections, agents, user?.organizationName]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    setAgentConnections(readAgentConnectionState(user?.organizationName));
+  }, [mounted, user?.organizationName]);
 
   const refreshData = useCallback(async () => {
     setLoading(true);
     // If demo mode, load demo data
     if (isDemoMode) {
       const demoAgents: AIAgent[] = [
-        { id: '1', name: 'Support Bot', description: 'Customer support AI agent', agent_type: 'support', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 23, conversations: 15420, created_at: '2024-01-15', satisfaction: 94, uptime: 99.5, budget_limit: 1000, current_spend: 462, auto_throttle: true },
-        { id: '2', name: 'Sales Assistant', description: 'Sales qualification AI agent', agent_type: 'sales', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'medium', risk_score: 45, conversations: 8932, created_at: '2024-02-01', satisfaction: 88, uptime: 98.2, budget_limit: 500, current_spend: 267, auto_throttle: false },
-        { id: '3', name: 'HR Bot', description: 'HR internal support agent', agent_type: 'hr', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'idle', risk_level: 'low', risk_score: 18, conversations: 4521, created_at: '2024-02-15', satisfaction: 96, uptime: 99.8, budget_limit: 300, current_spend: 135, auto_throttle: true },
-        { id: '4', name: 'Refund Handler', description: 'Automated refund processing', agent_type: 'finance', platform: 'web', model_name: 'GPT-4', status: 'paused', lifecycle_state: 'error', risk_level: 'high', risk_score: 78, conversations: 2341, created_at: '2024-03-01', satisfaction: 72, uptime: 95.5, budget_limit: 200, current_spend: 70, auto_throttle: false },
-        { id: '5', name: 'Knowledge Base', description: 'Internal knowledge assistant', agent_type: 'support', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 12, conversations: 28754, created_at: '2024-01-20', satisfaction: 97, uptime: 99.9, budget_limit: 1500, current_spend: 862, auto_throttle: true },
+        { id: '1', name: 'Support Bot', description: 'Customer support AI agent', agent_type: 'support', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 23, conversations: 15420, created_at: '2024-01-15', satisfaction: 94, uptime: 99.5, budget_limit: 1000, current_spend: 462, auto_throttle: true, publishStatus: 'live', primaryPack: 'support', integrationIds: ['zendesk', 'intercom'] },
+        { id: '2', name: 'Sales Assistant', description: 'Sales qualification AI agent', agent_type: 'sales', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'medium', risk_score: 45, conversations: 8932, created_at: '2024-02-01', satisfaction: 88, uptime: 98.2, budget_limit: 500, current_spend: 267, auto_throttle: false, publishStatus: 'live', primaryPack: 'sales', integrationIds: ['hubspot'] },
+        { id: '3', name: 'HR Bot', description: 'HR internal support agent', agent_type: 'hr', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'idle', risk_level: 'low', risk_score: 18, conversations: 4521, created_at: '2024-02-15', satisfaction: 96, uptime: 99.8, budget_limit: 300, current_spend: 135, auto_throttle: true, publishStatus: 'ready', primaryPack: 'recruitment', integrationIds: [] },
+        { id: '4', name: 'Refund Handler', description: 'Automated refund processing', agent_type: 'finance', platform: 'web', model_name: 'GPT-4', status: 'paused', lifecycle_state: 'error', risk_level: 'high', risk_score: 78, conversations: 2341, created_at: '2024-03-01', satisfaction: 72, uptime: 95.5, budget_limit: 200, current_spend: 70, auto_throttle: false, publishStatus: 'ready', primaryPack: 'finance', integrationIds: ['stripe'] },
+        { id: '5', name: 'Knowledge Base', description: 'Internal knowledge assistant', agent_type: 'support', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 12, conversations: 28754, created_at: '2024-01-20', satisfaction: 97, uptime: 99.9, budget_limit: 1500, current_spend: 862, auto_throttle: true, publishStatus: 'not_live', primaryPack: 'support', integrationIds: [] },
       ];
+      setIntegrationRows([
+        { id: 'zendesk', name: 'Zendesk', category: 'SUPPORT', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
+        { id: 'intercom', name: 'Intercom', category: 'SUPPORT', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
+        { id: 'hubspot', name: 'HubSpot', category: 'CRM', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
+        { id: 'stripe', name: 'Stripe', category: 'PAYMENTS', status: 'configured', lifecycleStatus: 'configured', lastSyncAt: new Date(Date.now() - 86400000).toISOString() },
+      ]);
+      setAgentConnections({
+        '1': { integrationIds: ['zendesk', 'intercom'], primaryPack: 'support' },
+        '2': { integrationIds: ['hubspot'], primaryPack: 'sales' },
+        '3': { integrationIds: [], primaryPack: 'recruitment' },
+        '4': { integrationIds: ['stripe'], primaryPack: 'finance' },
+        '5': { integrationIds: [], primaryPack: 'support' },
+      });
       const demoIncidents: Incident[] = [
         { id: '1', agent_id: '4', agent_name: 'Refund Handler', incident_type: 'policy_override', severity: 'critical', status: 'open', title: 'Unauthorized Refund Approved', description: 'Bot approved a refund request without proper verification', created_at: new Date().toISOString() },
         { id: '2', agent_id: '2', agent_name: 'Sales Assistant', incident_type: 'hallucination', severity: 'low', status: 'resolved', title: 'Incorrect Pricing Information', description: 'Bot provided wrong pricing for enterprise plan', resolved_at: new Date().toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() },
@@ -261,10 +370,11 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
 
     try {
       setError(null);
-      const [agentsRes, incidentsRes, costsRes] = await Promise.all([
+      const [agentsRes, incidentsRes, costsRes, integrationsRes] = await Promise.all([
         api.agents.getAll(),
         api.incidents.getAll({ limit: 100 }),
         api.costs.getAnalytics({ period: '30d' }),
+        api.integrations.getAll(),
       ]);
       const failures: string[] = [];
 
@@ -280,6 +390,15 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
           auto_throttle: a.auto_throttle || false,
         }));
         setAgents(normalizedAgents);
+        setAgentConnections(Object.fromEntries(
+          normalizedAgents.map((agent) => [
+            agent.id,
+            {
+              integrationIds: agent.integrationIds || [],
+              primaryPack: agent.primaryPack || suggestPackForAgent(agent),
+            },
+          ]),
+        ));
       } else {
         setAgents([]);
         failures.push(agentsRes.error || 'fleet data');
@@ -316,6 +435,20 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
         setCostData([]);
       }
 
+      if (integrationsRes.success && Array.isArray(integrationsRes.data)) {
+        setIntegrationRows((integrationsRes.data as any[]).map((integration) => ({
+          id: integration.id,
+          name: integration.name,
+          category: integration.category,
+          tags: integration.tags || [],
+          status: integration.status,
+          lifecycleStatus: integration.lifecycleStatus,
+          lastSyncAt: integration.lastSyncAt || null,
+        })));
+      } else {
+        setIntegrationRows([]);
+      }
+
       const [apiKeysResult, coverageResult] = await Promise.all([
         // appwriteDB.getApiKeys().catch(() => ({ apiKeys: [], error: 'unavailable' })),
         Promise.resolve({ apiKeys: [], error: 'unavailable' }),
@@ -348,7 +481,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     }
 
     setLoading(false);
-  }, [isDemoMode, user?.organizationName]);
+  }, [isDemoMode, suggestPackForAgent, user?.organizationName]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -370,6 +503,39 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     )
   );
 
+  const enrichedAgents = agents.map((agent) => {
+    const connectionState = agentConnections[agent.id] || {
+      integrationIds: agent.integrationIds || [],
+      primaryPack: agent.primaryPack || suggestPackForAgent(agent),
+    };
+    const linkedIntegrations = connectionState.integrationIds
+      .map((integrationId) => integrationRows.find((row) => row.id === integrationId))
+      .filter(Boolean) as IntegrationSummaryRow[];
+    const connectedTargets = linkedIntegrations.map((integration) => ({
+      integrationId: integration.id,
+      integrationName: integration.name,
+      packId: guessPackForIntegration(integration),
+      status: integration.lifecycleStatus || integration.status || 'disconnected',
+      lastSyncAt: integration.lastSyncAt || null,
+      lastActivityAt: integration.lastSyncAt || null,
+    }));
+    const connectedCount = connectedTargets.filter((target) => target.status === 'connected').length;
+    const publishStatus = connectedTargets.length === 0
+      ? 'not_live'
+      : connectedCount > 0
+        ? 'live'
+        : 'ready';
+
+    return {
+      ...agent,
+      publishStatus,
+      primaryPack: connectionState.primaryPack || suggestPackForAgent(agent),
+      integrationIds: connectionState.integrationIds,
+      connectedTargets,
+      lastIntegrationSyncAt: connectedTargets[0]?.lastSyncAt || null,
+    } as AIAgent;
+  });
+
   useEffect(() => {
     if (!mounted) return;
     if (loading) return;
@@ -380,6 +546,11 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
       navigateTo('getting-started', { userInitiated: false });
     }
   }, [mounted, loading, needsOnboarding, currentPage, navigateTo]);
+
+  useEffect(() => {
+    if (!mounted || isDemoMode) return;
+    writeAgentConnectionState(user?.organizationName, agentConnections);
+  }, [agentConnections, isDemoMode, mounted, user?.organizationName]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -673,7 +844,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
               { id: 'playbooks', icon: ClipboardList, label: 'Playbooks' },
               { id: 'jobs', icon: ListChecks, label: 'Jobs & Approvals' },
               { id: 'work-items', icon: ListTodo, label: 'Work Items' },
-              { id: 'connect', icon: PlugZap, label: 'Connect Agent' },
+              { id: 'connect', icon: PlugZap, label: 'Advanced Setup' },
               { id: 'action-policies', icon: Shield, label: 'Action Policies' },
               { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
               { id: 'blackbox', icon: Database, label: 'Black Box' },
@@ -865,7 +1036,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
               <ErrorBoundary variant="local" fallbackMessage={`Failed to load the ${currentPage} page`}>
 	                {currentPage === 'getting-started' && (
 	                  <GettingStartedPage
-	                    agents={agents}
+	                    agents={enrichedAgents}
 	                    onNavigate={(page) => navigateTo(page)}
 	                    onRefresh={refreshData}
 	                    storageScope={onboardingStorageScope}
@@ -873,14 +1044,14 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
 	                )}
 	                {currentPage === 'connect' && (
 	                  <ConnectAgentPage
-	                    agents={agents}
+	                    agents={enrichedAgents}
 	                    onNavigate={(page) => navigateTo(page)}
 	                    onRefresh={refreshData}
 	                  />
 	                )}
 	                {currentPage === 'overview' && (
 	                  <DashboardOverview
-	                    agents={agents}
+	                    agents={enrichedAgents}
 	                    incidents={incidents}
 	                    costData={costData}
 	                    onAddAgent={() => navigateTo('fleet')}
@@ -888,11 +1059,23 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
 	                  />
 	                )}
                 {currentPage === 'fleet' && (
-                  <FleetPage agents={agents} setAgents={saveAgents} />
+                  <FleetPage
+                    agents={enrichedAgents}
+                    setAgents={saveAgents}
+                    selectedAgentId={fleetWorkspaceAgentId}
+                    onSelectAgent={setFleetWorkspaceAgentId}
+                    onPublishAgent={openIntegrationsForAgent}
+                    onOpenOperationsPage={(page, options) => {
+                      if (options?.agentId) {
+                        localStorage.setItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, JSON.stringify({ agentId: options.agentId }));
+                      }
+                      navigateTo(page, { userInitiated: false });
+                    }}
+                  />
                 )}
                 {currentPage === 'playbooks' && (
                   <PlaybooksPage
-                    agents={agents}
+                    agents={enrichedAgents}
                     onNavigate={(page) => navigateTo(page)}
                   />
                 )}
@@ -906,12 +1089,21 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                   <ActionPoliciesPage />
                 )}
 	                {currentPage === 'incidents' && (
-	                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={agents} onNavigate={navigateTo} />
+	                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} />
 	                )}
 	                {currentPage === 'conversations' && (
-	                  <ConversationsPage agents={agents} onNavigate={navigateTo} />
+	                  <ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />
 	                )}
-                {currentPage === 'integrations' && <IntegrationsPage />}
+                {currentPage === 'integrations' && (
+                  <IntegrationsPage
+                    selectedAgent={enrichedAgents.find((agent) => agent.id === integrationAgentId) || enrichedAgents.find((agent) => agent.id === fleetWorkspaceAgentId) || null}
+                    recommendedPackId={integrationRecommendedPack}
+                    entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
+                    onNavigate={navigateTo}
+                    onIntegrationConnected={handleIntegrationConnected}
+                    onIntegrationDisconnected={() => { void refreshData(); }}
+                  />
+                )}
                 {currentPage === 'templates' && (
                   <AgentTemplatesPage onDeploy={async (template) => {
                     try {
@@ -962,9 +1154,9 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                   }} />
                 )}
 	                {currentPage === 'costs' && (
-	                  <CostsPage costData={costData} setCostData={saveCostData} agents={agents} incidents={incidents} onNavigate={navigateTo} />
+	                  <CostsPage costData={costData} setCostData={saveCostData} agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />
 	                )}
-                {currentPage === 'persona' && <PersonaPage agents={agents} />}
+                {currentPage === 'persona' && <PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />}
                 {currentPage === 'shadow' && <ShadowModePage />}
 	                {currentPage === 'blackbox' && <BlackBoxPage incidents={incidents} onNavigate={navigateTo} />}
                 {currentPage === 'api-access' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />}

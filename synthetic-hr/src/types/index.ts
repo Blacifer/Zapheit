@@ -85,6 +85,17 @@ export interface Organization {
 export type AgentStatus = 'active' | 'paused' | 'terminated';
 export type LifecycleState = 'provisioning' | 'idle' | 'processing' | 'learning' | 'error' | 'terminated';
 export type RiskLevel = 'low' | 'medium' | 'high';
+export type AgentPublishStatus = 'not_live' | 'ready' | 'live';
+export type AgentPackId = 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance';
+
+export interface AgentConnectedTarget {
+  integrationId: string;
+  integrationName: string;
+  packId: AgentPackId;
+  status: string;
+  lastSyncAt?: string | null;
+  lastActivityAt?: string | null;
+}
 
 export interface AIAgent {
   id: string;
@@ -105,6 +116,11 @@ export interface AIAgent {
   budget_limit: number;
   current_spend: number;
   auto_throttle: boolean;
+  publishStatus?: AgentPublishStatus;
+  primaryPack?: AgentPackId | null;
+  integrationIds?: string[];
+  connectedTargets?: AgentConnectedTarget[];
+  lastIntegrationSyncAt?: string | null;
 }
 
 // ==================== INCIDENT TYPES ====================

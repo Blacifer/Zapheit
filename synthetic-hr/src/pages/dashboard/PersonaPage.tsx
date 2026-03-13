@@ -176,8 +176,10 @@ function CompletenessRing({ pct }: { pct: number }) {
 }
 
 // ==================== MAIN COMPONENT ====================
-export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[]; isDemoMode?: boolean }) {
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(agents[0]?.id ?? null);
+const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
+
+export default function PersonaPage({ agents, isDemoMode, initialAgentId }: { agents: AIAgent[]; isDemoMode?: boolean; initialAgentId?: string | null }) {
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId || agents[0]?.id || null);
   const [personas, setPersonas] = useState<Record<string, PersonaDoc>>({});
   const [draft, setDraft] = useState<Partial<PersonaDoc>>({});
   const [isDirty, setIsDirty] = useState(false);
@@ -222,6 +224,24 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
     setIsDirty(false);
     setActiveTab('role');
   }, [selectedAgentId, personas, selectedAgent?.name]);
+
+  useEffect(() => {
+    if (initialAgentId) {
+      setSelectedAgentId(initialAgentId);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { agentId?: string };
+      if (parsed.agentId) {
+        setSelectedAgentId(parsed.agentId);
+      }
+    } catch {
+      // ignore malformed focus payload
+    }
+  }, [initialAgentId]);
 
   const handleFieldChange = (value: string) => {
     const tab = EDITOR_TABS.find(t => t.id === activeTab)!;
