@@ -51,7 +51,7 @@ export function getFrontendConfig(): SyntheticHrFrontendConfig {
     demoModeEnabled:
       readBoolean(runtime.demoModeEnabled) ??
       readBoolean(import.meta.env.VITE_DEMO_MODE_ENABLED) ??
-      (!import.meta.env.PROD),
+      true,
   };
 }
 

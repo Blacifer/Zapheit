@@ -44,6 +44,7 @@ const MarketplacePage = lazy(() => import('./dashboard/MarketplacePage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
+  onSignUp?: () => void;
 }
 
 function DashboardSectionLoading() {
@@ -233,7 +234,7 @@ function buildCoverageNotifications(
     .slice(0, 50);
 }
 
-export default function Dashboard({ isDemoMode }: DashboardProps) {
+export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState('overview');
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -855,9 +856,27 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
 
   return (
     <div className="min-h-screen app-bg flex text-slate-50">
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-cyan-500/90 to-blue-600/90 backdrop-blur-md text-white px-4 py-2.5 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-3">
+            <span className="px-2 py-0.5 rounded-md bg-white/20 text-xs font-bold tracking-wider uppercase">Demo</span>
+            <span className="text-sm font-medium">You're exploring with sample data — nothing is real or saved.</span>
+          </div>
+          {onSignUp && (
+            <button
+              onClick={onSignUp}
+              className="flex-shrink-0 px-4 py-1.5 bg-white text-blue-700 rounded-lg text-sm font-semibold hover:bg-slate-100 transition-colors shadow"
+            >
+              Sign Up Free →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Error Banner */}
       {error && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-red-500/90 text-white px-4 py-2 flex items-center justify-between">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-red-500/90 text-white px-4 py-2 flex items-center justify-between" style={isDemoMode ? { top: '46px' } : undefined}>
           <span>{error}</span>
           <button onClick={() => setError(null)} className="hover:text-red-200">
             <X className="w-4 h-4" />
@@ -865,7 +884,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
         </div>
       )}
 
-      <div className={`flex flex-1 w-full min-h-screen ${error ? 'pt-12' : ''}`}>
+      <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''}`}>
         {/* Sidebar */}
         <aside className="w-64 sidebar-surface p-4 flex flex-col min-h-screen">
           <div className="flex items-center gap-3 mb-8 px-2">
