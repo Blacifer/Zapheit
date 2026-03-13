@@ -2,6 +2,32 @@ import type { IntegrationSpec } from './spec-types';
 
 const API_CALLBACK_BASE = '/api/integrations/oauth/callback';
 
+const INTERNAL_INTEGRATION: IntegrationSpec = {
+  id: 'internal',
+  name: 'SyntheticHR (Built-in)',
+  category: 'OTHER',
+  description: 'Built-in work items and safe actions inside SyntheticHR. No external credentials required.',
+  // Kept as api_key for compatibility; UI/API special-case this to show as connected without configuration.
+  authType: 'api_key',
+  tags: ['BUILTIN', 'INTERNAL'],
+  status: 'READY',
+  color: '#64748B',
+  priority: 0,
+  endpoints: {},
+  capabilities: {
+    reads: [],
+    writes: [
+      { id: 'support.ticket.create', label: 'Create support ticket (internal)', risk: 'medium', pack: 'support' },
+      { id: 'support.ticket.update_status', label: 'Update ticket status (internal)', risk: 'low', pack: 'support' },
+      { id: 'sales.lead.create', label: 'Create sales lead (internal)', risk: 'medium', pack: 'sales' },
+      { id: 'sales.lead.update_stage', label: 'Update lead stage (internal)', risk: 'low', pack: 'sales' },
+      { id: 'it.access_request.create', label: 'Create access request (internal)', risk: 'high', pack: 'it' },
+      { id: 'it.access_request.decide', label: 'Approve/deny access request (internal)', risk: 'high', pack: 'it' },
+    ],
+  },
+  notes: 'These actions create records inside SyntheticHR and run through Jobs & Approvals via connector_action.',
+};
+
 export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
   {
     id: 'naukri',
@@ -887,6 +913,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
 ];
 
 export const IMPLEMENTED_INTEGRATIONS: IntegrationSpec[] = [
+  INTERNAL_INTEGRATION,
   ...PHASE1_INTEGRATIONS,
   ...PHASE2_INTEGRATIONS,
   ...PHASE3_INTEGRATIONS,

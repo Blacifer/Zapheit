@@ -35,6 +35,9 @@ export type IntegrationRequiredField = {
   description?: string;
 };
 
+// UI pack ids (frontend groups integrations/actions by these).
+export type IntegrationPackId = 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance';
+
 export type IntegrationApiKeyConfig = {
   requiredFields: IntegrationRequiredField[];
   testEndpoint: string;
@@ -58,6 +61,8 @@ export type IntegrationWriteCapability = {
   id: string; // stable action id, e.g. "outreach.send_email"
   label: string;
   risk: IntegrationActionRisk;
+  // Optional hint for UI grouping when provider category alone is not enough (e.g. built-in/internal actions).
+  pack?: IntegrationPackId;
 };
 
 export type IntegrationCapabilities = {
