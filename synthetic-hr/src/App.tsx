@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { AppContext, type AuthUser } from './context/AppContext';
 import { authHelpers } from './lib/supabase-client';
+import { getFrontendConfig } from './lib/config';
 import { STORAGE_KEYS } from './lib/utils';
 
 // Lazy load all page components
@@ -27,7 +28,8 @@ function App() {
   const [retentionDays, setRetentionDays] = useState(90);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const demoEnabled = !import.meta.env.PROD && import.meta.env.VITE_DEMO_MODE_ENABLED !== 'false';
+  const config = getFrontendConfig();
+  const demoEnabled = Boolean(config.demoModeEnabled);
   const pendingInviteStorageKey = 'synthetic_hr_pending_invite_token';
 
   const claimInviteIfPending = async (accessToken: string | null | undefined) => {
@@ -35,7 +37,7 @@ function App() {
     const token = localStorage.getItem(pendingInviteStorageKey);
     if (!token) return;
 
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+    const base = (config.apiUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
     const claimUrl = base.endsWith('/api') ? `${base}/invites/claim` : `${base}/api/invites/claim`;
 
     try {

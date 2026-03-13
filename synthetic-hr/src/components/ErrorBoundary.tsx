@@ -1,8 +1,9 @@
 import React from 'react';
 import * as Sentry from '@sentry/react';
+import { getFrontendConfig } from '../lib/config';
 
 // Error reporting service URL - in production, this would be your error tracking service
-const ERROR_REPORTING_URL = import.meta.env.VITE_ERROR_REPORTING_URL || null;
+const ERROR_REPORTING_URL = getFrontendConfig().errorReportingUrl || null;
 
 // Sanitize error for display - never expose internal details to users
 const sanitizeErrorForDisplay = (error: any): string => {

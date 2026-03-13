@@ -1,11 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getFrontendConfig } from './config';
 
 // Frontend auth and organization scoping still rely on Supabase.
 // Keep this helper as the single place that initializes the browser client.
 
-// Check for required environment variables - must be set for Supabase to work
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const config = getFrontendConfig();
+const supabaseUrl = config.supabaseUrl;
+const supabaseAnonKey = config.supabaseAnonKey;
 
 // Supabase is only available if both env vars are properly configured
 const isSupabaseConfigured = (): boolean => {

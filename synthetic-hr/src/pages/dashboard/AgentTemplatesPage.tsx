@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, Zap, Headphones, Users, RefreshCw, Server, Search, Loader2, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
+import { getFrontendConfig } from '../../lib/config';
 
 interface LiveModel {
   id: string;
@@ -46,7 +47,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
           const res = await fetch(`${apiUrl}/models`, {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });

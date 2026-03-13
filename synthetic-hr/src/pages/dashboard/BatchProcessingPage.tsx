@@ -3,6 +3,7 @@ import { Upload, Play, Download, CheckCircle, AlertCircle, Clock, FileJson, Tras
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 
 interface BatchItem {
   prompt: string;
@@ -73,7 +74,7 @@ export default function BatchProcessingPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
           const res = await fetch(`${apiUrl}/models`, {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });

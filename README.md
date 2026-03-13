@@ -20,7 +20,12 @@ Rasi-Synthetic-HR is an **AI Agent control plane**: define **Playbooks**, route 
 - Frontend: see `./synthetic-hr/README.md`
 - Database: `./synthetic-hr-database/DEPLOYMENT_GUIDE.md`
 
+## Self-host / enterprise
+
+- Checklist: `./ENTERPRISE_DEPLOYMENT_CHECKLIST.md`
+- Docker Compose (API + frontend): `./deploy/compose/control-plane.yml`
+- Note: deployments still require a Supabase instance (cloud or self-hosted) for auth + PostgREST.
+
 ## Archive
 
 Older planning/status docs were moved to `./docs/archive/` to keep the repo root clean.
-

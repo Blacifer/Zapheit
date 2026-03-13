@@ -20,9 +20,10 @@ import {
 import { ApiKey } from '../../types';
 import { api } from '../../lib/api-client';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 import { toast } from '../../lib/toast';
 
-const API_BASE = ((import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+const API_BASE = (getFrontendConfig().apiUrl || 'http://localhost:3001/api').replace(/\/$/, '');
 const ADMIN_BASE = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE;
 
 type Environment = 'production' | 'staging' | 'development';

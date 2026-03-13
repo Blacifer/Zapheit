@@ -4,6 +4,7 @@ import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AIAgent } from '../../types';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 
 type StepId = 'workspace' | 'key' | 'agent' | 'test' | 'verify';
 
@@ -76,7 +77,7 @@ export default function GettingStartedPage(props: {
     setModelsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
       const headers: Record<string, string> = {};
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 

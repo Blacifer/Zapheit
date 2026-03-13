@@ -4,10 +4,12 @@
  */
 
 import * as Sentry from '@sentry/react';
+import { getFrontendConfig } from './config';
 
 export const initSentry = () => {
   // Only initialize if we have a Sentry DSN configured
-  const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+  const config = getFrontendConfig();
+  const sentryDsn = config.sentryDsn;
   
   if (!sentryDsn) {
     console.warn('Sentry DSN not configured. Error tracking disabled.');
@@ -25,7 +27,7 @@ export const initSentry = () => {
     environment,
 
     // Release version (optional but recommended)
-    release: import.meta.env.VITE_APP_VERSION || '1.0.0',
+    release: config.appVersion || '1.0.0',
 
     // Sample rate (0 = no errors sent, 1 = all errors sent)
     sampleRate: isProduction ? 0.9 : 1.0,

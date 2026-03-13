@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { getFrontendConfig } from './config';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const config = getFrontendConfig();
+const supabaseUrl = config.supabaseUrl || '';
+const supabaseAnonKey = config.supabaseAnonKey || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env');
@@ -10,8 +12,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const getProvisionUrl = () => {
-  const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-  const normalized = rawApiUrl.replace(/\/+$/, '');
+  const normalized = (config.apiUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
   return normalized.endsWith('/api')
     ? `${normalized.slice(0, -4)}/auth/provision`
     : `${normalized}/auth/provision`;

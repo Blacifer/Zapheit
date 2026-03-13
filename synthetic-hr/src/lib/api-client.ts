@@ -4,9 +4,10 @@
  */
 
 import { getSupabaseClient } from './supabase';
+import { getFrontendConfig } from './config';
 import type { AIAgent, Incident, CostData, SupportTicket, SalesLead, AccessRequest } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
 
 const isAnonymousEndpoint = (endpoint: string): boolean => {
   return endpoint === '/health' || endpoint === '/invites/accept' || /\/invites\/[^/]+\/reject$/.test(endpoint);

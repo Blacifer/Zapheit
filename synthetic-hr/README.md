@@ -66,3 +66,8 @@ pnpm preview
 3. Set frontend environment variables
 4. Build and host the frontend
 5. Verify sign-in, org scoping, and one tracked request through RASI
+
+## Enterprise/self-host note
+
+Production deployments can override frontend configuration **at runtime** (no rebuild) via `public/runtime-config.js`.
+When using Docker, set `SYNTHETICHR_API_URL`, `SYNTHETICHR_SUPABASE_URL`, and `SYNTHETICHR_SUPABASE_ANON_KEY` on the container.

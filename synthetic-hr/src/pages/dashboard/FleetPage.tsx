@@ -9,6 +9,7 @@ import type { AIAgent } from '../../types';
 import { toast } from '../../lib/toast';
 import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
+import { getFrontendConfig } from '../../lib/config';
 
 interface FleetPageProps {
   agents: AIAgent[];
@@ -362,7 +363,7 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const controlPlaneBaseUrl = (((import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api') as string)
+  const controlPlaneBaseUrl = (((getFrontendConfig().apiUrl || 'http://localhost:3001/api') as string))
     .toString()
     .replace(/\/api\/?$/, '');
 
@@ -1004,7 +1005,7 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
           const res = await fetch(`${apiUrl}/models`, {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });

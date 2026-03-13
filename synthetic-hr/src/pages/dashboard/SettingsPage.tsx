@@ -12,6 +12,7 @@ import { useApp } from '../../context/AppContext';
 import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
 import { api } from '../../lib/api-client';
+import { getFrontendConfig } from '../../lib/config';
 
 // ==================== TYPES ====================
 type SettingsTab = 'profile' | 'organization' | 'team' | 'notifications' | 'security' | 'tools';
@@ -281,7 +282,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+        const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
         await fetch(`${apiUrl}/users/invite`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },

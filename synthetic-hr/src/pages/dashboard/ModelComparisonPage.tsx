@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Check, X, Zap, Cpu, ArrowRightLeft, Target, Globe2, Eye, Banknote, ShieldCheck, Search, Filter, Loader2, Users, FileText, Trash2, Sparkles, Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 
 interface LiveModel {
   id: string;
@@ -109,7 +110,7 @@ export default function ModelComparisonPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
           const res = await fetch(`${apiUrl}/models`, {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });

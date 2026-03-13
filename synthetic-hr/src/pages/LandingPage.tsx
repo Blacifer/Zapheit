@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Brain, Zap, ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
@@ -81,22 +81,45 @@ const PLAN_CARDS: PlanCard[] = [
 function AnimatedCounter({ target, label, suffix = '' }: { target: number; label: string; suffix?: string }) {
   const [count, setCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const elementRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const prefersReducedMotion = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      setIsVisible(true);
+      return;
+    }
+
+    const element = elementRef.current;
+    const supportsObserver = typeof window !== 'undefined' && typeof (window as any).IntersectionObserver === 'function';
+
+    if (!supportsObserver || !element) {
+      setIsVisible(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !isVisible) {
-        setIsVisible(true);
-      }
+      if (entry.isIntersecting) setIsVisible(true);
     }, { threshold: 0.1 });
 
-    const element = document.getElementById(`counter-${label}`);
-    if (element) observer.observe(element);
-
+    observer.observe(element);
     return () => observer.disconnect();
   }, [isVisible, label]);
 
   useEffect(() => {
     if (!isVisible) return;
+
+    const prefersReducedMotion = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      setCount(target);
+      return;
+    }
     
     const duration = 2000;
     const steps = 60;
@@ -117,7 +140,7 @@ function AnimatedCounter({ target, label, suffix = '' }: { target: number; label
   }, [isVisible, target]);
 
   return (
-    <div id={`counter-${label}`} className="text-center">
+    <div ref={elementRef} className="text-center">
       <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
         {count.toLocaleString()}{suffix}
       </div>
@@ -133,6 +156,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
   const [activeAgents, setActiveAgents] = useState(22);
   const [governanceLayer, setGovernanceLayer] = useState<(typeof GOVERNANCE_OPTIONS)[number]['id']>('scale');
+  const year = new Date().getFullYear();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -791,6 +815,50 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         </div>
       </section>
 
+      {/* Security Section */}
+      <section id="security" className="py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Security</span>
+            <h2 className="text-5xl font-bold text-white mt-4">Enterprise-ready by default</h2>
+            <p className="text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
+              Least-privilege access, auditability, and safe deployment patterns built for real operations.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Lock,
+                title: 'Least-privilege access',
+                body: 'Role-based access control and scoped API keys for services and automation.',
+              },
+              {
+                icon: Shield,
+                title: 'Audit trails + observability',
+                body: 'Request IDs, structured logs, and OpenTelemetry support for production monitoring.',
+              },
+              {
+                icon: Building2,
+                title: 'Customer-managed deployment',
+                body: 'Self-host with Docker/Kubernetes and configure the frontend at runtime (no rebuilds).',
+              },
+            ].map((item, idx) => (
+              <div
+                key={idx}
+                className="p-6 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-cyan-400/30 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center mb-4">
+                  <item.icon className="w-6 h-6 text-cyan-300" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA Section */}
       <section className="py-24 px-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-blue-500/10" />
@@ -839,34 +907,49 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             <div>
               <h4 className="font-semibold text-white mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Security</a></li>
+                <li><a href="#how-it-works" className="hover:text-cyan-400 transition-colors">How it works</a></li>
+                <li><a href="#stats" className="hover:text-cyan-400 transition-colors">Results</a></li>
+                <li><a href="#pillars" className="hover:text-cyan-400 transition-colors">Features</a></li>
+                <li><a href="#pricing" className="hover:text-cyan-400 transition-colors">Pricing</a></li>
+                <li><a href="#security" className="hover:text-cyan-400 transition-colors">Security</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-white mb-4">Company</h4>
+              <h4 className="font-semibold text-white mb-4">Get Started</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">About</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Contact</a></li>
+                <li>
+                  <button onClick={onLogin} className="hover:text-cyan-400 transition-colors">
+                    Sign In
+                  </button>
+                </li>
+                <li>
+                  <button onClick={onSignUp} className="hover:text-cyan-400 transition-colors">
+                    Start Free Trial
+                  </button>
+                </li>
+                {onDemo ? (
+                  <li>
+                    <button onClick={onDemo} className="hover:text-cyan-400 transition-colors">
+                      Schedule Demo
+                    </button>
+                  </li>
+                ) : null}
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-white mb-4">Legal</h4>
+              <h4 className="font-semibold text-white mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Privacy</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Terms</a></li>
-                <li><a href="#" className="hover:text-cyan-400 transition-colors">Compliance</a></li>
+                <li><a href="#pricing" className="hover:text-cyan-400 transition-colors">ROI Calculator</a></li>
+                <li><a href="#security" className="hover:text-cyan-400 transition-colors">Deployment Notes</a></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-slate-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500">© 2024 Rasi Solutions. All rights reserved.</p>
+            <p className="text-sm text-slate-500">© {year} Rasi Solutions. All rights reserved.</p>
             <div className="flex items-center gap-6">
-              <a href="#" className="text-slate-400 hover:text-cyan-400 transition-colors">Twitter</a>
-              <a href="#" className="text-slate-400 hover:text-cyan-400 transition-colors">LinkedIn</a>
-              <a href="#" className="text-slate-400 hover:text-cyan-400 transition-colors">GitHub</a>
+              <a href="#how-it-works" className="text-slate-400 hover:text-cyan-400 transition-colors">Overview</a>
+              <a href="#pillars" className="text-slate-400 hover:text-cyan-400 transition-colors">Features</a>
+              <a href="#security" className="text-slate-400 hover:text-cyan-400 transition-colors">Security</a>
             </div>
           </div>
         </div>
@@ -876,6 +959,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <style>{`
         html {
           scroll-behavior: smooth;
+        }
+        section {
+          scroll-margin-top: 96px;
         }
         @keyframes float {
           0%, 100% { transform: translateY(0px); }

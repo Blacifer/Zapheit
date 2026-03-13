@@ -7,6 +7,7 @@ import {
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -317,7 +318,7 @@ export default function PricingPage({ onNavigate }: { onNavigate?: (page: string
       setIsLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+        const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
         const headers: Record<string, string> = {};
         if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 

@@ -4,6 +4,7 @@ import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
 
 type WizardStep = 1 | 2 | 3;
 
@@ -32,13 +33,13 @@ function maskKey(value: string) {
 }
 
 function getGatewayBaseUrl() {
-  const apiUrl = ((import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api') as string;
+  const apiUrl = (getFrontendConfig().apiUrl || 'http://localhost:3001/api') as string;
   const base = apiUrl.replace(/\/api\/?$/, '');
   return `${base}/v1`;
 }
 
 function getApiBaseUrl() {
-  const apiUrl = ((import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api') as string;
+  const apiUrl = (getFrontendConfig().apiUrl || 'http://localhost:3001/api') as string;
   return apiUrl.replace(/\/+$/, '');
 }
 

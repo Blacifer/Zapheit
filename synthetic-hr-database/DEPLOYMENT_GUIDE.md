@@ -55,13 +55,13 @@ psql $DATABASE_URL < migration_001_core_schema.sql
 
 ```bash
 # Start PostgreSQL
-docker-compose -f docker-compose.postgres.yml up -d
+docker compose -f ../deploy/compose/postgres.yml up -d
 
 # Wait for container to be ready
-sleep 10
+docker logs -f synthetic-hr-postgres
 
 # Run migration
-docker exec postgres_container psql -U postgres -d synthetic_hr -f migration_001_core_schema.sql
+docker exec -i synthetic-hr-postgres psql -U postgres -d synthetic_hr < migration_001_core_schema.sql
 ```
 
 ## What Gets Created

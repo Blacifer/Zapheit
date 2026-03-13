@@ -1,0 +1,22 @@
+services:
+  synthetic-hr-postgres:
+    image: postgres:16-alpine
+    container_name: synthetic-hr-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-synthetic_hr}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - synthetic-hr-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  synthetic-hr-postgres-data:
+
