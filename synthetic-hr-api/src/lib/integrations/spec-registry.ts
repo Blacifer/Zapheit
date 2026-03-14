@@ -473,43 +473,6 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     },
   },
   {
-    id: 'zoho_payroll',
-    name: 'Zoho Payroll',
-    category: 'PAYROLL',
-    description: 'Zoho Payroll. Salary processing, payslips, tax filings, and payroll run analytics.',
-    authType: 'api_key',
-    tags: ['INDIA PRIORITY', 'PAYROLL', 'AI-READY'],
-    status: 'READY',
-    color: '#7C3AED',
-    priority: 1,
-    apiKeyConfig: {
-      requiredFields: [
-        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Payroll Org ID', required: true, description: 'Zoho Payroll → Settings → Organization Details' },
-        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Payroll access token', required: true, description: 'api-console.zoho.in → Self Client → Generate Token → scope: ZohoPayroll.payrolls.READ ZohoPayroll.employees.READ' },
-      ],
-      testEndpoint: 'https://payroll.zoho.in/api/v1/employees',
-      baseUrl: 'https://payroll.zoho.in/api/v1',
-    },
-    endpoints: {
-      employees: { method: 'GET', path: '/employees' },
-      employee: { method: 'GET', path: '/employees/{id}' },
-      payrolls: { method: 'GET', path: '/payrolls' },
-      payslips: { method: 'GET', path: '/payslips' },
-      taxDetails: { method: 'GET', path: '/tax-details' },
-    },
-    capabilities: {
-      reads: ['payroll.employees', 'payroll.payrolls', 'payroll.payslips', 'payroll.taxes'],
-      writes: [
-        { id: 'payroll.employee.update', label: 'Update employee payroll details', risk: 'high' },
-      ],
-    },
-    aiFeatures: {
-      enabled: true,
-      capabilities: ['payroll_analytics', 'compensation_benchmarking', 'tax_compliance', 'cost_forecasting'],
-      dataTypes: ['employees', 'payrolls', 'payslips', 'taxes'],
-    },
-  },
-  {
     id: 'paytm',
     name: 'Paytm Business',
     category: 'PAYMENTS',
