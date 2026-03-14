@@ -109,6 +109,7 @@ function App() {
         // OAuth popup callback page — render immediately regardless of auth state.
         if (isOAuthPopup) {
           setView('oauth-popup');
+          setLoading(false);
           return;
         }
 
