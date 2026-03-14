@@ -453,9 +453,9 @@ async function buildOAuthAuthorizeUrl(params: {
   const authUrl = new URL(oauthResolvedAuthUrl);
 
   let clientIdEnv = '';
-  const needsOffline = ['zoho_people', 'google_workspace', 'microsoft_365', 'teams', 'deel', 'gusto', 'flock', 'okta', 'digilocker'].includes(service);
+  const needsOffline = ['zoho_people', 'zoho_recruit', 'zoho_learn', 'zoho_payroll', 'google_workspace', 'microsoft_365', 'teams', 'deel', 'gusto', 'flock', 'okta', 'digilocker'].includes(service);
 
-  if (service === 'zoho_people') clientIdEnv = 'ZOHO_CLIENT_ID';
+  if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_payroll') clientIdEnv = 'ZOHO_CLIENT_ID';
   else if (service === 'linkedin') clientIdEnv = 'LINKEDIN_CLIENT_ID';
   else if (service === 'digilocker') clientIdEnv = 'DIGILOCKER_CLIENT_ID';
   else if (service === 'google_workspace') clientIdEnv = 'GOOGLE_CLIENT_ID';
@@ -481,7 +481,7 @@ async function buildOAuthAuthorizeUrl(params: {
     authUrl.searchParams.set('prompt', 'consent');
     authUrl.searchParams.set('include_granted_scopes', 'true');
   }
-  if (service === 'zoho_people') {
+  if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_payroll') {
     authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'consent');
   }
@@ -498,6 +498,9 @@ async function buildOAuthAuthorizeUrl(params: {
 function oauthEnvKeysForService(service: string): string[] {
   switch (service) {
     case 'zoho_people':
+    case 'zoho_recruit':
+    case 'zoho_learn':
+    case 'zoho_payroll':
       return ['ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET'];
     case 'linkedin':
       return ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'];
@@ -1101,7 +1104,7 @@ router.get('/oauth/callback/:service', async (req, res) => {
     let tokenUrl = resolveUrlTemplate(spec.oauthConfig.tokenUrl, connection);
 
     // Override Zoho token URL to match the DC that issued the authorization code.
-    if (zohoLocation && service === 'zoho_people') {
+    if (zohoLocation && (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_payroll')) {
       const zohoDomain = zohoLocation === 'com' ? 'zoho.com' : `zoho.${zohoLocation}`;
       tokenUrl = `https://accounts.${zohoDomain}/oauth/v2/token`;
       logger.info('Zoho DC-aware token exchange', { service, location: zohoLocation, tokenUrl });
@@ -1130,7 +1133,7 @@ router.get('/oauth/callback/:service', async (req, res) => {
       let clientIdEnv = '';
       let clientSecretEnv: string | null = null;
 
-      if (service === 'zoho_people') {
+      if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_payroll') {
         clientIdEnv = 'ZOHO_CLIENT_ID';
         clientSecretEnv = 'ZOHO_CLIENT_SECRET';
       } else if (service === 'linkedin') {
@@ -1217,7 +1220,7 @@ router.get('/oauth/callback/:service', async (req, res) => {
     }
 
     // For Zoho: store api_domain returned in the token response (required for API calls).
-    if (service === 'zoho_people' && token?.api_domain) {
+    if ((service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_payroll') && token?.api_domain) {
       await upsertCredential(rest, integration.id, 'api_domain', String(token.api_domain), false, null);
     }
 

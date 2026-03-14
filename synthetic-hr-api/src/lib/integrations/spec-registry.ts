@@ -260,18 +260,16 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Recruit',
     category: 'ATS',
     description: 'Applicant tracking with resume parsing, pipeline management, and hiring analytics.',
-    authType: 'api_key',
+    authType: 'oauth2',
     tags: ['INDIA PRIORITY', 'ATS', 'AI-READY'],
     status: 'READY',
     color: '#DC2626',
     priority: 2,
-    apiKeyConfig: {
-      requiredFields: [
-        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Recruit Org ID', required: true, description: 'Found in Zoho Recruit → Setup → Company Settings' },
-        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Recruit access token', required: true, description: 'Generate via Zoho API Console → Self Client → scope: ZohoRecruit.modules.ALL' },
-      ],
-      testEndpoint: 'https://recruit.zoho.in/recruit/v2/Candidates',
-      baseUrl: 'https://recruit.zoho.in/recruit/v2',
+    oauthConfig: {
+      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
+      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
+      scopes: ['ZohoRecruit.modules.ALL'],
+      redirectPath: `${API_CALLBACK_BASE}/zoho_recruit`,
     },
     endpoints: {
       candidates: { method: 'GET', path: '/Candidates' },
@@ -444,18 +442,16 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Learn',
     category: 'LMS',
     description: 'Learning management from Zoho. Skill recommendations, learning paths, and certification tracking.',
-    authType: 'api_key',
+    authType: 'oauth2',
     tags: ['INDIA PRIORITY', 'LMS', 'AI-READY'],
     status: 'READY',
     color: '#EA580C',
     priority: 3,
-    apiKeyConfig: {
-      requiredFields: [
-        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Learn Org ID', required: true, description: 'Found in Zoho Learn → Admin → Organization Settings' },
-        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Learn access token', required: true, description: 'Generate via Zoho API Console → Self Client → scope: ZohoLearn.course.READ' },
-      ],
-      testEndpoint: 'https://learn.zoho.com/api/v1/courses',
-      baseUrl: 'https://learn.zoho.com/api/v1',
+    oauthConfig: {
+      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
+      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
+      scopes: ['ZohoLearn.course.READ'],
+      redirectPath: `${API_CALLBACK_BASE}/zoho_learn`,
     },
     endpoints: {
       courses: { method: 'GET', path: '/courses' },
@@ -481,18 +477,16 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Payroll',
     category: 'PAYROLL',
     description: 'Zoho Payroll. Salary processing, payslips, tax filings, and payroll run analytics.',
-    authType: 'api_key',
+    authType: 'oauth2',
     tags: ['INDIA PRIORITY', 'PAYROLL', 'AI-READY'],
     status: 'READY',
     color: '#7C3AED',
     priority: 1,
-    apiKeyConfig: {
-      requiredFields: [
-        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Payroll Org ID', required: true, description: 'Found in Zoho Payroll → Settings → Organization' },
-        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Payroll access token', required: true, description: 'Generate via Zoho API Console → Self Client → Generate Token with ZohoPayroll scopes' },
-      ],
-      testEndpoint: 'https://payroll.zoho.in/api/v1/employees',
-      baseUrl: 'https://payroll.zoho.in/api/v1',
+    oauthConfig: {
+      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
+      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
+      scopes: ['ZohoPayroll.payrolls.READ', 'ZohoPayroll.employees.READ'],
+      redirectPath: `${API_CALLBACK_BASE}/zoho_payroll`,
     },
     endpoints: {
       employees: { method: 'GET', path: '/employees' },
