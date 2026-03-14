@@ -646,6 +646,7 @@ export default function IntegrationsPage({
       oauthCompleted = true;
       window.removeEventListener('message', handleMessage);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleWindowFocus);
       bc?.close();
       clearInterval(pollId);
       clearInterval(backendPollId);
@@ -724,22 +725,55 @@ export default function IntegrationsPage({
     }, 3000);
     setTimeout(() => clearInterval(backendPollId), 5 * 60 * 1000);
 
-    pollId = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(pollId);
-        // Defer cleanup slightly so any postMessage dispatched just before window.close()
-        // in the popup has time to be processed by handleMessage first.
-        setTimeout(() => {
-          window.removeEventListener('message', handleMessage);
-          window.removeEventListener('storage', handleStorage);
-          bc?.close();
-          clearInterval(backendPollId);
-          resetConnecting();
-          if (!oauthCompleted) {
-            toast.info('Connection cancelled.');
+    // Use window focus event for abandonment detection instead of popup.closed.
+    // OAuth providers (Microsoft, Google) set Cross-Origin-Opener-Policy headers that
+    // block popup.closed checks — using it causes console errors every second.
+    const handleWindowFocus = () => {
+      // User returned to this window. Give the backend poll 3s to confirm success,
+      // then if still not completed treat it as a cancellation.
+      setTimeout(async () => {
+        if (oauthCompleted) return;
+        try {
+          const list = await api.integrations.getAll();
+          const found = (list.data as IntegrationRow[])?.find(
+            (i) => i.id === providerId && i.status === 'connected',
+          );
+          if (found) {
+            handleOAuthResult({ type: 'OAUTH_COMPLETE', status: 'connected', service: providerId });
+            return;
           }
-        }, 300);
+        } catch { /* ignore */ }
+        // Not connected — user likely cancelled.
+        window.removeEventListener('focus', handleWindowFocus);
+        window.removeEventListener('message', handleMessage);
+        window.removeEventListener('storage', handleStorage);
+        bc?.close();
+        clearInterval(backendPollId);
+        resetConnecting();
+        toast.info('Connection cancelled.');
+      }, 3000);
+    };
+    window.addEventListener('focus', handleWindowFocus);
+
+    // Also keep a safe popup.closed poll as a fallback, silenced if COOP blocks it.
+    pollId = setInterval(() => {
+      try {
+        if (!popup.closed) return;
+      } catch {
+        // COOP header blocked popup.closed — stop polling, rely on focus event.
+        clearInterval(pollId);
+        return;
       }
+      clearInterval(pollId);
+      setTimeout(() => {
+        window.removeEventListener('message', handleMessage);
+        window.removeEventListener('storage', handleStorage);
+        window.removeEventListener('focus', handleWindowFocus);
+        bc?.close();
+        clearInterval(backendPollId);
+        resetConnecting();
+        if (!oauthCompleted) toast.info('Connection cancelled.');
+      }, 300);
     }, 1000);
   };
 
