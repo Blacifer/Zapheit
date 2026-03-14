@@ -10,6 +10,7 @@ const SignUpPage = lazy(() => import('./pages/SignUpPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
+const OAuthCallbackPage = lazy(() => import('./pages/OAuthCallbackPage'));
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -26,7 +27,7 @@ function App() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'landing' | 'signup' | 'login' | 'dashboard' | 'accept-invite'>('landing');
+  const [view, setView] = useState<'landing' | 'signup' | 'login' | 'dashboard' | 'accept-invite' | 'oauth-popup'>('landing');
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const config = getFrontendConfig();
@@ -103,6 +104,13 @@ function App() {
         // Check if user has an active session (Supabase handles auth tokens)
         const { user: authUser, error } = await authHelpers.getCurrentUser();
         const isAcceptInvite = typeof window !== 'undefined' && window.location.pathname.startsWith('/accept-invite');
+        const isOAuthPopup = typeof window !== 'undefined' && window.location.pathname === '/oauth/popup';
+
+        // OAuth popup callback page — render immediately regardless of auth state.
+        if (isOAuthPopup) {
+          setView('oauth-popup');
+          return;
+        }
 
         if (authUser && !error) {
           const userData: AuthUser = {
@@ -260,6 +268,7 @@ function App() {
             onDone={() => setView('dashboard')}
           />
         )}
+        {view === 'oauth-popup' && <OAuthCallbackPage />}
         {view === 'dashboard' && (
           <Dashboard
             isDemoMode={isDemoMode}

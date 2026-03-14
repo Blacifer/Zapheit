@@ -592,24 +592,111 @@ export default function IntegrationsPage({
       return;
     }
     setConnecting((prev) => ({ ...prev, [providerId]: true }));
-    try {
-      const returnTo = '/dashboard/integrations';
-      if (effectiveAgentContext) {
-        localStorage.setItem(PUBLISH_CONTEXT_STORAGE_KEY, JSON.stringify({
-          agentId: effectiveAgentId,
-          agentName: effectiveAgentName,
-          recommendedPackId: activePack,
-        }));
-      }
-      const init = await api.integrations.initOAuth(providerId, returnTo);
-      if (!init.success || !init.data?.url) {
-        toast.error(init.error || 'Failed to start OAuth connection');
-        return;
-      }
-      window.location.href = init.data.url;
-    } finally {
-      setConnecting((prev) => ({ ...prev, [providerId]: false }));
+
+    // Persist agent context before the OAuth redirect (same as before).
+    if (effectiveAgentContext) {
+      localStorage.setItem(PUBLISH_CONTEXT_STORAGE_KEY, JSON.stringify({
+        agentId: effectiveAgentId,
+        agentName: effectiveAgentName,
+        recommendedPackId: activePack,
+      }));
     }
+
+    let init: Awaited<ReturnType<typeof api.integrations.initOAuth>>;
+    try {
+      init = await api.integrations.initOAuth(providerId, '/dashboard/integrations', {}, true);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start OAuth connection');
+      setConnecting((prev) => ({ ...prev, [providerId]: false }));
+      return;
+    }
+
+    if (!init.success || !init.data?.url) {
+      toast.error(init.error || 'Failed to start OAuth connection');
+      setConnecting((prev) => ({ ...prev, [providerId]: false }));
+      return;
+    }
+
+    const popupUrl = init.data.url;
+    const popup = window.open(
+      popupUrl,
+      'oauth_popup',
+      'width=600,height=700,top=100,left=100,resizable=yes,scrollbars=yes,status=yes',
+    );
+
+    // Popup was blocked by the browser — fall back to full-page redirect.
+    if (!popup || popup.closed) {
+      toast.info('Popup was blocked. Redirecting instead…');
+      window.location.href = popupUrl;
+      return;
+    }
+
+    const resetConnecting = () => setConnecting((prev) => ({ ...prev, [providerId]: false }));
+
+    // Abandonment poll: fires every second to detect if the user closed the popup manually.
+    let pollId: ReturnType<typeof setInterval>;
+    // Guard against the poll firing between the popup's postMessage dispatch and the parent
+    // processing it — both cleanup paths check this before showing the cancellation toast.
+    let oauthCompleted = false;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!event.data || event.data.type !== 'OAUTH_COMPLETE') return;
+
+      // Clean up before doing anything else to prevent double-firing.
+      oauthCompleted = true;
+      window.removeEventListener('message', handleMessage);
+      clearInterval(pollId);
+      resetConnecting();
+
+      const { status, service, message: errMsg } = event.data as {
+        type: string; status: string; service: string; message?: string;
+      };
+
+      if (status === 'connected') {
+        const connectedProvider = providerMap.get(service);
+        toast.success(`Connected ${connectedProvider?.name || service}.`);
+        void load();
+        void loadActionCatalog();
+
+        // Mirror the post-OAuth agent publish logic from the mount useEffect.
+        if (effectiveAgentId && service) {
+          void api.agents.updatePublishState(effectiveAgentId, {
+            publish_status: 'live',
+            primary_pack: activePack,
+            integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), service])),
+          });
+          focusAgentWorkspace(effectiveAgentId);
+          onIntegrationConnected?.({
+            agentId: effectiveAgentId,
+            integrationId: service,
+            integrationName: connectedProvider?.name || service,
+            packId: activePack,
+            status: 'connected',
+            lastSyncAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        toast.error(errMsg || `Failed to connect ${provider?.name || providerId}.`);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    pollId = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollId);
+        // Defer cleanup slightly so any postMessage dispatched just before window.close()
+        // in the popup has time to be processed by handleMessage first.
+        setTimeout(() => {
+          window.removeEventListener('message', handleMessage);
+          resetConnecting();
+          if (!oauthCompleted) {
+            toast.info('Connection cancelled.');
+          }
+        }, 300);
+      }
+    }, 1000);
   };
 
   const connectApiKey = async (providerId: string) => {

@@ -400,13 +400,13 @@ async function verifyOAuthState(token: string): Promise<Record<string, any> | nu
   }
 }
 
-async function postForm(url: string, data: Record<string, string>): Promise<any> {
+async function postForm(url: string, data: Record<string, string>, extraHeaders?: Record<string, string>): Promise<any> {
   const body = new URLSearchParams();
   Object.entries(data).forEach(([k, v]) => body.set(k, v));
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(extraHeaders || {}) },
     body,
   });
 
@@ -465,6 +465,9 @@ async function buildOAuthAuthorizeUrl(params: {
   else if (service === 'gusto') clientIdEnv = 'GUSTO_CLIENT_ID';
   else if (service === 'flock') clientIdEnv = 'FLOCK_CLIENT_ID';
   else if (service === 'okta') clientIdEnv = 'OKTA_CLIENT_ID';
+  else if (service === 'salesforce') clientIdEnv = 'SALESFORCE_CLIENT_ID';
+  else if (service === 'intercom') clientIdEnv = 'INTERCOM_CLIENT_ID';
+  else if (service === 'quickbooks') clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
   else throw new Error('OAuth provider not implemented');
 
   const clientId = process.env[clientIdEnv];
@@ -520,6 +523,12 @@ function oauthEnvKeysForService(service: string): string[] {
       return ['FLOCK_CLIENT_ID', 'FLOCK_CLIENT_SECRET'];
     case 'okta':
       return ['OKTA_CLIENT_ID', 'OKTA_CLIENT_SECRET'];
+    case 'salesforce':
+      return ['SALESFORCE_CLIENT_ID', 'SALESFORCE_CLIENT_SECRET'];
+    case 'intercom':
+      return ['INTERCOM_CLIENT_ID', 'INTERCOM_CLIENT_SECRET'];
+    case 'quickbooks':
+      return ['QUICKBOOKS_CLIENT_ID', 'QUICKBOOKS_CLIENT_SECRET'];
     default:
       return [];
   }
@@ -798,6 +807,7 @@ router.post('/oauth/init', requirePermission('connectors.manage'), async (req, r
     service: z.string().min(1),
     returnTo: z.string().optional(),
     connection: z.record(z.string(), z.string()).optional(),
+    popup: z.boolean().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: 'Invalid payload' });
@@ -807,7 +817,9 @@ router.post('/oauth/init', requirePermission('connectors.manage'), async (req, r
   if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
   if (spec.authType !== 'oauth2' || !spec.oauthConfig) return res.status(400).json({ success: false, error: 'Integration is not OAuth2 based' });
 
-  const returnTo = safeReturnPath(parsed.data.returnTo) || '/dashboard/integrations';
+  const returnTo = parsed.data.popup
+    ? '/oauth/popup'
+    : (safeReturnPath(parsed.data.returnTo) || '/dashboard/integrations');
   const connection: Record<string, string> = {};
   Object.entries(parsed.data.connection || {}).forEach(([k, v]) => {
     if (!v) return;
@@ -1159,6 +1171,15 @@ router.get('/oauth/callback/:service', async (req, res) => {
       } else if (service === 'okta') {
         clientIdEnv = 'OKTA_CLIENT_ID';
         clientSecretEnv = 'OKTA_CLIENT_SECRET';
+      } else if (service === 'salesforce') {
+        clientIdEnv = 'SALESFORCE_CLIENT_ID';
+        clientSecretEnv = 'SALESFORCE_CLIENT_SECRET';
+      } else if (service === 'intercom') {
+        clientIdEnv = 'INTERCOM_CLIENT_ID';
+        clientSecretEnv = 'INTERCOM_CLIENT_SECRET';
+      } else if (service === 'quickbooks') {
+        clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
+        clientSecretEnv = 'QUICKBOOKS_CLIENT_SECRET';
       } else {
         throw new Error('OAuth provider not implemented');
       }
@@ -1167,13 +1188,23 @@ router.get('/oauth/callback/:service', async (req, res) => {
       const clientSecret = clientSecretEnv ? secretOrNull(clientSecretEnv) : null;
       if (!clientId || !clientSecret) throw new Error('OAuth env vars are not configured');
 
-      token = await postForm(tokenUrl, {
-        grant_type: 'authorization_code',
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        code,
-      });
+      // QuickBooks (Intuit) requires credentials in Authorization: Basic header, not the POST body.
+      if (service === 'quickbooks') {
+        const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        token = await postForm(tokenUrl, {
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code,
+        }, { Authorization: `Basic ${basic}` });
+      } else {
+        token = await postForm(tokenUrl, {
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          code,
+        });
+      }
     }
 
     const accessToken = token?.access_token;
@@ -1231,7 +1262,8 @@ router.get('/oauth/callback/:service', async (req, res) => {
   } catch (err: any) {
     logger.warn('OAuth callback failed', { service, error: err?.message || String(err) });
     const params = new URLSearchParams({ status: 'error', service, message: err?.message || 'OAuth failed' });
-    return res.redirect(302, `${frontendUrl}/dashboard/integrations?${params.toString()}`);
+    const errReturnTo = safeReturnPath((parsedState as any)?.returnTo) || '/dashboard/integrations';
+    return res.redirect(302, `${frontendUrl}${errReturnTo}?${params.toString()}`);
   }
 });
 

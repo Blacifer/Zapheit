@@ -1309,13 +1309,14 @@ export const integrationsApi = {
     });
   },
 
-  async initOAuth(service: string, returnTo: string, connection?: Record<string, string>): Promise<ApiResponse<{ url: string }>> {
+  async initOAuth(service: string, returnTo: string, connection?: Record<string, string>, popup?: boolean): Promise<ApiResponse<{ url: string }>> {
     return authenticatedFetch('/integrations/oauth/init', {
       method: 'POST',
       body: JSON.stringify({
         service,
         returnTo,
         connection: connection || {},
+        ...(popup ? { popup: true } : {}),
       }),
     });
   },
