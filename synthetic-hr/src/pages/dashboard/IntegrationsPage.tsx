@@ -1562,6 +1562,26 @@ export default function IntegrationsPage({
                   <div className="text-slate-200">{selectedIntegration.lastErrorMsg || '—'}</div>
                 </div>
               </div>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {effectiveStatus(selectedIntegration) === 'connected' || effectiveStatus(selectedIntegration) === 'error' ? (
+                  <>
+                    {selectedIntegration.authType === 'oauth2' ? (
+                      <button
+                        onClick={() => { closeDetails(); void connectOAuth(selectedIntegration.id); }}
+                        className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                      >
+                        Reconnect
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => { closeDetails(); void disconnectProvider(selectedIntegration.id); }}
+                      className="px-3 py-1.5 rounded-xl border border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15 transition-colors text-sm"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             {selectedIntegration.readiness ? (
