@@ -15,16 +15,21 @@ export default function OAuthCallbackPage() {
     const service = params.get('service') ?? '';
     const message = params.get('message') ?? '';
 
+    const payload = { type: 'OAUTH_COMPLETE', status, service, message };
     const qs = new URLSearchParams({ status, ...(service ? { service } : {}), ...(message ? { message } : {}) });
     const fallbackUrl = `/dashboard/integrations?${qs.toString()}`;
 
+    // Broadcast to all tabs on this origin — handles the case where the browser
+    // opened the OAuth flow as a new tab instead of a popup (window.opener is null).
+    try {
+      const bc = new BroadcastChannel('synthetic_hr_oauth');
+      bc.postMessage(payload);
+      bc.close();
+    } catch { /* BroadcastChannel not supported in this environment */ }
+
     if (window.opener && !window.opener.closed) {
-      // Send result back to the parent window, then close this popup.
-      // targetOrigin is always our own origin — never '*'.
-      window.opener.postMessage(
-        { type: 'OAUTH_COMPLETE', status, service, message },
-        window.location.origin,
-      );
+      // Popup flow: send result back to the parent window, then close.
+      window.opener.postMessage(payload, window.location.origin);
       window.close();
       // Some browsers open popups as tabs and ignore window.close().
       // Fall back to a redirect after a short delay so the user is never stuck.
@@ -32,9 +37,8 @@ export default function OAuthCallbackPage() {
         window.location.replace(fallbackUrl);
       }, 1500);
     } else {
-      // Opened in a regular tab (e.g. popup was blocked and we fell through to a redirect,
-      // or the user pasted the URL directly). Pass the query params to the integrations page
-      // so the existing parseOAuthToastFromQuery() handler can show the result.
+      // New-tab flow: redirect this tab back to the integrations page.
+      // The BroadcastChannel message above already notified the original tab.
       window.location.replace(fallbackUrl);
     }
   }, []);
