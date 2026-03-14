@@ -263,6 +263,7 @@ function App() {
         {view === 'dashboard' && (
           <Dashboard
             isDemoMode={isDemoMode}
+            onSignUp={isDemoMode ? () => setView('signup') : undefined}
           />
         )}
       </Suspense>

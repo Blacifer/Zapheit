@@ -149,6 +149,234 @@ function AnimatedCounter({ target, label, suffix = '' }: { target: number; label
   );
 }
 
+const PREVIEW_TABS = ['Overview', 'Fleet', 'Incidents', 'Costs'] as const;
+type PreviewTab = typeof PREVIEW_TABS[number];
+
+const DEMO_AGENTS = [
+  { name: 'Support Bot', type: 'support', model: 'GPT-4o', status: 'active', risk: 'low', riskScore: 23, conversations: 15420, spend: 462, budget: 1000 },
+  { name: 'Sales Assistant', type: 'sales', model: 'Claude 3.5', status: 'active', risk: 'medium', riskScore: 45, conversations: 8932, spend: 267, budget: 500 },
+  { name: 'HR Bot', type: 'hr', model: 'GPT-4o', status: 'active', risk: 'low', riskScore: 18, conversations: 4521, spend: 135, budget: 300 },
+  { name: 'Refund Handler', type: 'finance', model: 'GPT-4o', status: 'paused', risk: 'high', riskScore: 78, conversations: 2341, spend: 70, budget: 200 },
+  { name: 'Knowledge Base', type: 'support', model: 'Claude 3.5', status: 'active', risk: 'low', riskScore: 12, conversations: 28754, spend: 862, budget: 1500 },
+];
+
+const DEMO_INCIDENTS = [
+  { title: 'Unauthorized Refund Approved', agent: 'Refund Handler', severity: 'critical', status: 'open', time: '2h ago' },
+  { title: 'Potential PII Exposure', agent: 'Support Bot', severity: 'high', status: 'open', time: '1d ago' },
+  { title: 'Incorrect Pricing Information', agent: 'Sales Assistant', severity: 'low', status: 'resolved', time: '2d ago' },
+];
+
+function PreviewOverview() {
+  return (
+    <div className="p-5 space-y-4">
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Active Agents', value: '5', sub: '1 paused', color: 'text-cyan-400' },
+          { label: 'Open Incidents', value: '2', sub: '1 critical', color: 'text-red-400' },
+          { label: 'Monthly Cost', value: '$1,797', sub: '↑ 8% vs last mo', color: 'text-emerald-400' },
+          { label: 'Fleet Uptime', value: '99.4%', sub: 'last 30 days', color: 'text-blue-400' },
+        ].map((card) => (
+          <div key={card.label} className="rounded-xl bg-white/[0.06] border border-white/10 p-4">
+            <div className="text-xs text-slate-400 mb-1">{card.label}</div>
+            <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+            <div className="text-xs text-slate-500 mt-1">{card.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="col-span-2 rounded-xl bg-white/[0.06] border border-white/10 p-4">
+          <div className="text-xs text-slate-400 mb-3">Recent Activity</div>
+          <div className="space-y-2">
+            {[
+              { dot: 'bg-red-400', text: 'Refund Handler flagged for policy override', time: '2h ago' },
+              { dot: 'bg-yellow-400', text: 'Support Bot cost alert — 92% of budget used', time: '5h ago' },
+              { dot: 'bg-emerald-400', text: 'Knowledge Base passed shadow mode test (96%)', time: '1d ago' },
+              { dot: 'bg-blue-400', text: 'Sales Assistant integrated with HubSpot', time: '2d ago' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className={`w-2 h-2 rounded-full ${item.dot} flex-shrink-0 mt-1.5`} />
+                <span className="text-xs text-slate-300 flex-1">{item.text}</span>
+                <span className="text-xs text-slate-500 flex-shrink-0">{item.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl bg-white/[0.06] border border-white/10 p-4">
+          <div className="text-xs text-slate-400 mb-3">Risk Distribution</div>
+          <div className="space-y-2">
+            {[{ label: 'Low', count: 3, color: 'bg-emerald-400', pct: 60 }, { label: 'Medium', count: 1, color: 'bg-yellow-400', pct: 20 }, { label: 'High', count: 1, color: 'bg-red-400', pct: 20 }].map((r) => (
+              <div key={r.label}>
+                <div className="flex justify-between text-xs text-slate-400 mb-1"><span>{r.label}</span><span>{r.count}</span></div>
+                <div className="h-1.5 rounded-full bg-white/10"><div className={`h-1.5 rounded-full ${r.color}`} style={{ width: `${r.pct}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewFleet() {
+  return (
+    <div className="p-5 space-y-2">
+      {DEMO_AGENTS.map((agent) => (
+        <div key={agent.name} className="flex items-center gap-4 rounded-xl bg-white/[0.05] border border-white/[0.08] px-4 py-3 hover:bg-white/[0.08] transition-colors">
+          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${agent.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-white truncate">{agent.name}</div>
+            <div className="text-xs text-slate-400">{agent.model} · {agent.conversations.toLocaleString()} conversations</div>
+          </div>
+          <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${agent.risk === 'low' ? 'bg-emerald-400/15 text-emerald-400' : agent.risk === 'medium' ? 'bg-yellow-400/15 text-yellow-400' : 'bg-red-400/15 text-red-400'}`}>
+            {agent.risk} risk
+          </div>
+          <div className="w-24">
+            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>${agent.spend}</span><span>${agent.budget}</span></div>
+            <div className="h-1.5 rounded-full bg-white/10"><div className={`h-1.5 rounded-full ${agent.spend / agent.budget > 0.8 ? 'bg-red-400' : 'bg-cyan-400'}`} style={{ width: `${(agent.spend / agent.budget) * 100}%` }} /></div>
+          </div>
+          <div className={`text-xs px-2 py-0.5 rounded-md border ${agent.status === 'active' ? 'border-emerald-400/30 text-emerald-400' : 'border-slate-600 text-slate-500'}`}>
+            {agent.status}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewIncidents() {
+  return (
+    <div className="p-5 space-y-3">
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[{ label: 'Total', value: '3', color: 'text-white' }, { label: 'Open', value: '2', color: 'text-red-400' }, { label: 'Resolved', value: '1', color: 'text-emerald-400' }].map((s) => (
+          <div key={s.label} className="rounded-xl bg-white/[0.06] border border-white/10 p-3 text-center">
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {DEMO_INCIDENTS.map((inc) => (
+        <div key={inc.title} className="flex items-start gap-4 rounded-xl bg-white/[0.05] border border-white/[0.08] px-4 py-3">
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${inc.severity === 'critical' ? 'bg-red-400' : inc.severity === 'high' ? 'bg-orange-400' : 'bg-yellow-400'}`} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-white">{inc.title}</div>
+            <div className="text-xs text-slate-400 mt-0.5">{inc.agent} · {inc.time}</div>
+          </div>
+          <div className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${inc.severity === 'critical' ? 'bg-red-400/15 text-red-400' : inc.severity === 'high' ? 'bg-orange-400/15 text-orange-400' : 'bg-yellow-400/15 text-yellow-400'}`}>
+            {inc.severity}
+          </div>
+          <div className={`text-xs px-2 py-0.5 rounded-md border flex-shrink-0 ${inc.status === 'open' ? 'border-red-400/30 text-red-400' : 'border-emerald-400/30 text-emerald-400'}`}>
+            {inc.status}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewCosts() {
+  const total = DEMO_AGENTS.reduce((sum, a) => sum + a.spend, 0);
+  return (
+    <div className="p-5 space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[{ label: 'This Month', value: `$${total.toLocaleString()}`, color: 'text-cyan-400' }, { label: 'Projected', value: `$${Math.round(total * 1.08).toLocaleString()}`, color: 'text-yellow-400' }, { label: 'Saved vs. Unmanaged', value: '$847', color: 'text-emerald-400' }].map((s) => (
+          <div key={s.label} className="rounded-xl bg-white/[0.06] border border-white/10 p-4">
+            <div className="text-xs text-slate-400 mb-1">{s.label}</div>
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl bg-white/[0.06] border border-white/10 p-4">
+        <div className="text-xs text-slate-400 mb-4">Cost by Agent</div>
+        <div className="space-y-3">
+          {[...DEMO_AGENTS].sort((a, b) => b.spend - a.spend).map((agent) => (
+            <div key={agent.name} className="flex items-center gap-3">
+              <div className="w-28 text-xs text-slate-300 truncate">{agent.name}</div>
+              <div className="flex-1 h-5 rounded-md bg-white/[0.06] overflow-hidden relative">
+                <div
+                  className="h-full rounded-md bg-gradient-to-r from-cyan-500 to-blue-500 transition-all"
+                  style={{ width: `${(agent.spend / total) * 100}%` }}
+                />
+              </div>
+              <div className="w-14 text-right text-xs text-slate-300">${agent.spend}</div>
+              <div className="w-10 text-right text-xs text-slate-500">{Math.round((agent.spend / total) * 100)}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: () => void }) {
+  const [activeTab, setActiveTab] = useState<PreviewTab>('Overview');
+
+  return (
+    <div className="rounded-2xl overflow-hidden border border-white/15 shadow-2xl shadow-blue-900/30 bg-slate-950/80 backdrop-blur-xl">
+      {/* Fake browser chrome */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-slate-900/80 border-b border-white/10">
+        <span className="w-3 h-3 rounded-full bg-red-400/70" />
+        <span className="w-3 h-3 rounded-full bg-yellow-400/70" />
+        <span className="w-3 h-3 rounded-full bg-emerald-400/70" />
+        <div className="flex-1 mx-4 h-6 rounded-md bg-white/[0.06] border border-white/10 flex items-center px-3">
+          <span className="text-xs text-slate-500">app.rasi.ai · Demo Mode</span>
+        </div>
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="text-xs text-cyan-400 font-medium">Live Preview</span>
+        </div>
+      </div>
+
+      {/* Mock sidebar + content */}
+      <div className="flex" style={{ minHeight: '380px' }}>
+        {/* Mini sidebar */}
+        <div className="w-40 bg-slate-900/60 border-r border-white/[0.07] p-3 flex flex-col gap-1 flex-shrink-0">
+          {(PREVIEW_TABS as unknown as PreviewTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                activeTab === tab
+                  ? 'bg-white/[0.1] text-white border border-white/10'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+          <div className="mt-auto pt-4 border-t border-white/[0.07] space-y-1">
+            {['Integrations', 'Costs', 'Settings'].map((item) => (
+              <div key={item} className="px-3 py-1.5 text-xs text-slate-600">{item}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === 'Overview' && <PreviewOverview />}
+          {activeTab === 'Fleet' && <PreviewFleet />}
+          {activeTab === 'Incidents' && <PreviewIncidents />}
+          {activeTab === 'Costs' && <PreviewCosts />}
+        </div>
+      </div>
+
+      {/* Bottom CTA strip */}
+      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-900/80 to-blue-950/60 border-t border-white/10">
+        <span className="text-xs text-slate-400">Sample data only — sign up to connect your real AI agents</span>
+        <div className="flex items-center gap-3">
+          {onDemo && (
+            <button onClick={onDemo} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors font-medium flex items-center gap-1">
+              <Play className="w-3.5 h-3.5" /> Full Interactive Demo
+            </button>
+          )}
+          <button onClick={onSignUp} className="text-xs px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30 transition-colors font-medium">
+            Sign Up Free
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<number | null>(null);
@@ -425,6 +653,42 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 suffix={stat.suffix || ''}
               />
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Product Preview Section */}
+      <section id="preview" className="py-24 px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent" />
+
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="text-center mb-12">
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
+            <h2 className="text-5xl font-bold text-white mt-4">See the Control Plane in Action</h2>
+            <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
+              Browse a live demo of the dashboard — real interface, sample data.
+            </p>
+          </div>
+
+          <ProductPreview onDemo={onDemo} onSignUp={onSignUp} />
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+            {onDemo && (
+              <button
+                onClick={onDemo}
+                className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-600 hover:to-blue-700 transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30"
+              >
+                <Play className="w-5 h-5" />
+                Enter Interactive Demo
+              </button>
+            )}
+            <button
+              onClick={onSignUp}
+              className="flex items-center gap-2 px-7 py-3.5 rounded-xl border border-white/15 bg-white/[0.05] text-white font-semibold hover:bg-white/[0.09] transition-all backdrop-blur-md"
+            >
+              Start Free Trial
+              <ArrowRight className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </section>
