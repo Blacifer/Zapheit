@@ -477,16 +477,18 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Payroll',
     category: 'PAYROLL',
     description: 'Zoho Payroll. Salary processing, payslips, tax filings, and payroll run analytics.',
-    authType: 'oauth2',
+    authType: 'api_key',
     tags: ['INDIA PRIORITY', 'PAYROLL', 'AI-READY'],
     status: 'READY',
     color: '#7C3AED',
     priority: 1,
-    oauthConfig: {
-      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
-      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoPayroll.payrolls.READ', 'ZohoPayroll.employees.READ'],
-      redirectPath: `${API_CALLBACK_BASE}/zoho_payroll`,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Payroll Org ID', required: true, description: 'Found in Zoho Payroll → Settings → Organization' },
+        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Payroll access token', required: true, description: 'Generate via Zoho API Console → Self Client → Generate Token with ZohoPayroll scopes' },
+      ],
+      testEndpoint: 'https://payroll.zoho.in/api/v1/employees',
+      baseUrl: 'https://payroll.zoho.in/api/v1',
     },
     endpoints: {
       employees: { method: 'GET', path: '/employees' },
