@@ -15,6 +15,9 @@ export default function OAuthCallbackPage() {
     const service = params.get('service') ?? '';
     const message = params.get('message') ?? '';
 
+    const qs = new URLSearchParams({ status, ...(service ? { service } : {}), ...(message ? { message } : {}) });
+    const fallbackUrl = `/dashboard/integrations?${qs.toString()}`;
+
     if (window.opener && !window.opener.closed) {
       // Send result back to the parent window, then close this popup.
       // targetOrigin is always our own origin — never '*'.
@@ -23,12 +26,16 @@ export default function OAuthCallbackPage() {
         window.location.origin,
       );
       window.close();
+      // Some browsers open popups as tabs and ignore window.close().
+      // Fall back to a redirect after a short delay so the user is never stuck.
+      setTimeout(() => {
+        window.location.replace(fallbackUrl);
+      }, 1500);
     } else {
       // Opened in a regular tab (e.g. popup was blocked and we fell through to a redirect,
       // or the user pasted the URL directly). Pass the query params to the integrations page
       // so the existing parseOAuthToastFromQuery() handler can show the result.
-      const qs = new URLSearchParams({ status, ...(service ? { service } : {}), ...(message ? { message } : {}) });
-      window.location.replace(`/dashboard/integrations?${qs.toString()}`);
+      window.location.replace(fallbackUrl);
     }
   }, []);
 
