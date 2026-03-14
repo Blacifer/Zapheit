@@ -633,8 +633,6 @@ export default function IntegrationsPage({
 
     const resetConnecting = () => setConnecting((prev) => ({ ...prev, [providerId]: false }));
 
-    // Abandonment poll: fires every second to detect if the user closed the popup manually.
-    let pollId: ReturnType<typeof setInterval>;
     // Backend poll: checks the API every 3s — works regardless of cross-tab messaging.
     let backendPollId: ReturnType<typeof setInterval>;
     // Guard against double-firing when multiple signals deliver the result.
@@ -648,7 +646,6 @@ export default function IntegrationsPage({
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('focus', handleWindowFocus);
       bc?.close();
-      clearInterval(pollId);
       clearInterval(backendPollId);
       localStorage.removeItem('synthetic_hr_oauth_result');
       resetConnecting();
@@ -755,26 +752,6 @@ export default function IntegrationsPage({
     };
     window.addEventListener('focus', handleWindowFocus);
 
-    // Also keep a safe popup.closed poll as a fallback, silenced if COOP blocks it.
-    pollId = setInterval(() => {
-      try {
-        if (!popup.closed) return;
-      } catch {
-        // COOP header blocked popup.closed — stop polling, rely on focus event.
-        clearInterval(pollId);
-        return;
-      }
-      clearInterval(pollId);
-      setTimeout(() => {
-        window.removeEventListener('message', handleMessage);
-        window.removeEventListener('storage', handleStorage);
-        window.removeEventListener('focus', handleWindowFocus);
-        bc?.close();
-        clearInterval(backendPollId);
-        resetConnecting();
-        if (!oauthCompleted) toast.info('Connection cancelled.');
-      }, 300);
-    }, 1000);
   };
 
   const connectApiKey = async (providerId: string) => {
