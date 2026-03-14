@@ -117,7 +117,7 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoPeople.employee.ALL', 'ZohoPeople.forms.READ', 'AaaServer.profile.READ'],
+      scopes: ['ZohoPeople.employee.ALL', 'ZohoPeople.forms.READ'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_people`,
     },
     endpoints: {
@@ -268,7 +268,7 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoRecruit.modules.ALL', 'ZohoRecruit.modules.READ', 'AaaServer.profile.READ'],
+      scopes: ['ZohoRecruit.modules.ALL'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_recruit`,
     },
     endpoints: {
@@ -450,7 +450,7 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoLearn.course.READ', 'ZohoLearn.course.ALL', 'AaaServer.profile.READ'],
+      scopes: ['ZohoLearn.course.READ', 'ZohoLearn.course.ALL'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_learn`,
     },
     endpoints: {

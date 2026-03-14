@@ -418,8 +418,9 @@ async function postForm(url: string, data: Record<string, string>): Promise<any>
     json = { raw };
   }
 
-  if (!res.ok) {
+  if (!res.ok || (json && json.error && !json.access_token)) {
     const message = json?.error_description || json?.error || json?.message || `Token exchange failed (${res.status})`;
+    logger.warn('OAuth token exchange error', { url, status: res.status, body: raw.slice(0, 500) });
     throw new Error(message);
   }
 
@@ -1166,7 +1167,14 @@ router.get('/oauth/callback/:service', async (req, res) => {
     const refreshToken = token?.refresh_token;
     const expiresIn = Number(token?.expires_in || token?.expires_in_sec || token?.expires || 0);
 
-    if (!accessToken) throw new Error('No access token returned by provider');
+    if (!accessToken) {
+      // Log the sanitised token response to aid debugging (no secret values)
+      const safeToken = token ? Object.fromEntries(
+        Object.entries(token).filter(([k]) => !['access_token','refresh_token','id_token'].includes(k))
+      ) : null;
+      logger.error('No access token in provider response', { service, safeToken });
+      throw new Error(token?.error_description || token?.error || 'No access token returned by provider');
+    }
 
     const integration = await upsertIntegration(rest, orgId, spec.id, {
       status: 'connected',
