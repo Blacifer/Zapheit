@@ -312,6 +312,8 @@ export default function IntegrationsPage({
   const [governanceConfirmed, setGovernanceConfirmed] = useState(false);
   const [connecting, setConnecting] = useState<Record<string, boolean>>({});
   const [credentials, setCredentials] = useState<Record<string, Record<string, string>>>({});
+  const [connectModalProviderId, setConnectModalProviderId] = useState<string | null>(null);
+  const [providerSearch, setProviderSearch] = useState('');
 
   const [sampleLoading, setSampleLoading] = useState(false);
   const [sampleError, setSampleError] = useState<string | null>(null);
@@ -371,6 +373,14 @@ export default function IntegrationsPage({
   }, [items]);
 
   const activePackProviders = useMemo(() => providersByPack.get(activePack) || [], [providersByPack, activePack]);
+
+  const filteredPackProviders = useMemo(() => {
+    if (!providerSearch.trim()) return activePackProviders;
+    const q = providerSearch.toLowerCase();
+    return activePackProviders.filter((p) =>
+      `${p.name} ${p.category} ${p.description} ${p.tags.join(' ')}`.toLowerCase().includes(q)
+    );
+  }, [activePackProviders, providerSearch]);
 
   const effectiveStatus = useCallback((it: IntegrationRow): string => it.lifecycleStatus || it.status || 'disconnected', []);
   const isConfiguredLike = useCallback((it: IntegrationRow): boolean => effectiveStatus(it) !== 'not_configured', [effectiveStatus]);
@@ -492,6 +502,20 @@ export default function IntegrationsPage({
   const closeVault = () => {
     setVaultOpen(false);
     setVaultQuery('');
+  };
+
+  const openConnectModal = (providerId: string) => {
+    ensureCredentialSeed(providerId);
+    setConnectModalProviderId(providerId);
+  };
+
+  const closeConnectModal = () => {
+    setConnectModalProviderId(null);
+  };
+
+  const connectFromModal = async (providerId: string) => {
+    await connectApiKey(providerId);
+    closeConnectModal();
   };
 
   const ensureCredentialSeed = (providerId: string) => {
@@ -719,7 +743,8 @@ export default function IntegrationsPage({
     }
     void load();
     void loadActionCatalog();
-  }, [activePack, effectiveAgentId, focusAgentWorkspace, onIntegrationConnected, providerMap, selectedAgent?.integrationIds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePack, effectiveAgentId, focusAgentWorkspace, onIntegrationConnected, selectedAgent?.integrationIds]);
 
   useEffect(() => {
     if (selectedAgent) {
@@ -1055,8 +1080,28 @@ export default function IntegrationsPage({
           ) : null}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3">
-          {activePackProviders.map((provider) => {
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            value={providerSearch}
+            onChange={(e) => setProviderSearch(e.target.value)}
+            placeholder="Search integrations…"
+            className="w-full max-w-xs px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
+          />
+          {providerSearch ? (
+            <button
+              onClick={() => setProviderSearch('')}
+              className="text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+          ) : null}
+          {filteredPackProviders.length !== activePackProviders.length ? (
+            <span className="text-xs text-slate-500">{filteredPackProviders.length} of {activePackProviders.length}</span>
+          ) : null}
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3">
+          {filteredPackProviders.map((provider) => {
             const Icon = providerIcon(provider.id);
             const caps = provider.capabilities || { reads: [], writes: [] };
             const readBadges = (caps.reads || []).slice(0, 2);
@@ -1112,40 +1157,49 @@ export default function IntegrationsPage({
                           </span>
                         ) : null}
                       </div>
+                      {status === 'connected' ? (
+                        <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-300/80 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] px-2.5 py-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Connected — agents can now use this integration
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => openDetails(provider.id)}
-                      className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
-                    >
-                      Details
-                    </button>
-
-                    {status === 'connected' && (caps.reads || []).some((r) => String(r).includes('candidate_profiles')) ? (
-                      <button
-                        onClick={() => runSamplePull(provider.id)}
-                        className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
-                        disabled={sampleLoading}
-                      >
-                        {sampleLoading ? 'Loading…' : 'Sample pull'}
-                      </button>
+                    {status === 'connected' ? (
+                      <>
+                        {(caps.reads || []).some((r) => String(r).includes('candidate_profiles')) ? (
+                          <button
+                            onClick={() => runSamplePull(provider.id)}
+                            className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                            disabled={sampleLoading}
+                          >
+                            {sampleLoading ? 'Loading…' : 'Sample pull'}
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => openDetails(provider.id)}
+                          className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                        >
+                          Manage
+                        </button>
+                      </>
                     ) : (
-                      <button
-                        onClick={() => {
-                          if (provider.authType === 'api_key' || provider.authType === 'client_credentials') {
-                          openVault('pack', activePack);
-                          setVaultQuery(provider.name);
-                          ensureCredentialSeed(provider.id);
-                          return;
-                        }
-                        startConnectProvider(provider.id);
-                        }}
-                        className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
-                      >
-                        {provider.authType === 'api_key' || provider.authType === 'client_credentials' ? 'Configure' : 'Connect'}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openDetails(provider.id)}
+                          className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                        >
+                          Details
+                        </button>
+                        <button
+                          onClick={() => openConnectModal(provider.id)}
+                          className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                        >
+                          Connect
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1501,12 +1555,21 @@ export default function IntegrationsPage({
                     Open vault
                   </button>
                   {effectiveStatus(selectedIntegration) !== 'connected' ? (
-                    <button
-                      onClick={() => void testProvider(selectedIntegration.id)}
-                      className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
-                    >
-                      Test & connect
-                    </button>
+                    selectedIntegration.authType === 'oauth2' && !selectedIntegration.connectionId ? (
+                      <button
+                        onClick={() => { closeDetails(); void connectOAuth(selectedIntegration.id); }}
+                        className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                      >
+                        Connect via OAuth
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => void testProvider(selectedIntegration.id)}
+                        className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                      >
+                        Test & connect
+                      </button>
+                    )
                   ) : null}
                 </div>
               </div>
@@ -1608,6 +1671,119 @@ export default function IntegrationsPage({
           </div>
         </Drawer>
       ) : null}
+
+      {connectModalProviderId ? (() => {
+        const provider = providerMap.get(connectModalProviderId);
+        if (!provider) return null;
+        const isBusy = Boolean(connecting[connectModalProviderId]);
+        const oauthReady = provider.authType !== 'oauth2' ? true : (provider.oauth?.ready !== false);
+        const Icon = providerIcon(provider.id);
+
+        return (
+          <Modal title={`Connect ${provider.name}`} onClose={closeConnectModal} widthClass="max-w-lg">
+            <div className="space-y-5">
+              {/* Provider header */}
+              <div className="flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-white/[0.03]">
+                <div className="w-12 h-12 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center shrink-0">
+                  <Icon className="w-6 h-6 text-slate-200" />
+                </div>
+                <div>
+                  <div className="font-semibold text-white">{provider.name}</div>
+                  <div className="text-sm text-slate-400 mt-0.5 line-clamp-2">{provider.description}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {provider.authType === 'oauth2' ? 'OAuth 2.0' : provider.authType === 'api_key' ? 'API Key' : provider.authType} · {provider.category}
+                  </div>
+                </div>
+              </div>
+
+              {/* OAuth not ready warning */}
+              {provider.authType === 'oauth2' && !oauthReady ? (
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-amber-100">
+                  <div className="font-semibold">OAuth not configured on server</div>
+                  <div className="text-sm text-amber-100/80 mt-1">
+                    Missing env: {(provider.oauth?.missingEnv || []).join(', ')}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* OAuth flow */}
+              {provider.authType === 'oauth2' ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-300">
+                    You'll be redirected to {provider.name} to authorize access. Once done you'll return here automatically.
+                  </p>
+                  {(provider.readiness?.items || []).length > 0 ? (
+                    <div className="space-y-2">
+                      {(provider.readiness!.items).map((it) => {
+                        const badge = readinessBadge(it.status);
+                        return (
+                          <div key={it.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            <div className="text-sm text-slate-200">{it.label}</div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border ${badge.cls}`}>{badge.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  <button
+                    onClick={() => void connectOAuth(provider.id)}
+                    disabled={isBusy || !oauthReady}
+                    className="w-full px-4 py-3 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors font-semibold disabled:opacity-50"
+                  >
+                    {isBusy ? 'Redirecting…' : `Continue to ${provider.name}`}
+                  </button>
+                </div>
+              ) : (
+                /* API key / client_credentials flow */
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-400">
+                    Enter your {provider.name} credentials. They'll be encrypted and stored securely.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {provider.requiredFields.map((field) => (
+                      <label key={field.name} className="block">
+                        <div className="text-xs text-slate-400 font-semibold mb-1">
+                          {field.label}{field.required ? ' *' : ''}
+                        </div>
+                        <input
+                          type={field.type === 'password' ? 'password' : 'text'}
+                          value={(credentials[provider.id]?.[field.name] || '') as string}
+                          onChange={(e) =>
+                            setCredentials((prev) => ({
+                              ...prev,
+                              [provider.id]: { ...(prev[provider.id] || {}), [field.name]: e.target.value },
+                            }))
+                          }
+                          placeholder={field.placeholder || ''}
+                          className="w-full px-3 py-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        />
+                        {field.description ? (
+                          <div className="text-xs text-slate-500 mt-1">{field.description}</div>
+                        ) : null}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      onClick={closeConnectModal}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void connectFromModal(provider.id)}
+                      disabled={isBusy}
+                      className="flex-[2] px-4 py-2.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold disabled:opacity-50"
+                    >
+                      {isBusy ? 'Connecting…' : 'Connect'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })() : null}
 
       {wizardOpen ? (
         <Modal title="Recruitment pack setup" onClose={closeWizard} widthClass="max-w-4xl">
