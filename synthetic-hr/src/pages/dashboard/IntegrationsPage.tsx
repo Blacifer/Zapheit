@@ -635,7 +635,9 @@ export default function IntegrationsPage({
 
     // Abandonment poll: fires every second to detect if the user closed the popup manually.
     let pollId: ReturnType<typeof setInterval>;
-    // Guard against double-firing when both postMessage and BroadcastChannel deliver the result.
+    // Backend poll: checks the API every 3s — works regardless of cross-tab messaging.
+    let backendPollId: ReturnType<typeof setInterval>;
+    // Guard against double-firing when multiple signals deliver the result.
     let oauthCompleted = false;
     let bc: BroadcastChannel | null = null;
 
@@ -646,6 +648,7 @@ export default function IntegrationsPage({
       window.removeEventListener('storage', handleStorage);
       bc?.close();
       clearInterval(pollId);
+      clearInterval(backendPollId);
       localStorage.removeItem('synthetic_hr_oauth_result');
       resetConnecting();
 
@@ -706,6 +709,21 @@ export default function IntegrationsPage({
 
     window.addEventListener('message', handleMessage);
 
+    // Backend poll — most reliable fallback. Checks every 3s whether the
+    // integration flipped to 'connected' in the DB. Stops after 5 minutes.
+    backendPollId = setInterval(async () => {
+      try {
+        const list = await api.integrations.getAll();
+        const found = (list.data as IntegrationRow[])?.find(
+          (i) => i.id === providerId && i.status === 'connected',
+        );
+        if (found) {
+          handleOAuthResult({ type: 'OAUTH_COMPLETE', status: 'connected', service: providerId });
+        }
+      } catch { /* network error — keep polling */ }
+    }, 3000);
+    setTimeout(() => clearInterval(backendPollId), 5 * 60 * 1000);
+
     pollId = setInterval(() => {
       if (popup.closed) {
         clearInterval(pollId);
@@ -715,6 +733,7 @@ export default function IntegrationsPage({
           window.removeEventListener('message', handleMessage);
           window.removeEventListener('storage', handleStorage);
           bc?.close();
+          clearInterval(backendPollId);
           resetConnecting();
           if (!oauthCompleted) {
             toast.info('Connection cancelled.');
