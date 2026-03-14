@@ -260,16 +260,18 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Recruit',
     category: 'ATS',
     description: 'Applicant tracking with resume parsing, pipeline management, and hiring analytics.',
-    authType: 'oauth2',
+    authType: 'api_key',
     tags: ['INDIA PRIORITY', 'ATS', 'AI-READY'],
     status: 'READY',
     color: '#DC2626',
     priority: 2,
-    oauthConfig: {
-      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
-      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoRecruit.modules.ALL'],
-      redirectPath: `${API_CALLBACK_BASE}/zoho_recruit`,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Recruit Org ID', required: true, description: 'Found in Zoho Recruit → Setup → Company Settings' },
+        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Recruit access token', required: true, description: 'Generate via Zoho API Console → Self Client → scope: ZohoRecruit.modules.ALL' },
+      ],
+      testEndpoint: 'https://recruit.zoho.in/recruit/v2/Candidates',
+      baseUrl: 'https://recruit.zoho.in/recruit/v2',
     },
     endpoints: {
       candidates: { method: 'GET', path: '/Candidates' },
@@ -442,16 +444,18 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     name: 'Zoho Learn',
     category: 'LMS',
     description: 'Learning management from Zoho. Skill recommendations, learning paths, and certification tracking.',
-    authType: 'oauth2',
+    authType: 'api_key',
     tags: ['INDIA PRIORITY', 'LMS', 'AI-READY'],
     status: 'READY',
     color: '#EA580C',
     priority: 3,
-    oauthConfig: {
-      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
-      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoLearn.course.READ', 'ZohoLearn.course.ALL'],
-      redirectPath: `${API_CALLBACK_BASE}/zoho_learn`,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'org_id', label: 'Organization ID', type: 'text', placeholder: 'Enter your Zoho Learn Org ID', required: true, description: 'Found in Zoho Learn → Admin → Organization Settings' },
+        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Paste your Zoho Learn access token', required: true, description: 'Generate via Zoho API Console → Self Client → scope: ZohoLearn.course.READ' },
+      ],
+      testEndpoint: 'https://learn.zoho.com/api/v1/courses',
+      baseUrl: 'https://learn.zoho.com/api/v1',
     },
     endpoints: {
       courses: { method: 'GET', path: '/courses' },
