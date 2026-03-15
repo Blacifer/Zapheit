@@ -721,6 +721,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       lastErrorMsg: row?.last_error_msg || null,
       aiEnabled: row?.ai_enabled ?? Boolean(spec.aiFeatures?.enabled),
       connectionId: row?.id || null,
+      specStatus: spec.status,
     };
   });
 

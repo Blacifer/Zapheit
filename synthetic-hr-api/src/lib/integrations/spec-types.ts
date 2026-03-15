@@ -77,7 +77,7 @@ export type IntegrationSpec = {
   description: string;
   authType: IntegrationAuthType;
   tags: string[];
-  status: 'READY';
+  status: 'READY' | 'COMING_SOON';
   color: string;
   priority: number;
   apiKeyConfig?: IntegrationApiKeyConfig;

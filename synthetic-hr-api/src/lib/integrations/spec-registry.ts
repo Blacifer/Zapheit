@@ -967,7 +967,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     description: 'Identity governance and directory sync via Okta or Auth0.',
     authType: 'oauth2',
     tags: ['IDENTITY', 'ENTERPRISE'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#007DC1',
     priority: 4,
     connectionFields: [
@@ -998,7 +998,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     description: 'Indian team messaging platform (Slack alternative).',
     authType: 'oauth2',
     tags: ['INDIA PRIORITY', 'COMMUNICATION'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#0BA8E0',
     priority: 4,
     oauthConfig: {
@@ -1113,7 +1113,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     description: 'Accounting platform for invoices, expenses, payroll reporting, and financial analytics.',
     authType: 'oauth2',
     tags: ['FINANCE', 'ACCOUNTING', 'GLOBAL'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#2CA01C',
     priority: 4,
     oauthConfig: {
