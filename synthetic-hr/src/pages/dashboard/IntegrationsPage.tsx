@@ -66,6 +66,7 @@ type IntegrationRow = {
   lastErrorAt?: string | null;
   lastErrorMsg?: string | null;
   connectionId?: string | null;
+  specStatus?: 'READY' | 'COMING_SOON' | string;
 };
 
 type ConnectionLog = {
@@ -369,6 +370,8 @@ export default function IntegrationsPage({
     items.forEach((it) => {
       // Built-in/internal provider is used to populate Action Catalog; keep it out of provider cards + pack stats to avoid confusion.
       if (it.id === 'internal') return;
+      // Coming soon integrations are rendered in a separate section below.
+      if (it.specStatus === 'COMING_SOON') return;
       const packId = guessPackForIntegration(it);
       const list = map.get(packId) || [];
       list.push(it);
@@ -378,6 +381,19 @@ export default function IntegrationsPage({
     Array.from(map.entries()).forEach(([k, list]) => {
       list.sort((a, b) => a.name.localeCompare(b.name));
       map.set(k, list);
+    });
+    return map;
+  }, [items]);
+
+  const comingSoonByPack = useMemo(() => {
+    const map = new Map<IntegrationPackId, IntegrationRow[]>();
+    INTEGRATION_PACKS.forEach((p) => map.set(p.id, []));
+    items.forEach((it) => {
+      if (it.specStatus !== 'COMING_SOON') return;
+      const packId = guessPackForIntegration(it);
+      const list = map.get(packId) || [];
+      list.push(it);
+      map.set(packId, list);
     });
     return map;
   }, [items]);
@@ -1403,6 +1419,49 @@ export default function IntegrationsPage({
             );
           })}
         </div>
+
+        {/* Coming Soon integrations */}
+        {(comingSoonByPack.get(activePack) || []).length > 0 ? (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-medium text-slate-400">Coming Soon</span>
+              <span className="text-xs px-2 py-0.5 rounded-full border border-slate-600/50 bg-slate-700/30 text-slate-500">
+                {(comingSoonByPack.get(activePack) || []).length}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              {(comingSoonByPack.get(activePack) || []).map((provider) => {
+                const Icon = providerIcon(provider.id);
+                return (
+                  <div key={provider.id} className="rounded-2xl border border-white/5 bg-white/[0.015] p-4 opacity-60">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl border border-white/5 bg-white/[0.03] flex items-center justify-center shrink-0">
+                          <Icon className="w-5 h-5 text-slate-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-slate-400 truncate">{provider.name}</div>
+                            <span className="text-xs px-2 py-0.5 rounded-full border border-slate-600/40 bg-slate-700/20 text-slate-500">
+                              Coming Soon
+                            </span>
+                          </div>
+                          <div className="text-sm text-slate-600 mt-1 line-clamp-2">{provider.description}</div>
+                        </div>
+                      </div>
+                      <button
+                        disabled
+                        className="px-3 py-2 rounded-xl border border-white/5 bg-white/[0.02] text-slate-600 text-sm cursor-not-allowed shrink-0"
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-10">
