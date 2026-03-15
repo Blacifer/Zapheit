@@ -327,6 +327,7 @@ export default function IntegrationsPage({
   const [activePack, setActivePack] = useState<IntegrationPackId>('recruitment');
   const [persistedContext, setPersistedContext] = useState<{ agentId?: string; agentName?: string; recommendedPackId?: IntegrationPackId } | null>(null);
 
+  const [browserExpanded, setBrowserExpanded] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultQuery, setVaultQuery] = useState('');
   const [vaultFocus, setVaultFocus] = useState<'pack' | 'all'>('pack');
@@ -1084,46 +1085,15 @@ export default function IntegrationsPage({
               : 'Connect third-party apps with clear capabilities, safe defaults, and an immediate “see it” moment.'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => openVault('pack', activePack)}
-            className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm font-semibold inline-flex items-center gap-2"
-          >
-            <KeyRound className="w-4 h-4" />
-            Credentials Vault
-          </button>
-          <button
-            onClick={() => openWizard(entryMode === 'publish' ? 3 : 1)}
-            className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
-          >
-            {entryMode === 'publish' && effectiveAgentContext
-              ? `Connect ${effectiveAgentName || 'agent'}`
-              : 'Set up a pack'}
-          </button>
-        </div>
-      </div>
-
-      {/* App Store discovery banner */}
-      <div className="mt-5 rounded-2xl border border-violet-400/20 bg-violet-500/[0.06] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0">
-            <ShoppingBag className="w-4 h-4 text-violet-300" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-white">Looking for more integrations?</div>
-            <div className="text-xs text-slate-400 mt-0.5 truncate">
-              Browse the App Store to add partner apps — they appear here once connected.
-            </div>
-          </div>
-        </div>
         <button
           onClick={() => onNavigate?.('marketplace')}
-          className="shrink-0 px-4 py-2 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 hover:bg-violet-500/30 transition-colors text-sm font-semibold inline-flex items-center gap-2"
+          className="shrink-0 text-xs text-violet-300 hover:text-violet-200 transition-colors inline-flex items-center gap-1.5"
         >
           <ShoppingBag className="w-3.5 h-3.5" />
           Browse App Store
         </button>
       </div>
+
 
       {entryMode === 'publish' && effectiveAgentContext ? (
         <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/[0.07] p-5">
@@ -1163,82 +1133,75 @@ export default function IntegrationsPage({
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Pack selector tabs */}
+      <div className="mt-6 flex items-center gap-1 border-b border-white/10 overflow-x-auto">
         {INTEGRATION_PACKS.map((pack) => {
           const stats = packStats.get(pack.id) || { total: 0, configured: 0, connected: 0, needsAttention: 0 };
-          const badge = packDisplayBadge(pack.id);
           const Icon = pack.icon as any;
           const isActive = activePack === pack.id;
-          const enableTone = stats.configured === 0 ? 'border-amber-400/20 bg-amber-400/10 text-amber-100' : stats.needsAttention > 0 ? 'border-rose-400/20 bg-rose-400/10 text-rose-100' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
-          const enableLabel = stats.configured === 0 ? 'Disabled until configured' : stats.needsAttention > 0 ? 'Needs attention' : 'Enabled';
-
           return (
-            <div
+            <button
               key={pack.id}
-              className={`rounded-2xl border border-white/10 p-5 transition-colors ${isActive ? 'bg-white/[0.04]' : 'bg-white/[0.02] hover:bg-white/[0.03]'}`}
+              onClick={() => setActivePack(pack.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px ${
+                isActive ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Icon className={`w-4 h-4 ${pack.id === 'recruitment' ? 'text-emerald-300' : 'text-slate-300'}`} />
-                  <div className="font-semibold text-white">{pack.name}</div>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${badge.cls}`}>{badge.label}</span>
-              </div>
-              <p className="text-sm text-slate-400 mt-2">{pack.description}</p>
-              <div className="mt-4 flex items-center gap-2 flex-wrap">
-                <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
-                  <BadgeCheck className="w-3.5 h-3.5 text-slate-300" />
-                  Capability-first
-                </span>
-                <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5 text-blue-300" />
-                  Approval-first
-                </span>
-                <span className={`text-xs px-2 py-1 rounded-lg border ${enableTone} inline-flex items-center gap-1`}>
-                  {stats.needsAttention > 0 ? <AlertTriangle className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />}
-                  {enableLabel}
-                </span>
-              </div>
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
-                  {stats.configured}/{stats.total} configured
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
-                    {(enabledActionCountByPack.get(pack.id) || 0)} actions enabled
-                  </span>
-                  <button
-                    onClick={() => {
-                      setActivePack(pack.id);
-                      openVault('pack', pack.id);
-                    }}
-                    className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
-                  >
-                    Configure
-                  </button>
-                  <button
-                    onClick={() => setActivePack(pack.id)}
-                    className={`px-3 py-2 rounded-xl border text-sm transition-colors ${
-                      isActive ? 'border-blue-400/30 bg-blue-500/15 text-blue-200' : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                    }`}
-                  >
-                    View
-                  </button>
-                </div>
-              </div>
-              {stats.configured === 0 && (
-                <button
-                  onClick={() => onNavigate?.('marketplace')}
-                  className="mt-3 w-full py-2 rounded-xl border border-dashed border-violet-400/25 bg-violet-500/[0.05] text-violet-300 hover:bg-violet-500/10 transition-colors text-xs font-medium inline-flex items-center justify-center gap-1.5"
-                >
-                  <ShoppingBag className="w-3 h-3" />
-                  Add apps from App Store
-                </button>
+              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-300' : 'text-slate-500'}`} />
+              {pack.name}
+              {stats.needsAttention > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
               )}
-            </div>
+              {stats.connected > 0 && stats.needsAttention === 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-400/20 text-emerald-300">
+                  {stats.connected}
+                </span>
+              )}
+            </button>
           );
-          })}
+        })}
+        <div className="ml-auto flex items-center gap-2 pb-2 pl-4 shrink-0">
+          <button
+            onClick={() => openVault('pack', activePack)}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-xs font-semibold inline-flex items-center gap-1.5"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            Credentials
+          </button>
+          <button
+            onClick={() => openWizard(entryMode === 'publish' ? 3 : 1)}
+            className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-xs font-semibold"
+          >
+            {entryMode === 'publish' && effectiveAgentContext
+              ? `Connect ${effectiveAgentName || 'agent'}`
+              : 'Set up pack'}
+          </button>
+        </div>
       </div>
+
+      {/* Active pack stats strip */}
+      {(() => {
+        const stats = packStats.get(activePack) || { total: 0, configured: 0, connected: 0, needsAttention: 0 };
+        const enabledCount = enabledActionCountByPack.get(activePack) || 0;
+        return (
+          <div className="mt-3 flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+            <span>{stats.configured}/{stats.total} configured</span>
+            <span>·</span>
+            <span>{stats.connected} connected</span>
+            <span>·</span>
+            <span>{enabledCount} actions enabled</span>
+            {stats.needsAttention > 0 && (
+              <>
+                <span>·</span>
+                <span className="text-rose-400 inline-flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {stats.needsAttention} need attention
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Domain Agents for this pack */}
       {(() => {
@@ -1401,12 +1364,6 @@ export default function IntegrationsPage({
                           </span>
                         ) : null}
                       </div>
-                      {status === 'connected' ? (
-                        <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-300/80 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] px-2.5 py-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Connected — agents can now use this integration
-                        </div>
-                      ) : null}
                     </div>
                   </div>
 
@@ -1555,9 +1512,7 @@ export default function IntegrationsPage({
                         </span>
                         <span className={`text-[10px] px-2 py-0.5 rounded-md border ${tone.cls}`}>{a.enabled ? 'Enabled' : 'Disabled'}</span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1 truncate">
-                        {a.providerName} • {a.service}:{a.action} • Provider status: {formatStatusLabel(providerStatus)}
-                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5 truncate">{a.providerName}</div>
                       {disabledReason ? <div className="text-xs text-amber-200 mt-1">{disabledReason}</div> : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1588,36 +1543,46 @@ export default function IntegrationsPage({
         </div>
       </div>
 
-      <div className="mt-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Recruitment browser (preview)</h2>
-            <p className="text-sm text-slate-400 mt-1">A fast “see it” view. V1 uses sample pulls; real sync comes next.</p>
+      <div className=”mt-10”>
+        <button
+          onClick={() => setBrowserExpanded((v) => !v)}
+          className=”flex items-center justify-between w-full group”
+        >
+          <div className=”text-left”>
+            <h2 className=”text-base font-semibold text-white group-hover:text-slate-200 transition-colors”>
+              Recruitment browser
+              <span className=”ml-2 text-xs font-normal text-slate-500”>preview</span>
+            </h2>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (defaultSampleProviderId) {
-                  void runSamplePull(defaultSampleProviderId);
-                } else {
-                  openWizard(3);
-                }
-              }}
-              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
-            >
-              {defaultSampleProviderId ? 'Refresh preview' : 'Connect & preview'}
-            </button>
-          </div>
+          <span className=”text-xs text-slate-500 group-hover:text-slate-400 transition-colors”>
+            {browserExpanded ? 'Collapse ↑' : 'Expand ↓'}
+          </span>
+        </button>
+        {browserExpanded && (
+        <div className=”flex items-center justify-end mt-3”>
+          <button
+            onClick={() => {
+              if (defaultSampleProviderId) {
+                void runSamplePull(defaultSampleProviderId);
+              } else {
+                openWizard(3);
+              }
+            }}
+            className=”px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm”
+          >
+            {defaultSampleProviderId ? 'Refresh preview' : 'Connect & preview'}
+          </button>
         </div>
+        )}
 
-        {sampleError ? (
+        {browserExpanded && sampleError ? (
           <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100">
             <div className="font-semibold">Preview unavailable</div>
             <div className="text-sm text-rose-100/80 mt-1">{sampleError}</div>
           </div>
         ) : null}
 
-        {sampleCandidates.length === 0 ? (
+        {browserExpanded && sampleCandidates.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
             <div className="flex items-start gap-3">
               <Sparkles className="w-5 h-5 text-blue-300 mt-0.5" />
@@ -1643,7 +1608,7 @@ export default function IntegrationsPage({
               </div>
             </div>
           </div>
-        ) : (
+        ) : browserExpanded ? (
           <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10 text-sm text-slate-300 flex items-center justify-between">
