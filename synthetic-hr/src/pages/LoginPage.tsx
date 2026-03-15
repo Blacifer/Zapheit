@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Brain, AlertCircle, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { Brain, AlertCircle, ArrowRight, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { authHelpers } from '../lib/supabase-client';
 
@@ -13,6 +13,7 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetSent, setResetSent] = useState(false);
@@ -188,13 +189,23 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
 
             <div>
               <label className="block text-sm text-slate-300 mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pr-10"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button
