@@ -1561,7 +1561,6 @@ export default function FleetPage({
                                   const disconnect = await api.integrations.disconnect(target.integrationId);
                                   if (!disconnect.success) return disconnect;
                                   await removeIntegration(activeWorkspaceAgent, target.integrationId);
-                                  await syncAgentPublishState(activeWorkspaceAgent.id);
                                   return { success: true, data: { id: activeWorkspaceAgent.id } };
                                 },
                                 `${target.integrationName} disconnected.`
