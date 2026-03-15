@@ -170,6 +170,41 @@ function getActionSamplePayload(provider: string) {
           message: 'Test event from RASI integrations workspace',
         },
       };
+    case 'zendesk':
+    case 'freshdesk':
+      return {
+        subject: `RASI test ticket ${new Date().toLocaleDateString('en-GB')}`,
+        description: 'Connectivity test ticket created from the RASI integrations workspace. Safe to delete.',
+      };
+    case 'intercom':
+      return {
+        role: 'lead',
+        name: 'RASI Integration Test',
+      };
+    case 'hubspot':
+      return {
+        firstname: 'RASI',
+        lastname: 'IntegrationTest',
+        email: `rasi-test-${Date.now()}@example.com`,
+      };
+    case 'salesforce':
+      return {
+        FirstName: 'RASI',
+        LastName: 'IntegrationTest',
+        Company: 'RASI Test',
+        Email: `rasi-test-${Date.now()}@example.com`,
+      };
+    case 'okta':
+      return {
+        firstName: 'RASI',
+        lastName: 'TestUser',
+        email: `rasi-test-${Date.now()}@example.com`,
+      };
+    case 'razorpayx':
+      return {
+        name: 'RASI Test Contact',
+        type: 'vendor',
+      };
     default:
       return { created_at: now };
   }
@@ -486,6 +521,281 @@ async function runProviderActionTest(
         actionType: 'webhook',
         targetLabel: url,
         details: { event, probe: 'custom.webhook.post' },
+      };
+    }
+    // ── SUPPORT ──────────────────────────────────────────────────────────────
+    case 'zendesk': {
+      const subdomain = String(credentials.subdomain || '').trim().replace(/\.zendesk\.com$/, '');
+      if (!subdomain) {
+        return { ok: false, actionType: 'ticket', error: 'Provide your Zendesk subdomain before creating a test ticket.' };
+      }
+      const auth = Buffer.from(`${credentials.email}/token:${credentials.apiToken}`).toString('base64');
+      const payload = getActionSamplePayload(provider);
+      const response = await fetchWithTimeout(`https://${subdomain}.zendesk.com/api/v2/tickets.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket: {
+            subject: payload.subject,
+            comment: { body: payload.description },
+            tags: ['rasi-integration-test'],
+          },
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket', targetLabel: subdomain,
+          error: data?.error || data?.description || `Zendesk test ticket failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: subdomain,
+        details: { ticketId: data?.ticket?.id ?? null, probe: 'api.v2.tickets.create' },
+      };
+    }
+    case 'freshdesk': {
+      const subdomain = String(credentials.subdomain || '').trim().replace(/\.freshdesk\.com$/, '');
+      if (!subdomain) {
+        return { ok: false, actionType: 'ticket', error: 'Provide your Freshdesk subdomain before creating a test ticket.' };
+      }
+      const auth = Buffer.from(`${credentials.apiKey}:X`).toString('base64');
+      const payload = getActionSamplePayload(provider);
+      const response = await fetchWithTimeout(`https://${subdomain}.freshdesk.com/api/v2/tickets`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: payload.subject,
+          description: payload.description,
+          email: 'rasi-integration-test@example.com',
+          priority: 1,
+          status: 2,
+          tags: ['rasi-integration-test'],
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket', targetLabel: subdomain,
+          error: data?.description || data?.message || `Freshdesk test ticket failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: subdomain,
+        details: { ticketId: data?.id ?? null, probe: 'api.v2.tickets.create' },
+      };
+    }
+    case 'intercom': {
+      const testEmail = `rasi-test-${Date.now()}@example.com`;
+      const response = await fetchWithTimeout('https://api.intercom.io/contacts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${credentials.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Intercom-Version': '2.10',
+        },
+        body: JSON.stringify({ role: 'lead', email: testEmail, name: 'RASI Integration Test' }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket',
+          error: data?.errors?.[0]?.message || data?.message || `Intercom test contact creation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket',
+        details: { contactId: data?.id ?? null, probe: 'contacts.create' },
+      };
+    }
+    // ── SALES ─────────────────────────────────────────────────────────────────
+    case 'hubspot': {
+      const payload = getActionSamplePayload(provider);
+      const response = await fetchWithTimeout('https://api.hubapi.com/crm/v3/objects/contacts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${credentials.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          properties: {
+            firstname: payload.firstname,
+            lastname: payload.lastname,
+            email: payload.email,
+            company: 'RASI Integration Test',
+            hs_lead_status: 'NEW',
+          },
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket',
+          error: data?.message || `HubSpot test contact creation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket',
+        details: { contactId: data?.id ?? null, probe: 'crm.v3.contacts.create' },
+      };
+    }
+    case 'salesforce': {
+      const instanceUrl = String(credentials.instanceUrl || '').trim().replace(/\/+$/, '');
+      if (!instanceUrl) {
+        return { ok: false, actionType: 'ticket', error: 'Salesforce instance URL is missing. Reconnect your Salesforce integration.' };
+      }
+      const payload = getActionSamplePayload(provider);
+      const response = await fetchWithTimeout(`${instanceUrl}/services/data/v58.0/sobjects/Lead`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${credentials.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FirstName: payload.FirstName,
+          LastName: payload.LastName,
+          Company: payload.Company,
+          Email: payload.Email,
+          LeadSource: 'Web',
+          Description: 'RASI integration test lead — safe to delete.',
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errMsg = Array.isArray(data) ? data[0]?.message : data?.message;
+        return {
+          ok: false, actionType: 'ticket', targetLabel: instanceUrl,
+          error: errMsg || `Salesforce test lead failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: instanceUrl,
+        details: { leadId: data?.id ?? null, probe: 'sobjects.lead.create' },
+      };
+    }
+    // ── IT / IDENTITY ─────────────────────────────────────────────────────────
+    case 'okta': {
+      const domain = String(credentials.domain || '').trim().replace(/\/+$/, '');
+      if (!domain) {
+        return { ok: false, actionType: 'ticket', error: 'Provide your Okta domain before creating a test user.' };
+      }
+      const testEmail = `rasi-test-${Date.now()}@example.com`;
+      const response = await fetchWithTimeout(`https://${domain}/api/v1/users?activate=false`, {
+        method: 'POST',
+        headers: {
+          Authorization: `SSWS ${credentials.apiToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          profile: { firstName: 'RASI', lastName: 'TestUser', email: testEmail, login: testEmail },
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket', targetLabel: domain,
+          error: data?.errorSummary || data?.message || `Okta test user creation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: domain,
+        details: { userId: data?.id ?? null, status: data?.status ?? null, probe: 'api.v1.users.create' },
+      };
+    }
+    // ── FINANCE ───────────────────────────────────────────────────────────────
+    case 'stripe': {
+      if (!String(credentials.secretKey || '').startsWith('sk_test_')) {
+        return { ok: false, actionType: 'webhook', error: 'Use a Stripe test key (sk_test_...) for action tests. Live keys are not used here.' };
+      }
+      const auth = Buffer.from(`${credentials.secretKey}:`).toString('base64');
+      const response = await fetchWithTimeout('https://api.stripe.com/v1/payment_intents', {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          amount: '100',
+          currency: 'usd',
+          description: 'RASI integration test',
+          'metadata[source]': 'rasi-integration-test',
+        }).toString(),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'webhook',
+          error: data?.error?.message || `Stripe test PaymentIntent failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'webhook',
+        details: { paymentIntentId: data?.id ?? null, status: data?.status ?? null, probe: 'payment_intents.create' },
+      };
+    }
+    case 'razorpayx': {
+      const auth = Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64');
+      const response = await fetchWithTimeout('https://api.razorpay.com/v1/contacts', {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'RASI Test Contact',
+          type: 'vendor',
+          email: `rasi-test-${Date.now()}@example.com`,
+          reference_id: `rasi-${Date.now()}`,
+          notes: { source: 'rasi-integration-test' },
+        }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.id) {
+        return {
+          ok: false, actionType: 'webhook',
+          error: data?.error?.description || `RazorpayX test contact creation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'webhook',
+        details: { contactId: data.id ?? null, probe: 'contacts.create' },
+      };
+    }
+    // ── COMPLIANCE ────────────────────────────────────────────────────────────
+    case 'cleartax': {
+      const gstin = String(credentials.gstin || '').trim().toUpperCase();
+      if (!gstin) {
+        return { ok: false, actionType: 'ticket', error: 'Provide your GSTIN before validating your ClearTax connection.' };
+      }
+      const response = await fetchWithTimeout(
+        `https://api.cleartax.in/v1/compliance/status?gstin=${encodeURIComponent(gstin)}`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${credentials.authToken}`, 'Content-Type': 'application/json' },
+        },
+      );
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket', targetLabel: gstin,
+          error: data?.message || data?.error || `ClearTax credential validation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: gstin,
+        details: { filingStatus: data?.filing_status ?? data?.status ?? null, probe: 'compliance.status.get' },
+      };
+    }
+    case 'epfo': {
+      const establishmentId = String(credentials.establishmentId || credentials.username || '').trim();
+      if (!establishmentId) {
+        return { ok: false, actionType: 'ticket', error: 'Provide your EPFO establishment ID before validating the connection.' };
+      }
+      const response = await fetchWithTimeout('https://unifiedportal-emp.epfindia.gov.in/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ establishment_id: establishmentId, password: credentials.password }),
+      });
+      const data: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false, actionType: 'ticket', targetLabel: establishmentId,
+          error: data?.message || `EPFO credential validation failed (${response.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'ticket', targetLabel: establishmentId,
+        details: { status: data?.status ?? null, probe: 'epfo.validate' },
       };
     }
     default:

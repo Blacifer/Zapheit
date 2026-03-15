@@ -79,6 +79,14 @@ export default function FleetPage({
   const [suggestedApps, setSuggestedApps] = useState<any[]>([]);
   const [testJobBusy, setTestJobBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  // Integration Assignment Panel
+  const [showAddIntegration, setShowAddIntegration] = useState(false);
+  const [availableIntegrations, setAvailableIntegrations] = useState<Array<{ id: string; name: string; category: string; status: string; capabilities?: { writes: Array<{ id: string; label: string; risk: string }> } }>>([]);
+  const [addIntegrationLoading, setAddIntegrationLoading] = useState(false);
+  // Action Mapper
+  const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
+  const [actionCatalog, setActionCatalog] = useState<Array<{ service: string; action: string; enabled: boolean }>>([]);
+  const [savingAction, setSavingAction] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -377,6 +385,58 @@ export default function FleetPage({
       lastIntegrationSyncAt: response.data.lastIntegrationSyncAt || null,
     });
   };
+
+  const openAddIntegrationPanel = async (agent: AIAgent) => {
+    setShowAddIntegration(true);
+    setAddIntegrationLoading(true);
+    const [intRes, catalogRes] = await Promise.all([
+      api.integrations.getAll(),
+      api.integrations.getActionCatalog(),
+    ]);
+    if (intRes.success && Array.isArray(intRes.data)) {
+      setAvailableIntegrations((intRes.data as any[]).filter((i: any) => i.status === 'connected'));
+    }
+    if (catalogRes.success && Array.isArray(catalogRes.data)) {
+      setActionCatalog(catalogRes.data as any[]);
+    }
+    setAddIntegrationLoading(false);
+    void agent; // keep linter happy — agent used by caller for pack filtering in JSX
+  };
+
+  const assignIntegration = async (agent: AIAgent, serviceId: string) => {
+    const currentIds = agent.integrationIds || [];
+    if (currentIds.includes(serviceId)) return;
+    const res = await api.agents.updatePublishState(agent.id, { integration_ids: [...currentIds, serviceId] });
+    if (!res.success) { toast.error(res.error || 'Failed to assign integration.'); return; }
+    await syncAgentPublishState(agent.id);
+    toast.success('Integration assigned to agent.');
+  };
+
+  const removeIntegration = async (agent: AIAgent, serviceId: string) => {
+    const newIds = (agent.integrationIds || []).filter((id) => id !== serviceId);
+    const res = await api.agents.updatePublishState(agent.id, { integration_ids: newIds });
+    if (!res.success) { toast.error(res.error || 'Failed to remove integration.'); return; }
+    await syncAgentPublishState(agent.id);
+  };
+
+  const toggleIntegrationAction = async (service: string, action: string, currentEnabled: boolean) => {
+    const key = `${service}:${action}`;
+    setSavingAction(key);
+    await api.integrations.upsertActions([{ service, action, enabled: !currentEnabled }]);
+    setActionCatalog((prev) => {
+      const exists = prev.some((a) => a.service === service && a.action === action);
+      if (exists) return prev.map((a) => a.service === service && a.action === action ? { ...a, enabled: !currentEnabled } : a);
+      return [...prev, { service, action, enabled: !currentEnabled }];
+    });
+    setSavingAction(null);
+  };
+
+  const getPublishChecklist = (agent: AIAgent) => [
+    { label: 'System prompt set', ok: Boolean((agent as any).config?.systemPrompt || (agent as any).systemPrompt) },
+    { label: 'Model selected', ok: Boolean(agent.modelName) },
+    { label: 'Integration connected', ok: (agent.connectedTargets?.length || 0) > 0 },
+    { label: 'Actions enabled', ok: (agent.integrationIds?.length || 0) > 0 || actionCatalog.some((a) => a.enabled) },
+  ];
 
   const runAgentAction = async (
     agentId: string,
@@ -1367,91 +1427,225 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'integrations' ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Header */}
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
                   <button
-                    onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
+                    onClick={() => void openAddIntegrationPanel(activeWorkspaceAgent)}
                     className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
                   >
-                    <Link2 className="w-3.5 h-3.5" />
-                    Connect this agent
+                    <Plus className="w-3.5 h-3.5" />
+                    Add integration
                   </button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
-                      No channels connected yet. Publish this agent into Integrations to make it live on support, sales, finance, or any other workflow.
+
+                {/* Publish checklist */}
+                {activeWorkspaceAgent.publishStatus !== 'live' && (() => {
+                  const checklist = getPublishChecklist(activeWorkspaceAgent);
+                  const allGreen = checklist.every((c) => c.ok);
+                  return (
+                    <div className={`rounded-2xl border p-4 ${allGreen ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.06]'}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-[0.16em] mb-3 ${allGreen ? 'text-emerald-300' : 'text-amber-300'}`}>
+                        {allGreen ? 'Ready to go live' : 'Before going live'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {checklist.map((item) => (
+                          <div key={item.label} className="flex items-center gap-2">
+                            {item.ok
+                              ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                              : <XCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                            <span className={`text-xs ${item.ok ? 'text-slate-300' : 'text-slate-400'}`}>{item.label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
-                    (activeWorkspaceAgent.connectedTargets || []).map((target) => (
-                      <div key={target.integrationId} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h4 className="font-semibold text-white">{target.integrationName}</h4>
-                            <p className="text-sm text-slate-400 mt-1">{target.packId} channel</p>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                            target.status === 'connected'
-                              ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
-                              : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
-                          }`}>
-                            {target.status}
-                          </span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Last sync</div>
-                            <div className="text-sm text-white mt-1">
-                              {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}
+                  );
+                })()}
+
+                {/* Connected targets */}
+                {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
+                    <Link2 className="w-6 h-6 text-slate-500 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400">No integrations assigned yet.</p>
+                    <p className="text-xs text-slate-500 mt-1">Click "Add integration" to wire a connected provider to this agent.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(activeWorkspaceAgent.connectedTargets || []).map((target) => {
+                      const actionsForService = availableIntegrations.find((i) => i.id === target.integrationId)?.capabilities?.writes || [];
+                      const isExpanded = expandedActions.has(target.integrationId);
+                      return (
+                        <div key={target.integrationId} className="rounded-2xl border border-white/10 bg-white/[0.03]">
+                          {/* Card header */}
+                          <div className="flex items-center justify-between gap-3 p-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${target.status === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                              <div>
+                                <h4 className="font-semibold text-white text-sm">{target.integrationName}</h4>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {target.packId} · {target.lastSyncAt ? `synced ${new Date(target.lastSyncAt).toLocaleDateString()}` : 'no sync yet'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                target.status === 'connected'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+                              }`}>{target.status}</span>
+                              <button
+                                onClick={() => setExpandedActions((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(target.integrationId)) { next.delete(target.integrationId); }
+                                  else {
+                                    next.add(target.integrationId);
+                                    void api.integrations.getActionCatalog().then((res) => {
+                                      if (res.success && Array.isArray(res.data)) setActionCatalog(res.data as any[]);
+                                    });
+                                    void api.integrations.getAll().then((res) => {
+                                      if (res.success && Array.isArray(res.data)) setAvailableIntegrations((res.data as any[]).filter((i: any) => i.status === 'connected'));
+                                    });
+                                  }
+                                  return next;
+                                })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-400 hover:text-white hover:bg-white/10 inline-flex items-center gap-1"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                Actions
+                              </button>
                             </div>
                           </div>
-                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Operating mode</div>
-                            <div className="text-sm text-white mt-1">
-                              {target.status === 'connected' ? 'Live traffic enabled' : 'Needs attention'}
+
+                          {/* Action mapper — expandable */}
+                          {isExpanded && (
+                            <div className="border-t border-white/10 px-4 py-3">
+                              {actionsForService.length === 0 ? (
+                                <p className="text-xs text-slate-500">No configurable actions for this integration.</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500 mb-2">Enabled actions</p>
+                                  {actionsForService.map((write: { id: string; label: string; risk: string }) => {
+                                    const catalogEntry = actionCatalog.find((a) => a.service === target.integrationId && a.action === write.id);
+                                    const enabled = catalogEntry ? catalogEntry.enabled : false;
+                                    const key = `${target.integrationId}:${write.id}`;
+                                    const riskColors: Record<string, string> = { low: 'text-slate-400', medium: 'text-amber-400', high: 'text-rose-400', money: 'text-orange-400' };
+                                    return (
+                                      <div key={write.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
+                                        <div>
+                                          <span className="text-xs text-white">{write.label}</span>
+                                          <span className={`ml-2 text-[10px] ${riskColors[write.risk] || 'text-slate-500'}`}>{write.risk} risk</span>
+                                        </div>
+                                        <button
+                                          onClick={() => void toggleIntegrationAction(target.integrationId, write.id, enabled)}
+                                          disabled={savingAction === key}
+                                          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-cyan-500' : 'bg-slate-700'} ${savingAction === key ? 'opacity-50' : ''}`}
+                                        >
+                                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <button
-                            onClick={() => void runAgentAction(
-                              activeWorkspaceAgent.id,
-                              `disconnect:${target.integrationId}`,
-                              async () => {
-                                const disconnect = await api.integrations.disconnect(target.integrationId);
-                                if (!disconnect.success) {
-                                  return disconnect;
-                                }
-                                await syncAgentPublishState(activeWorkspaceAgent.id);
-                                return { success: true, data: { id: activeWorkspaceAgent.id } };
-                              },
-                              `${target.integrationName} disconnected.`
-                            )}
-                            className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
-                            disabled={actionBusy === `disconnect:${target.integrationId}`}
-                          >
-                            {actionBusy === `disconnect:${target.integrationId}` ? 'Disconnecting…' : 'Disconnect channel'}
-                          </button>
-                          {activeWorkspaceAgent.publishStatus !== 'live' ? (
+                          )}
+
+                          {/* Card footer actions */}
+                          <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
                             <button
                               onClick={() => void runAgentAction(
                                 activeWorkspaceAgent.id,
-                                `live:${activeWorkspaceAgent.id}`,
-                                () => api.agents.goLive(activeWorkspaceAgent.id),
-                                `${activeWorkspaceAgent.name} is now live.`
+                                `disconnect:${target.integrationId}`,
+                                async () => {
+                                  const disconnect = await api.integrations.disconnect(target.integrationId);
+                                  if (!disconnect.success) return disconnect;
+                                  await removeIntegration(activeWorkspaceAgent, target.integrationId);
+                                  await syncAgentPublishState(activeWorkspaceAgent.id);
+                                  return { success: true, data: { id: activeWorkspaceAgent.id } };
+                                },
+                                `${target.integrationName} disconnected.`
                               )}
-                              className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15"
-                              disabled={actionBusy === `live:${activeWorkspaceAgent.id}`}
+                              className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
+                              disabled={actionBusy === `disconnect:${target.integrationId}`}
                             >
-                              {actionBusy === `live:${activeWorkspaceAgent.id}` ? 'Going live…' : 'Go live'}
+                              {actionBusy === `disconnect:${target.integrationId}` ? 'Disconnecting…' : 'Disconnect'}
                             </button>
-                          ) : null}
+                            {activeWorkspaceAgent.publishStatus !== 'live' ? (
+                              <button
+                                onClick={() => void runAgentAction(
+                                  activeWorkspaceAgent.id,
+                                  `live:${activeWorkspaceAgent.id}`,
+                                  () => api.agents.goLive(activeWorkspaceAgent.id),
+                                  `${activeWorkspaceAgent.name} is now live.`
+                                )}
+                                className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15 inline-flex items-center gap-1.5"
+                                disabled={actionBusy === `live:${activeWorkspaceAgent.id}`}
+                              >
+                                <Play className="w-3 h-3" />
+                                {actionBusy === `live:${activeWorkspaceAgent.id}` ? 'Going live…' : 'Go live'}
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add Integration slide-over panel */}
+                {showAddIntegration && (
+                  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddIntegration(false)}>
+                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10">
+                        <div>
+                          <p className="font-semibold text-white text-sm">Assign an integration</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Select a connected provider to wire to this agent</p>
+                        </div>
+                        <button onClick={() => setShowAddIntegration(false)} className="text-slate-400 hover:text-white">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div className="p-4 max-h-80 overflow-y-auto">
+                        {addIntegrationLoading ? (
+                          <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">Loading integrations…</span>
+                          </div>
+                        ) : availableIntegrations.length === 0 ? (
+                          <div className="text-center py-6">
+                            <p className="text-sm text-slate-400">No connected integrations found.</p>
+                            <p className="text-xs text-slate-500 mt-1">Connect providers on the Integrations page first.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {availableIntegrations.map((integration) => {
+                              const alreadyAssigned = (activeWorkspaceAgent.integrationIds || []).includes(integration.id);
+                              return (
+                                <div key={integration.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                                  <div>
+                                    <p className="text-sm font-medium text-white">{integration.name}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wider">{integration.category}</p>
+                                  </div>
+                                  {alreadyAssigned ? (
+                                    <span className="text-xs text-emerald-400 font-medium">Assigned</span>
+                                  ) : (
+                                    <button
+                                      onClick={() => void assignIntegration(activeWorkspaceAgent, integration.id)}
+                                      className="rounded-lg bg-cyan-500/20 border border-cyan-400/30 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30"
+                                    >
+                                      Assign
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 

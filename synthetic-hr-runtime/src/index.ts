@@ -480,9 +480,51 @@ async function executeJob(job: JobRow) {
       return;
     }
 
-    await logJob(job.id, `Unsupported connector service: ${service}`, 'error');
-    await completeJob(job.id, { status: 'failed', error: `Unsupported connector service: ${service}` });
-    return;
+    // External provider (zendesk, freshdesk, hubspot, salesforce, okta, stripe, etc.)
+    // Delegate to the control plane which holds the decrypted credentials.
+    {
+      await logJob(job.id, `Executing external connector action service=${service} action=${action}`, 'info');
+      const jwt = signRuntimeJwt();
+
+      // Check policy first
+      try {
+        const qs = new URLSearchParams({ service, action });
+        const polRes = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/policy?${qs.toString()}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const pol = await polRes.json().catch(() => ({} as any));
+        if (polRes.ok && pol?.success && pol?.data && pol.data.enabled === false) {
+          await completeJob(job.id, { status: 'failed', error: 'Action disabled by policy', output: { policy: pol.data } });
+          return;
+        }
+      } catch {
+        // ignore policy lookup failures
+      }
+
+      const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute-external`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          job_id: job.id,
+          agent_id: job.agent_id || undefined,
+          service,
+          action,
+          payload,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({} as any));
+      if (!response.ok || result?.success !== true) {
+        const errMsg = result?.error || `External action failed (${response.status})`;
+        await logJob(job.id, errMsg, 'error');
+        await completeJob(job.id, { status: 'failed', error: errMsg, output: { result } });
+        return;
+      }
+
+      await completeJob(job.id, { status: 'succeeded', output: result?.data || result });
+      return;
+    }
   }
 
   await completeJob(job.id, { status: 'failed', error: `Unsupported job type: ${job.type}` });

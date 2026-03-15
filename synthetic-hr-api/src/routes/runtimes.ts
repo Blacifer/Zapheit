@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
 import { logger } from '../lib/logger';
 import { SupabaseRestError, eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
-import { encryptSecret } from '../lib/integrations/encryption';
+import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { generateOpaqueToken, hashToken, requireRuntimeAuth, signRuntimeJwt, type RuntimeAuthContext } from '../lib/runtime-auth';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 
@@ -861,6 +861,376 @@ router.post('/actions/execute', requireRuntimeAuth(), async (req: Request, res: 
 
     const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: `Unsupported internal action: ${action}` });
     return res.status(400).json({ success: false, error: `Unsupported internal action: ${action}`, action_run: run });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
+// =========================
+// External connector action execution (runtime auth)
+// Looks up org's integration credentials and calls the provider API.
+// =========================
+
+async function getIntegrationCredentials(orgId: string, serviceType: string): Promise<Record<string, string> | null> {
+  const intQ = new URLSearchParams();
+  intQ.set('organization_id', eq(orgId));
+  intQ.set('service_type', eq(serviceType));
+  intQ.set('select', 'id,status');
+  const integrations = (await supabaseRestAsService('integrations', intQ)) as any[];
+  const integration = integrations?.[0];
+  if (!integration || integration.status === 'disconnected') return null;
+
+  const credQ = new URLSearchParams();
+  credQ.set('integration_id', eq(integration.id));
+  credQ.set('select', 'key,value,is_sensitive');
+  const rows = (await supabaseRestAsService('integration_credentials', credQ)) as any[];
+  const creds: Record<string, string> = {};
+  for (const row of rows) {
+    creds[row.key] = row.is_sensitive ? decryptSecret(row.value) : row.value;
+  }
+  return creds;
+}
+
+async function executeExternalAction(
+  service: string,
+  action: string,
+  creds: Record<string, string>,
+  payload: Record<string, any>,
+): Promise<{ ok: boolean; output: any; error?: string }> {
+  const fetch = (await import('node-fetch')).default as unknown as typeof globalThis.fetch;
+
+  // ── SUPPORT: Zendesk ──
+  if (service === 'zendesk') {
+    const subdomain = String(creds.subdomain || '').replace(/\.zendesk\.com$/, '');
+    const auth = Buffer.from(`${creds.email}/token:${creds.apiToken}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+
+    if (action === 'support.ticket.reply') {
+      const ticketId = payload.ticketId || payload.ticket_id;
+      if (!ticketId) return { ok: false, output: {}, error: 'payload.ticketId is required for ticket reply' };
+      const res = await fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ ticket: { comment: { body: String(payload.comment || payload.message || ''), public: payload.public !== false } } }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.error || `Zendesk reply failed (${res.status})` };
+      return { ok: true, output: { ticket_id: data?.ticket?.id, status: data?.ticket?.status } };
+    }
+    if (action === 'support.ticket.update_status') {
+      const ticketId = payload.ticketId || payload.ticket_id;
+      const status = payload.status || 'solved';
+      if (!ticketId) return { ok: false, output: {}, error: 'payload.ticketId is required for status update' };
+      const res = await fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/${ticketId}.json`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ ticket: { status } }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.error || `Zendesk status update failed (${res.status})` };
+      return { ok: true, output: { ticket_id: data?.ticket?.id, status: data?.ticket?.status } };
+    }
+  }
+
+  // ── SUPPORT: Freshdesk ──
+  if (service === 'freshdesk') {
+    const subdomain = String(creds.subdomain || '').replace(/\.freshdesk\.com$/, '');
+    const auth = Buffer.from(`${creds.apiKey}:X`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+
+    if (action === 'support.ticket.reply') {
+      const ticketId = payload.ticketId || payload.ticket_id;
+      if (!ticketId) return { ok: false, output: {}, error: 'payload.ticketId is required for ticket reply' };
+      const res = await fetch(`https://${subdomain}.freshdesk.com/api/v2/tickets/${ticketId}/reply`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ body: String(payload.comment || payload.message || '') }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.description || `Freshdesk reply failed (${res.status})` };
+      return { ok: true, output: { conversation_id: data?.id } };
+    }
+    if (action === 'support.ticket.update_status') {
+      const ticketId = payload.ticketId || payload.ticket_id;
+      const statusMap: Record<string, number> = { open: 2, pending: 3, resolved: 4, closed: 5 };
+      const status = statusMap[String(payload.status || 'resolved')] ?? 4;
+      if (!ticketId) return { ok: false, output: {}, error: 'payload.ticketId is required for status update' };
+      const res = await fetch(`https://${subdomain}.freshdesk.com/api/v2/tickets/${ticketId}`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ status }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.description || `Freshdesk status update failed (${res.status})` };
+      return { ok: true, output: { ticket_id: data?.id, status: data?.status } };
+    }
+  }
+
+  // ── SUPPORT: Intercom ──
+  if (service === 'intercom') {
+    const headers = { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json', 'Intercom-Version': '2.10' };
+    if (action === 'support.ticket.reply') {
+      const conversationId = payload.conversationId || payload.conversation_id;
+      if (!conversationId) return { ok: false, output: {}, error: 'payload.conversationId is required for Intercom reply' };
+      const res = await fetch(`https://api.intercom.io/conversations/${conversationId}/reply`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ message_type: 'note', type: 'admin', admin_id: creds.adminId || payload.adminId, body: String(payload.message || payload.comment || '') }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.errors?.[0]?.message || `Intercom reply failed (${res.status})` };
+      return { ok: true, output: { conversation_id: data?.id } };
+    }
+  }
+
+  // ── SALES: HubSpot ──
+  if (service === 'hubspot') {
+    const headers = { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' };
+    if (action === 'sales.lead.update') {
+      const contactId = payload.contactId || payload.contact_id;
+      if (!contactId) return { ok: false, output: {}, error: 'payload.contactId is required for HubSpot lead update' };
+      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ properties: payload.properties || {} }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.message || `HubSpot lead update failed (${res.status})` };
+      return { ok: true, output: { contact_id: data?.id, properties: data?.properties } };
+    }
+    if (action === 'sales.deal.update') {
+      const dealId = payload.dealId || payload.deal_id;
+      if (!dealId) return { ok: false, output: {}, error: 'payload.dealId is required for HubSpot deal update' };
+      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ properties: payload.properties || {} }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.message || `HubSpot deal update failed (${res.status})` };
+      return { ok: true, output: { deal_id: data?.id, properties: data?.properties } };
+    }
+    if (action === 'sales.lead.create') {
+      const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts', {
+        method: 'POST', headers,
+        body: JSON.stringify({ properties: payload.properties || { email: payload.email, firstname: payload.firstName, lastname: payload.lastName, company: payload.company } }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.message || `HubSpot contact create failed (${res.status})` };
+      return { ok: true, output: { contact_id: data?.id } };
+    }
+  }
+
+  // ── SALES: Salesforce ──
+  if (service === 'salesforce') {
+    const instanceUrl = String(creds.instanceUrl || '').replace(/\/+$/, '');
+    const headers = { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' };
+    if (action === 'sales.lead.create') {
+      const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/Lead`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ FirstName: payload.firstName, LastName: payload.lastName || 'Unknown', Company: payload.company || 'Unknown', Email: payload.email, LeadSource: payload.leadSource || 'Web', ...payload.extra }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      const errMsg = Array.isArray(data) ? data[0]?.message : data?.message;
+      if (!res.ok) return { ok: false, output: data, error: errMsg || `Salesforce lead create failed (${res.status})` };
+      return { ok: true, output: { lead_id: data?.id } };
+    }
+    if (action === 'sales.lead.update' || action === 'sales.opportunity.update') {
+      const sobject = action.includes('opportunity') ? 'Opportunity' : 'Lead';
+      const recordId = payload.recordId || payload.leadId || payload.opportunityId;
+      if (!recordId) return { ok: false, output: {}, error: `payload.recordId is required for Salesforce ${sobject} update` };
+      const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/${sobject}/${recordId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify(payload.properties || {}),
+      });
+      if (!res.ok) {
+        const data: any = await res.json().catch(() => ({}));
+        return { ok: false, output: data, error: Array.isArray(data) ? data[0]?.message : `Salesforce update failed (${res.status})` };
+      }
+      return { ok: true, output: { record_id: recordId, sobject } };
+    }
+  }
+
+  // ── IT: Okta ──
+  if (service === 'okta') {
+    const domain = String(creds.domain || '').replace(/\/+$/, '');
+    const headers = { Authorization: `SSWS ${creds.apiToken}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (action === 'identity.user.provision') {
+      const email = payload.email || payload.login;
+      if (!email) return { ok: false, output: {}, error: 'payload.email is required for Okta user provisioning' };
+      const res = await fetch(`https://${domain}/api/v1/users?activate=${payload.activate !== false}`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ profile: { firstName: payload.firstName || 'New', lastName: payload.lastName || 'User', email, login: email }, credentials: payload.tempPassword ? { password: { value: payload.tempPassword } } : undefined }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.errorSummary || `Okta user provision failed (${res.status})` };
+      return { ok: true, output: { user_id: data?.id, status: data?.status, login: data?.profile?.login } };
+    }
+    if (action === 'identity.user.deactivate') {
+      const userId = payload.userId || payload.user_id;
+      if (!userId) return { ok: false, output: {}, error: 'payload.userId is required for Okta user deactivation' };
+      const res = await fetch(`https://${domain}/api/v1/users/${userId}/lifecycle/deactivate`, { method: 'POST', headers });
+      if (!res.ok) {
+        const data: any = await res.json().catch(() => ({}));
+        return { ok: false, output: data, error: data?.errorSummary || `Okta deactivate failed (${res.status})` };
+      }
+      return { ok: true, output: { user_id: userId, status: 'DEPROVISIONED' } };
+    }
+    if (action === 'identity.group.assign') {
+      const userId = payload.userId || payload.user_id;
+      const groupId = payload.groupId || payload.group_id;
+      if (!userId || !groupId) return { ok: false, output: {}, error: 'payload.userId and payload.groupId are required for group assignment' };
+      const res = await fetch(`https://${domain}/api/v1/groups/${groupId}/users/${userId}`, { method: 'PUT', headers });
+      if (!res.ok) {
+        const data: any = await res.json().catch(() => ({}));
+        return { ok: false, output: data, error: data?.errorSummary || `Okta group assign failed (${res.status})` };
+      }
+      return { ok: true, output: { user_id: userId, group_id: groupId } };
+    }
+  }
+
+  // ── FINANCE: Stripe ──
+  if (service === 'stripe') {
+    const auth = Buffer.from(`${creds.secretKey}:`).toString('base64');
+    if (action === 'finance.refund.create') {
+      const paymentIntentId = payload.paymentIntentId || payload.payment_intent;
+      if (!paymentIntentId) return { ok: false, output: {}, error: 'payload.paymentIntentId is required for Stripe refund' };
+      const params = new URLSearchParams({ payment_intent: paymentIntentId });
+      if (payload.amount) params.set('amount', String(payload.amount));
+      if (payload.reason) params.set('reason', String(payload.reason));
+      const res = await fetch('https://api.stripe.com/v1/refunds', {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.error?.message || `Stripe refund failed (${res.status})` };
+      return { ok: true, output: { refund_id: data?.id, status: data?.status, amount: data?.amount } };
+    }
+  }
+
+  // ── FINANCE: RazorpayX ──
+  if (service === 'razorpayx') {
+    const auth = Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+    if (action === 'finance.payout.initiate') {
+      const required = ['fund_account_id', 'amount', 'currency', 'mode', 'purpose'];
+      const missing = required.filter((k) => !payload[k]);
+      if (missing.length) return { ok: false, output: {}, error: `Missing required payout fields: ${missing.join(', ')}` };
+      const res = await fetch('https://api.razorpay.com/v1/payouts', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          account_number: creds.accountNumber,
+          fund_account_id: payload.fund_account_id,
+          amount: payload.amount,
+          currency: payload.currency,
+          mode: payload.mode,
+          purpose: payload.purpose,
+          queue_if_low_balance: payload.queue_if_low_balance ?? true,
+          narration: payload.narration || 'RASI agent payout',
+          notes: { source: 'rasi-agent', ...(payload.notes || {}) },
+        }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.id) return { ok: false, output: data, error: data?.error?.description || `RazorpayX payout failed (${res.status})` };
+      return { ok: true, output: { payout_id: data.id, status: data.status, utr: data.utr } };
+    }
+  }
+
+  // ── COMPLIANCE: ClearTax ──
+  if (service === 'cleartax') {
+    const headers = { Authorization: `Bearer ${creds.authToken}`, 'Content-Type': 'application/json' };
+    if (action === 'compliance.gst.file') {
+      const gstin = payload.gstin || creds.gstin;
+      if (!gstin) return { ok: false, output: {}, error: 'payload.gstin is required for GST filing' };
+      const res = await fetch(`https://api.cleartax.in/v1/gst/returns`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ gstin, return_type: payload.return_type || 'GSTR1', year: payload.year, period: payload.period, data: payload.data || {} }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.message || `ClearTax GST filing failed (${res.status})` };
+      return { ok: true, output: { transaction_id: data?.transaction_id, status: data?.status } };
+    }
+    if (action === 'compliance.tds.calculate') {
+      const res = await fetch('https://api.cleartax.in/v1/tds/calculate', {
+        method: 'POST', headers,
+        body: JSON.stringify({ pan: payload.pan, payment_amount: payload.amount, section: payload.section || '194C' }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, output: data, error: data?.message || `ClearTax TDS calculation failed (${res.status})` };
+      return { ok: true, output: { tds_amount: data?.tds_amount, rate: data?.rate } };
+    }
+  }
+
+  return { ok: false, output: {}, error: `Action '${action}' is not implemented for provider '${service}'` };
+}
+
+const externalActionSchema = z.object({
+  job_id: z.string().optional(),
+  agent_id: z.string().uuid().optional(),
+  service: z.string().min(1),
+  action: z.string().min(1),
+  payload: z.record(z.any()).optional().default({}),
+});
+
+router.post('/actions/execute-external', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const parsed = externalActionSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+    const { job_id, agent_id, service, action, payload } = parsed.data;
+    const now = nowIso();
+
+    const makeActionRun = async (result: { status: 'ok' | 'failed'; input: any; output: any; error?: string | null }) => {
+      const created = (await supabaseRestAsService('agent_action_runs', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          agent_id: agent_id || null,
+          job_id: job_id || null,
+          action_type: `${service}.${action}`,
+          status: result.status,
+          input: result.input || {},
+          output: result.output || {},
+          error: result.error || null,
+          created_at: now,
+        },
+      })) as any[];
+      return created?.[0] || null;
+    };
+
+    // Check policy
+    {
+      const polQ = new URLSearchParams();
+      polQ.set('organization_id', eq(ctx.organization_id));
+      polQ.set('service', eq(service));
+      polQ.set('action', eq(action));
+      polQ.set('select', '*');
+      polQ.set('limit', '1');
+      const polRows = (await supabaseRestAsService('action_policies', polQ)) as any[];
+      const policy = polRows?.[0] || null;
+      if (policy && policy.enabled === false) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Action disabled by policy' });
+        return res.status(403).json({ success: false, error: 'Action disabled by policy', action_run: run });
+      }
+    }
+
+    // Look up credentials
+    const creds = await getIntegrationCredentials(ctx.organization_id, service);
+    if (!creds) {
+      const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: `No active integration found for service: ${service}` });
+      return res.status(404).json({ success: false, error: `No active integration found for service: ${service}`, action_run: run });
+    }
+
+    // Execute
+    const result = await executeExternalAction(service, action, creds, payload);
+    const run = await makeActionRun({
+      status: result.ok ? 'ok' : 'failed',
+      input: payload,
+      output: result.output,
+      error: result.error || null,
+    });
+
+    if (!result.ok) {
+      return res.status(422).json({ success: false, error: result.error, action_run: run });
+    }
+    return res.json({ success: true, data: result.output, action_run: run });
   } catch (err: any) {
     return safeError(res, err);
   }
