@@ -174,9 +174,7 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const [telemetry, setTelemetry] = useState<OverviewTelemetry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [secondsSince, setSecondsSince] = useState(0);
-  const AUTO_REFRESH_INTERVAL = 8; // seconds
+  const AUTO_REFRESH_INTERVAL = 30; // seconds
 
   const loadOverviewState = useCallback(async () => {
     setRefreshing(true);
@@ -186,8 +184,6 @@ export default function DashboardOverview({
         setTelemetry(telemetryResponse.data);
       }
     } catch { /* silently ignore */ }
-    setLastRefreshed(new Date());
-    setSecondsSince(0);
     setRefreshing(false);
   }, []);
 
@@ -202,15 +198,7 @@ export default function DashboardOverview({
     return () => clearInterval(interval);
   }, [loadOverviewState]);
 
-  // Live countdown clock
-  useEffect(() => {
-    const tick = setInterval(() => {
-      setSecondsSince(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [lastRefreshed]);
-
-  const hasData = agents.length > 0;
+const hasData = agents.length > 0;
 
   const activityFeed = useMemo(() => {
     const items: ActivityItem[] = [
@@ -421,7 +409,7 @@ export default function DashboardOverview({
   return (
     <div className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_28%),linear-gradient(135deg,rgba(2,6,23,0.90),rgba(2,6,23,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.26)]">
-        <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+        <div className="grid gap-6 xl:grid-cols-2">
           <div>
             <SectionEyebrow label="Live command center" />
             <div className="flex flex-wrap items-center gap-3">
@@ -431,28 +419,24 @@ export default function DashboardOverview({
               />
               <ActionPill label={`Risk score ${avgRiskScore}/100`} tone={avgRiskScore >= 70 ? 'risk' : avgRiskScore >= 40 ? 'warn' : 'good'} />
             </div>
-            <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-[-0.04em] text-white xl:text-[3.6rem] xl:leading-[1.02]">Overview</h1>
-            <p className="mt-3 max-w-2xl text-[1.02rem] leading-8 text-slate-300">
-              A live command center for fleet health, open risk, spend, and governance readiness. This page now uses actual fleet, incident, and cost state instead of placeholder activity.
+            <h1 className="mt-3 text-2xl font-bold text-white">Overview</h1>
+            <p className="mt-1 max-w-xl text-sm text-slate-400">
+              Live command center for fleet health, open risk, spend, and governance readiness.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-400">
-              <div className="inline-flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400'} animate-pulse`} />
-                Live operational snapshot
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+              <div className="inline-flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400'} animate-pulse`} />
+                Live
               </div>
-              <span className="text-slate-600">•</span>
-              <span>{telemetry?.generatedAt ? `Backend telemetry ${formatRelative(telemetry.generatedAt)}` : activityFeed.length > 0 ? `Latest signal ${formatRelative(activityFeed[0].at)}` : 'Awaiting recent activity'}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-500 text-xs">
-                {secondsSince < 5 ? 'Just refreshed' : `Updated ${secondsSince}s ago`} · auto-refresh in {Math.max(0, AUTO_REFRESH_INTERVAL - secondsSince)}s
-              </span>
+              <span>·</span>
+              <span>{telemetry?.generatedAt ? `Updated ${formatRelative(telemetry.generatedAt)}` : activityFeed.length > 0 ? formatRelative(activityFeed[0].at) : 'Awaiting data'}</span>
               <button
                 onClick={() => void loadOverviewState()}
                 disabled={refreshing}
-                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-50 disabled:pointer-events-none"
+                className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40"
               >
                 <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing…' : 'Refresh now'}
+                {refreshing ? 'Refreshing…' : 'Refresh'}
               </button>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -506,18 +490,13 @@ export default function DashboardOverview({
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.96fr_1.04fr]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Siren className="h-5 w-5 text-blue-200" />
-            </div>
-            <div>
-              <SectionEyebrow label="Resolve next" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Action Queue</h2>
-              <p className="mt-1 text-sm text-slate-400">The shortest path to reducing real risk right now.</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Siren className="h-4 w-4 text-blue-300 shrink-0" />
+            <h2 className="text-base font-semibold text-white">Action Queue</h2>
           </div>
+          <p className="mt-1 text-sm text-slate-400">Shortest path to reducing real risk right now.</p>
 
           <div className="mt-6 space-y-3">
             {actionQueue.length > 0 ? (
@@ -549,34 +528,24 @@ export default function DashboardOverview({
         </section>
 
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Activity className="h-5 w-5 text-blue-200" />
-            </div>
-            <div>
-              <SectionEyebrow label="Service telemetry" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Reliability</h2>
-              <p className="mt-1 text-sm text-slate-400">Operational metrics from live platform telemetry.</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-blue-300 shrink-0" />
+            <h2 className="text-base font-semibold text-white">Reliability</h2>
           </div>
+          <p className="mt-1 text-sm text-slate-400">Operational metrics from live platform telemetry.</p>
           <div className="mt-6">
             <OperationalMetrics />
           </div>
         </section>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.92fr]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Layers3 className="h-5 w-5 text-blue-200" />
-            </div>
-            <div>
-              <SectionEyebrow label="Latest signals" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Recent Activity</h2>
-              <p className="mt-1 text-sm text-slate-400">Derived from actual incident, fleet, and cost records already in this org.</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Layers3 className="h-4 w-4 text-blue-300 shrink-0" />
+            <h2 className="text-base font-semibold text-white">Recent Activity</h2>
           </div>
+          <p className="mt-1 text-sm text-slate-400">Latest incident, fleet, and cost signals.</p>
 
           <div className="mt-6 space-y-3">
             {activityFeed.length > 0 ? (
@@ -610,16 +579,11 @@ export default function DashboardOverview({
         </section>
 
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-              <Sparkles className="h-5 w-5 text-blue-200" />
-            </div>
-            <div>
-              <SectionEyebrow label="Governance posture" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Coverage Snapshot</h2>
-              <p className="mt-1 text-sm text-slate-400">How much of the current stack is actually governed and cost-visible.</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-blue-300 shrink-0" />
+            <h2 className="text-base font-semibold text-white">Coverage Snapshot</h2>
           </div>
+          <p className="mt-1 text-sm text-slate-400">Governance and cost visibility across your fleet.</p>
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
@@ -702,12 +666,14 @@ export default function DashboardOverview({
         </section>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <SectionEyebrow label="Fleet posture" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">AI Workforce</h2>
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-blue-300 shrink-0" />
+                <h2 className="text-base font-semibold text-white">AI Workforce</h2>
+              </div>
               <p className="mt-1 text-sm text-slate-400">Fleet posture and risk by governed agent.</p>
             </div>
             <ActionPill label={`${activeAgents.length} active`} tone={activeAgents.length === agents.length ? 'good' : 'warn'} />
@@ -739,27 +705,39 @@ export default function DashboardOverview({
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <SectionEyebrow label="Incident posture" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Black Box</h2>
-              <p className="mt-1 text-sm text-slate-400">Evidence trail for incident history, severity, and operational context.</p>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-blue-300 shrink-0" />
+                <h2 className="text-base font-semibold text-white">Open Incidents</h2>
+              </div>
+              <p className="mt-1 text-sm text-slate-400">Active incidents requiring attention.</p>
             </div>
             <button
               onClick={() => onNavigate?.('blackbox')}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-slate-200 transition hover:text-white"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
             >
-              Open evidence
-              <ArrowRight className="h-4 w-4" />
+              View all
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_40%),rgba(2,6,23,0.55)] p-5">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/80">
-              <ShieldAlert className="h-5 w-5 text-blue-200" />
-            </div>
-            <p className="font-semibold text-white">Incident evidence stays available</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Review recent incidents, severity distribution, and forensic evidence in Black Box while you rebuild the next workflow from a cleaner baseline.
-            </p>
+          <div className="mt-4 space-y-2">
+            {openIncidents.length === 0 ? (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3 text-sm text-emerald-200">
+                No open incidents right now.
+              </div>
+            ) : (
+              openIncidents.slice(0, 5).map((incident) => (
+                <div key={incident.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{incident.title}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{incident.agent_name} · {formatRelative(incident.created_at)}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>
+                    {incident.severity}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </section>
       </div>
