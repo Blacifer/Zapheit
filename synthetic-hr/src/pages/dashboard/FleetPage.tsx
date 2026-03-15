@@ -1074,10 +1074,7 @@ export default function FleetPage({
                   {activeWorkspaceAgent.connectedTargets?.length || 0} connected target{(activeWorkspaceAgent.connectedTargets?.length || 0) === 1 ? '' : 's'}
                 </span>
               </div>
-              <p className="text-sm text-slate-300 mt-2 max-w-3xl">
-                Operate this agent from one place. Publish channels in Integrations, review conversations, adjust persona and policies, and intervene directly when needed.
-              </p>
-            </div>
+              </div>
             <button onClick={closeWorkspace} className="text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>
@@ -1310,21 +1307,16 @@ export default function FleetPage({
             </>) : null}
 
             {workspaceTab === 'conversations' ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">Recent conversations</h3>
-                      <p className="text-sm text-slate-400 mt-1">Review the latest interactions here, then open the full inbox only when you need deeper investigation.</p>
-                    </div>
-                    <button
-                      onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Open full inbox
-                    </button>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-sm font-semibold text-white">Recent conversations</h3>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-1.5"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Open full inbox
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                   {workspaceState.loadingConversations ? (
@@ -1375,21 +1367,16 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'integrations' ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
-                      <p className="text-sm text-slate-400 mt-1">Non-technical flow: pick a channel, connect it, and come back here to supervise operations.</p>
-                    </div>
-                    <button
-                      onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
-                      className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-2"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Connect this agent
-                    </button>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
+                  <button
+                    onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
+                    className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    Connect this agent
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
@@ -1469,20 +1456,15 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'policies' ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
-                      <p className="text-sm text-slate-400 mt-1">Edit the core prompt and operating policy here. Use the full editor only when you need deeper persona work.</p>
-                    </div>
-                    <button
-                      onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
-                    >
-                      Open full editor
-                    </button>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                  >
+                    Open full editor
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -1526,21 +1508,16 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'analytics' ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
-                      <p className="text-sm text-slate-400 mt-1">Watch spend, traffic, and short-term trends here before you dive into the full analytics surface.</p>
-                    </div>
-                    <button
-                      onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      Open analytics
-                    </button>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-1.5"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    Open analytics
+                  </button>
                 </div>
                 {workspaceState.loadingAnalytics ? (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-slate-300 inline-flex items-center gap-2">
@@ -1738,83 +1715,6 @@ export default function FleetPage({
         </div>
       ) : null}
 
-      {/* AI Employee Review Cards */}
-      {agents.length > 0 && (
-        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Target className="w-6 h-6 text-cyan-400" />
-            <h2 className="text-xl font-bold text-white">Agent review snapshot</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agents.map((agent) => {
-              // Calculate performance metrics
-              const accuracyScore = Math.max(0, 100 - (agent.risk_score * 0.5));
-              const toneScore = agent.status === 'active' ? 92 : 0;
-              const responseTime = agent.conversations > 0 ? 1.2 : 0;
-
-              return (
-                <div key={agent.id} className="bg-slate-900/50 border border-slate-700 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-white">{agent.name}</h3>
-                    <span className={`px-2 py-1 rounded text-xs ${agent.status === 'active' ? 'bg-green-400/10 text-green-400' :
-                      agent.status === 'paused' ? 'bg-yellow-400/10 text-yellow-400' :
-                        'bg-red-400/10 text-red-400'
-                      }`}>
-                      {agent.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-slate-400">Accuracy Score</span>
-                        <span className={accuracyScore >= 80 ? 'text-green-400' : accuracyScore >= 60 ? 'text-yellow-400' : 'text-red-400'}>
-                          {accuracyScore.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${accuracyScore >= 80 ? 'bg-green-400' : accuracyScore >= 60 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                          style={{ width: `${accuracyScore}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-slate-400">Tone Score</span>
-                        <span className={toneScore >= 80 ? 'text-green-400' : toneScore >= 60 ? 'text-yellow-400' : 'text-red-400'}>
-                          {toneScore.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${toneScore >= 80 ? 'bg-green-400' : toneScore >= 60 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                          style={{ width: `${Math.min(100, toneScore)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-700">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-slate-400">Conversations</p>
-                          <p className="text-white font-medium">{agent.conversations.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">Avg Response</p>
-                          <p className="text-white font-medium">{responseTime.toFixed(1)}s</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Deploy Modal */}
       {deployAgentId && (
