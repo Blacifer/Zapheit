@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppContext, type AuthUser } from './context/AppContext';
 import { authHelpers } from './lib/supabase-client';
 import { getFrontendConfig } from './lib/config';
@@ -24,10 +25,11 @@ function LoadingSpinner() {
 const TIMEOUT_MS = 15 * 60 * 1000;
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'landing' | 'signup' | 'login' | 'dashboard' | 'accept-invite' | 'oauth-popup'>('landing');
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const config = getFrontendConfig();
@@ -60,24 +62,23 @@ function App() {
     }
   }, [config.apiUrl]);
 
+  // Inactivity timeout — only active while on the dashboard
   useEffect(() => {
-    if (!mounted || view !== 'dashboard' || isDemoMode) return;
+    const isDashboard = location.pathname.startsWith('/dashboard');
+    if (!mounted || !isDashboard || isDemoMode) return;
 
     let timeoutId: NodeJS.Timeout;
 
     const resetTimeout = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        // Session expired
         signOut();
         setSessionExpired(true);
       }, TIMEOUT_MS);
     };
 
-    // Initialize timeout
     resetTimeout();
 
-    // Listen for activity
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
     events.forEach((event) => {
       window.addEventListener(event, resetTimeout, { passive: true });
@@ -89,7 +90,7 @@ function App() {
         window.removeEventListener(event, resetTimeout);
       });
     };
-  }, [mounted, view, isDemoMode]);
+  }, [mounted, location.pathname, isDemoMode]);
 
   useEffect(() => {
     setMounted(true);
@@ -101,17 +102,14 @@ function App() {
 
     const loadSession = async () => {
       try {
-        // Check if user has an active session (Supabase handles auth tokens)
-        const { user: authUser, error } = await authHelpers.getCurrentUser();
-        const isAcceptInvite = typeof window !== 'undefined' && window.location.pathname.startsWith('/accept-invite');
-        const isOAuthPopup = typeof window !== 'undefined' && window.location.pathname === '/oauth/popup';
-
-        // OAuth popup callback page — render immediately regardless of auth state.
-        if (isOAuthPopup) {
-          setView('oauth-popup');
+        // OAuth popup — let the route handle rendering; just unblock loading.
+        if (location.pathname === '/oauth/popup') {
           setLoading(false);
           return;
         }
+
+        const { user: authUser, error } = await authHelpers.getCurrentUser();
+        const isAcceptInvite = location.pathname.startsWith('/accept-invite');
 
         if (authUser && !error) {
           const userData: AuthUser = {
@@ -120,13 +118,12 @@ function App() {
             organizationName: authUser.user_metadata?.organization_name || 'My Organization',
           };
           setUser(userData);
-          if (isAcceptInvite) {
-            setView('accept-invite');
-          } else {
-            setView('dashboard');
-          }
-          // Don't store user data in localStorage - fetch from API on app load
           localStorage.setItem('has_session', 'true');
+
+          // If landing on auth pages while authenticated, redirect to dashboard.
+          if (!isAcceptInvite && (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/signup')) {
+            navigate('/dashboard', { replace: true });
+          }
 
           if (isAcceptInvite) {
             const { session } = await authHelpers.getSession();
@@ -134,7 +131,10 @@ function App() {
           }
         } else {
           localStorage.removeItem('has_session');
-          if (isAcceptInvite) setView('accept-invite');
+          // Redirect away from protected paths if unauthenticated.
+          if (location.pathname.startsWith('/dashboard')) {
+            navigate('/login', { replace: true });
+          }
         }
       } catch (err) {
         console.error('Session load error:', err);
@@ -144,7 +144,7 @@ function App() {
     };
 
     loadSession();
-  }, [mounted, claimInviteIfPending]);
+  }, [mounted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enterDemoMode = () => {
     if (!demoEnabled) return;
@@ -154,10 +154,9 @@ function App() {
       organizationName: 'Demo Organization',
     };
     setUser(demoUser);
-    setView('dashboard');
     setIsDemoMode(true);
-    // Only store session marker, not user data
     localStorage.setItem('has_session', 'true');
+    navigate('/dashboard');
   };
 
   // Sign up handler
@@ -204,11 +203,10 @@ function App() {
           organizationName: result.user.user_metadata?.organization_name || 'My Organization',
         };
         setUser(userData);
-        const isAcceptInvite = typeof window !== 'undefined' && window.location.pathname.startsWith('/accept-invite');
-        setView(isAcceptInvite ? 'accept-invite' : 'dashboard');
-        // Only store session marker, not user data
         localStorage.setItem('has_session', 'true');
         await claimInviteIfPending(result.session?.access_token);
+        const isAcceptInvite = location.pathname.startsWith('/accept-invite');
+        navigate(isAcceptInvite ? location.pathname : '/dashboard');
       }
 
       return { error: null };
@@ -220,9 +218,8 @@ function App() {
 
   // Sign out handler
   const signOut = async () => {
-    // Clear all app data from localStorage
     localStorage.removeItem('has_session');
-    localStorage.removeItem('synthetic_hr_user'); // Clean up old format if present
+    localStorage.removeItem('synthetic_hr_user');
     localStorage.removeItem(STORAGE_KEYS.AGENTS);
     localStorage.removeItem(STORAGE_KEYS.INCIDENTS);
     localStorage.removeItem(STORAGE_KEYS.COST_DATA);
@@ -231,16 +228,14 @@ function App() {
     try {
       await authHelpers.signOut();
     } catch (err) {
-      // Continue with logout even if server is unreachable
       console.error('Signout warning:', err);
     }
 
     setUser(null);
-    setView('login');
     setIsDemoMode(false);
+    navigate('/login');
   };
 
-  // Prevent hydration mismatch
   if (!mounted || loading) {
     return <LoadingSpinner />;
   }
@@ -248,34 +243,26 @@ function App() {
   return (
     <AppContext.Provider value={{ user, loading: false, signUp, signIn, signOut }}>
       <Suspense fallback={<LoadingSpinner />}>
-        {view === 'landing' && (
-          <LandingPage
-            onSignUp={() => setView('signup')}
-            onLogin={() => setView('login')}
-            onDemo={demoEnabled ? enterDemoMode : undefined}
-          />
-        )}
-        {view === 'signup' && (
-          <SignUpPage onSignIn={() => setView('login')} onBack={() => setView('landing')} />
-        )}
-        {view === 'login' && (
-          <LoginPage onSignUp={() => setView('signup')} onBack={() => setView('landing')} />
-        )}
-        {view === 'accept-invite' && (
-          <AcceptInvitePage
-            onLogin={() => setView('login')}
-            onSignUp={() => setView('signup')}
-            onBack={() => setView('landing')}
-            onDone={() => setView('dashboard')}
-          />
-        )}
-        {view === 'oauth-popup' && <OAuthCallbackPage />}
-        {view === 'dashboard' && (
-          <Dashboard
-            isDemoMode={isDemoMode}
-            onSignUp={isDemoMode ? () => setView('signup') : undefined}
-          />
-        )}
+        <Routes>
+          <Route path="/" element={<LandingPage onSignUp={() => navigate('/signup')} onLogin={() => navigate('/login')} onDemo={demoEnabled ? enterDemoMode : undefined} />} />
+          <Route path="/signup" element={<SignUpPage onSignIn={() => navigate('/login')} onBack={() => navigate('/')} />} />
+          <Route path="/login" element={<LoginPage onSignUp={() => navigate('/signup')} onBack={() => navigate('/')} />} />
+          <Route path="/accept-invite/*" element={
+            <AcceptInvitePage
+              onLogin={() => navigate('/login')}
+              onSignUp={() => navigate('/signup')}
+              onBack={() => navigate('/')}
+              onDone={() => navigate('/dashboard')}
+            />
+          } />
+          <Route path="/oauth/popup" element={<OAuthCallbackPage />} />
+          <Route path="/dashboard/*" element={
+            user
+              ? <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />
+              : <Navigate to="/login" replace />
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Suspense>
 
       {sessionExpired && (
@@ -291,7 +278,7 @@ function App() {
             <button
               onClick={() => {
                 setSessionExpired(false);
-                setView('login');
+                navigate('/login');
               }}
               className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-cyan-500 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)]"
             >

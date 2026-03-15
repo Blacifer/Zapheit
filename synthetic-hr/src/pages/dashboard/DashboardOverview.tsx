@@ -3,13 +3,17 @@ import {
   Activity,
   ArrowRight,
   Bot,
+  CheckCircle2,
   Layers3,
   RefreshCw,
   ShieldAlert,
+  ShoppingBag,
   Siren,
   Sparkles,
   TrendingUp,
   Users,
+  XCircle,
+  Zap,
 } from 'lucide-react';
 import type { AIAgent, Incident, CostData } from '../../types';
 import OperationalMetrics from '../../components/OperationalMetrics';
@@ -641,6 +645,62 @@ export default function DashboardOverview({
           </div>
         </section>
       </div>
+
+      {/* App Health widget */}
+      {(telemetry?.integrations.total ?? 0) > 0 ? (
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <SectionEyebrow label="Integration health" />
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">App Health</h2>
+              <p className="mt-1 text-sm text-slate-400">Live status of installed apps powering your agents.</p>
+            </div>
+            <button
+              onClick={() => onNavigate?.('marketplace')}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 transition hover:text-white"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              App Store
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-center">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold tabular-nums text-emerald-300">{telemetry.integrations.healthy}</p>
+              <p className="text-xs text-slate-400 mt-1">Connected</p>
+            </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-center">
+              <XCircle className="w-5 h-5 text-amber-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold tabular-nums text-amber-300">{telemetry.integrations.degraded}</p>
+              <p className="text-xs text-slate-400 mt-1">Degraded</p>
+            </div>
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4 text-center">
+              <Zap className="w-5 h-5 text-slate-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold tabular-nums text-slate-200">{telemetry.integrations.total}</p>
+              <p className="text-xs text-slate-400 mt-1">Total apps</p>
+            </div>
+          </div>
+          {telemetry.integrations.degraded > 0 ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3">
+              <p className="text-sm text-amber-200">
+                <span className="font-semibold">{telemetry.integrations.degraded} app{telemetry.integrations.degraded > 1 ? 's' : ''}</span> need attention — re-auth or check credentials.
+              </p>
+              <button
+                onClick={() => onNavigate?.('integrations')}
+                className="shrink-0 text-xs font-semibold text-amber-300 hover:text-amber-100 transition-colors inline-flex items-center gap-1"
+              >
+                Fix now <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] px-4 py-3">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-200">All connected apps are healthy.</p>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">

@@ -22,6 +22,7 @@ import {
   Link2,
   Mail,
   Shield,
+  ShoppingBag,
   Sparkles,
   Users,
   Wrench,
@@ -1102,6 +1103,28 @@ export default function IntegrationsPage({
         </div>
       </div>
 
+      {/* App Store discovery banner */}
+      <div className="mt-5 rounded-2xl border border-violet-400/20 bg-violet-500/[0.06] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-4 h-4 text-violet-300" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white">Looking for more integrations?</div>
+            <div className="text-xs text-slate-400 mt-0.5 truncate">
+              Browse the App Store to add partner apps — they appear here once connected.
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => onNavigate?.('marketplace')}
+          className="shrink-0 px-4 py-2 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 hover:bg-violet-500/30 transition-colors text-sm font-semibold inline-flex items-center gap-2"
+        >
+          <ShoppingBag className="w-3.5 h-3.5" />
+          Browse App Store
+        </button>
+      </div>
+
       {entryMode === 'publish' && effectiveAgentContext ? (
         <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/[0.07] p-5">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1203,6 +1226,15 @@ export default function IntegrationsPage({
                   </button>
                 </div>
               </div>
+              {stats.configured === 0 && (
+                <button
+                  onClick={() => onNavigate?.('marketplace')}
+                  className="mt-3 w-full py-2 rounded-xl border border-dashed border-violet-400/25 bg-violet-500/[0.05] text-violet-300 hover:bg-violet-500/10 transition-colors text-xs font-medium inline-flex items-center justify-center gap-1.5"
+                >
+                  <ShoppingBag className="w-3 h-3" />
+                  Add apps from App Store
+                </button>
+              )}
             </div>
           );
           })}

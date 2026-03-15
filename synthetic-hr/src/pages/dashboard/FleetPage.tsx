@@ -3,7 +3,7 @@ import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
-  ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
+  ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
@@ -76,6 +76,7 @@ export default function FleetPage({
   const [currentDeployment, setCurrentDeployment] = useState<any | null>(null);
   const [createdEnrollment, setCreatedEnrollment] = useState<{ runtimeId: string; token: string; expiresAt: string } | null>(null);
   const [testJob, setTestJob] = useState<any | null>(null);
+  const [suggestedApps, setSuggestedApps] = useState<any[]>([]);
   const [testJobBusy, setTestJobBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
@@ -123,6 +124,29 @@ export default function FleetPage({
       operationalPolicy: String((agent as any)?.config?.operational_policy || ''),
     });
   }, [agents, workspaceAgentId]);
+
+  useEffect(() => {
+    if (!workspaceAgentId) return;
+    const agent = agents.find((a) => a.id === workspaceAgentId);
+    if (!agent) return;
+    api.marketplace.getAll().then((res) => {
+      if (!res.success || !res.data) return;
+      const pack = agent.primaryPack || '';
+      const packToCategory: Record<string, string[]> = {
+        recruitment: ['recruitment', 'hr'],
+        support: ['communication', 'support'],
+        finance: ['finance', 'payroll'],
+        sales: ['sales', 'analytics'],
+        it: ['it', 'security'],
+        compliance: ['compliance'],
+      };
+      const cats = packToCategory[pack] || [];
+      const uninstalled = (res.data as any[]).filter(
+        (app) => !app.connectionStatus && (cats.length === 0 || cats.includes(app.category))
+      );
+      setSuggestedApps(uninstalled.slice(0, 3));
+    }).catch(() => {});
+  }, [workspaceAgentId]);
 
   const loadWorkspace = async (agentId: string) => {
     setWorkspaceState((current) => ({
@@ -1084,7 +1108,7 @@ export default function FleetPage({
 
           <div className="p-6">
             {workspaceTab === 'overview' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <><div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-2">
                   <h3 className="text-sm font-semibold text-white">Publish status</h3>
                   <p className="text-sm text-slate-400 mt-1">
@@ -1233,7 +1257,57 @@ export default function FleetPage({
                   </button>
                 </div>
               </div>
-            ) : null}
+
+              {suggestedApps.length > 0 && (
+                <div className="mt-4 rounded-2xl border border-violet-400/15 bg-violet-500/[0.04] p-5">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4 text-violet-300" />
+                      <h3 className="text-sm font-semibold text-white">Suggested Apps</h3>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/20 text-violet-300">
+                        For this agent
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => onOpenOperationsPage?.('marketplace')}
+                      className="text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors inline-flex items-center gap-1"
+                    >
+                      Browse all
+                      <Zap className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {suggestedApps.map((app) => (
+                      <div
+                        key={app.id}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          {app.logoUrl ? (
+                            <img src={app.logoUrl} alt={app.name} className="w-6 h-6 rounded object-contain" />
+                          ) : (
+                            <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center">
+                              <ShoppingBag className="w-3 h-3 text-slate-400" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-white truncate">{app.name}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 line-clamp-2">{app.description}</p>
+                        {app.setupTimeMinutes && (
+                          <span className="text-[11px] text-slate-500">⏱ {app.setupTimeMinutes} min setup</span>
+                        )}
+                        <button
+                          onClick={() => onOpenOperationsPage?.('marketplace')}
+                          className="mt-auto pt-2 text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors text-left inline-flex items-center gap-1"
+                        >
+                          Add to workspace →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>) : null}
 
             {workspaceTab === 'conversations' ? (
               <div className="space-y-4">

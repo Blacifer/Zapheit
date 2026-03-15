@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { initSentry } from './lib/sentry'
 import { validateFrontendEnvironment } from './lib/env-validation'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
@@ -13,10 +14,12 @@ validateFrontendEnvironment();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </ErrorBoundary>
+    <BrowserRouter>
+      <ErrorBoundary>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </ErrorBoundary>
+    </BrowserRouter>
   </StrictMode>,
 )

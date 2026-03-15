@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, Key, Loader2, Rocket, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Copy, Gavel, HandCoins, Headset, Key, Loader2, Rocket, ShieldCheck, ShoppingBag, Sparkles, Trash2, Wrench, Zap } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AIAgent } from '../../types';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 
-type StepId = 'workspace' | 'key' | 'agent' | 'test' | 'verify';
+type StepId = 'workspace' | 'key' | 'agent' | 'apps' | 'test' | 'verify';
 
 type LiveModel = { id: string; name?: string; provider?: string };
 
@@ -52,6 +52,7 @@ export default function GettingStartedPage(props: {
 
   const [testPrompt, setTestPrompt] = useState('Write a short welcome message for a new employee joining today.');
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [installedAppCount, setInstalledAppCount] = useState(0);
 
   const selectedAgent = useMemo(() => {
     return props.agents.find((agent) => agent.id === selectedAgentId) || null;
@@ -111,6 +112,9 @@ export default function GettingStartedPage(props: {
     if (props.agents.length > 0) {
       setSelectedAgentId(props.agents[0].id);
     }
+    api.marketplace.getInstalled().then((res) => {
+      if (res.success && Array.isArray(res.data)) setInstalledAppCount(res.data.length);
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -360,6 +364,7 @@ export default function GettingStartedPage(props: {
           <StepPill id="workspace" label="Workspace status" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
           <StepPill id="key" label="Create temporary key" icon={Key} done={Boolean(apiKeySecret) || hasAnyKey} />
           <StepPill id="agent" label="Create or select agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
+          <StepPill id="apps" label="Connect an app" icon={ShoppingBag} done={installedAppCount > 0} />
           <StepPill id="test" label="Send test request" icon={Rocket} done={Boolean(testResult)} />
           <StepPill id="verify" label="Verify coverage" icon={CheckCircle2} done={hasGatewayTraffic} />
         </div>
@@ -614,11 +619,79 @@ export default function GettingStartedPage(props: {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setStep('test')}
+                    onClick={() => setStep('apps')}
                     className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
-                    disabled={!apiKeySecret}
                   >
                     Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'apps' && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Connect an app</h2>
+                  <p className="text-slate-400 mt-1 text-sm">
+                    Apps give your agents real capabilities — like processing refunds, classifying support tickets, or sourcing candidates. Pick a use case to get started.
+                  </p>
+                </div>
+
+                {installedAppCount > 0 ? (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">{installedAppCount} app{installedAppCount !== 1 ? 's' : ''} connected</p>
+                      <p className="text-xs text-emerald-200/80 mt-0.5">Your agents are ready to use them.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[
+                      { icon: BriefcaseBusiness, label: 'Hiring',            color: '#7C3AED', desc: 'LinkedIn + Greenhouse' },
+                      { icon: Headset,           label: 'Support',           color: '#2563EB', desc: 'Zendesk + Freshdesk' },
+                      { icon: HandCoins,         label: 'Finance',           color: '#DC2626', desc: 'Stripe + QuickBooks' },
+                      { icon: Building2,         label: 'Sales',             color: '#059669', desc: 'HubSpot + Salesforce' },
+                      { icon: Wrench,            label: 'IT / Access',       color: '#D97706', desc: 'Okta + Jira SM' },
+                      { icon: Gavel,             label: 'Compliance',        color: '#0891B2', desc: 'ClearTax' },
+                    ].map(({ icon: Icon, label, color, desc }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => props.onNavigate('marketplace')}
+                        className="flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-700 bg-slate-900/30 hover:bg-slate-800/50 text-left transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: color + '25', border: `1px solid ${color}40` }}>
+                          <Icon className="w-4 h-4" style={{ color }} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-white leading-tight">{label}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => props.onNavigate('marketplace')}
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    Browse App Store
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep('test')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700 flex items-center gap-2"
+                  >
+                    {installedAppCount > 0 ? (
+                      <><Zap className="w-4 h-4 text-emerald-400" /> Continue to test</>
+                    ) : (
+                      <><ArrowRight className="w-4 h-4" /> Skip for now</>
+                    )}
                   </button>
                 </div>
               </div>

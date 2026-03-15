@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
@@ -235,8 +236,11 @@ function buildCoverageNotifications(
 }
 
 export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Derive current page from URL path: /dashboard/fleet → 'fleet'
+  const currentPage = location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || 'overview';
   const [mounted, setMounted] = useState(false);
-  const [currentPage, setCurrentPage] = useState('overview');
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [integrationRows, setIntegrationRows] = useState<IntegrationSummaryRow[]>([]);
   const [agentConnections, setAgentConnections] = useState<Record<string, AgentConnectionDraft>>({});
@@ -264,8 +268,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     if (userInitiated) {
       hasUserNavigatedRef.current = true;
     }
-    setCurrentPage(page);
-  }, []);
+    navigate(`/dashboard/${page}`);
+  }, [navigate]);
 
   const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
     const type = String(agent.agent_type || '').toLowerCase();
@@ -898,28 +902,18 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           </div>
 
           <nav className="flex-1 space-y-1" role="navigation" aria-label="Main navigation">
+            {/* ── Workspace ── */}
             {[
               { id: 'getting-started', icon: Sparkles, label: 'Getting Started', badge: needsOnboarding ? 'Recommended' : null },
               { id: 'overview', icon: BarChart3, label: 'Overview' },
-              { id: 'fleet', icon: Users, label: 'Fleet' },
-              { id: 'templates', icon: Zap, label: 'Templates' },
-              { id: 'agent-library', icon: Bot, label: 'Agent Library' },
-              { id: 'marketplace', icon: ShoppingBag, label: 'Marketplace' },
-              { id: 'integrations', icon: Link2, label: 'Integrations' },
-              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
-              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-              { id: 'costs', icon: DollarSign, label: 'Costs' },
-              { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
-              { id: 'api-access', icon: Key, label: 'API Access' },
-              { id: 'settings', icon: Settings, label: 'Settings' },
             ].map((item) => (
-	              <button
-	                key={item.id}
-	                onClick={() => navigateTo(item.id)}
-	                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-	                aria-current={currentPage === item.id ? 'page' : undefined}
-	                aria-label={item.label}
-	              >
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
                 <item.icon className="w-5 h-5" aria-hidden="true" />
                 <span className="flex-1 min-w-0 text-left">{item.label}</span>
                 {item.badge ? (
@@ -930,8 +924,95 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               </button>
             ))}
 
-            <div className="px-2 pt-5 pb-2">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Advanced Tools</div>
+            {/* ── Agents ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Agents</div>
+            </div>
+            {[
+              { id: 'fleet', icon: Users, label: 'Fleet' },
+              { id: 'templates', icon: Zap, label: 'Templates' },
+              { id: 'agent-library', icon: Bot, label: 'Agent Library' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
+              </button>
+            ))}
+
+            {/* ── Apps & Data ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Apps & Data</div>
+            </div>
+            {[
+              { id: 'marketplace', icon: ShoppingBag, label: 'Apps', sublabel: 'Browse & install' },
+              { id: 'integrations', icon: Link2, label: 'Connections', sublabel: 'Manage configured' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">
+                  <span className="block text-[13px] leading-tight">{item.label}</span>
+                  <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">{item.sublabel}</span>
+                </span>
+              </button>
+            ))}
+
+            {/* ── Monitor ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Monitor</div>
+            </div>
+            {[
+              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
+              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
+              { id: 'costs', icon: DollarSign, label: 'Costs' },
+              { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
+              </button>
+            ))}
+
+            {/* ── Configure ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Configure</div>
+            </div>
+            {[
+              { id: 'api-access', icon: Key, label: 'API Access' },
+              { id: 'settings', icon: Settings, label: 'Settings' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
+              </button>
+            ))}
+
+            {/* ── Advanced Tools ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Advanced Tools</div>
             </div>
             {[
               { id: 'developer', icon: PlugZap, label: 'Developer' },
@@ -1249,7 +1330,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {currentPage === 'batch' && <BatchProcessingPage />}
                 {currentPage === 'fine-tuning' && <ModelFineTuningPage />}
                 {currentPage === 'caching' && <CachingPage />}
-                {currentPage === 'marketplace' && <MarketplacePage onNavigate={navigateTo} />}
+                {currentPage === 'marketplace' && <MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />}
                 {currentPage === 'developer' && <DeveloperPage onNavigate={navigateTo} />}
                 {currentPage === 'agent-library' && (
                   <DomainAgentLibraryPage

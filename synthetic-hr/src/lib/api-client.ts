@@ -2946,6 +2946,9 @@ export type MarketplaceApp = {
   description: string;
   permissions: string[];
   relatedAgentIds: string[];
+  actionsUnlocked: string[];
+  setupTimeMinutes: number;
+  bundleIds: string[];
   installMethod: 'free' | 'api_key' | 'oauth2';
   requiredFields?: Array<{ name: string; label: string; type: 'text' | 'password'; placeholder?: string; required: boolean }>;
   installCount: number;
@@ -2954,11 +2957,31 @@ export type MarketplaceApp = {
   colorHex: string;
   logoLetter: string;
   installed: boolean;
+  connectionStatus?: string | null;
+  lastSyncAt?: string | null;
+  lastErrorAt?: string | null;
+  lastErrorMsg?: string | null;
+  comingSoon?: boolean;
+  connectionSource?: 'marketplace' | 'connections' | null;
+};
+
+export type AppBundle = {
+  id: string;
+  name: string;
+  description: string;
+  intentLabel: string;
+  appIds: string[];
+  colorHex: string;
+  icon: string;
 };
 
 export const marketplaceApi = {
   async getAll(): Promise<ApiResponse<MarketplaceApp[]>> {
     return authenticatedFetch<MarketplaceApp[]>('/marketplace/apps', { method: 'GET' });
+  },
+
+  async getBundles(): Promise<ApiResponse<AppBundle[]>> {
+    return authenticatedFetch<AppBundle[]>('/marketplace/bundles', { method: 'GET' });
   },
 
   async getInstalled(): Promise<ApiResponse<MarketplaceApp[]>> {
