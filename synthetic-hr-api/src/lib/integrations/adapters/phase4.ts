@@ -338,7 +338,10 @@ export const JiraAdapter: IntegrationAdapter = {
         method: 'GET',
         headers: { Authorization: basicAuthHeader(email, apiToken), Accept: 'application/json' },
       });
-      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      if (res.status === 401) return { success: false, message: 'Invalid credentials — check your email and API token' };
+      if (res.status === 403) return { success: false, message: 'Access denied — ensure your API token has the right permissions' };
+      if (res.status === 404) return { success: false, message: 'Jira not found at this URL — verify Jira Software is activated on your Atlassian site and the base URL is correct (e.g. https://yourcompany.atlassian.net)' };
+      if (!res.ok) return { success: false, message: `Jira API error: ${res.status}` };
       return { success: true, message: 'Connected to Jira successfully' };
     } catch (err: any) {
       return { success: false, message: `Connection failed: ${err?.message || String(err)}` };

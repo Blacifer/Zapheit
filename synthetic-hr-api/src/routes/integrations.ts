@@ -440,6 +440,9 @@ async function buildOAuthAuthorizeUrl(params: {
   const apiBase = getApiBaseUrl(req);
   const redirectUri = `${apiBase}${spec.oauthConfig.redirectPath}`;
 
+  const needsPkce = service === 'salesforce';
+  const codeVerifier = needsPkce ? crypto.randomBytes(32).toString('base64url') : undefined;
+
   const state = await signOAuthState({
     orgId,
     userId,
@@ -447,6 +450,7 @@ async function buildOAuthAuthorizeUrl(params: {
     returnTo,
     connection,
     nonce: crypto.randomUUID(),
+    ...(codeVerifier ? { codeVerifier } : {}),
   });
 
   const oauthResolvedAuthUrl = resolveUrlTemplate(spec.oauthConfig.authorizationUrl, connection);
@@ -493,6 +497,11 @@ async function buildOAuthAuthorizeUrl(params: {
   }
   if (service === 'okta') {
     authUrl.searchParams.set('nonce', crypto.randomUUID());
+  }
+  if (needsPkce && codeVerifier) {
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
   }
 
   return { url: authUrl.toString() };
@@ -1101,6 +1110,7 @@ router.get('/oauth/callback/:service', async (req, res) => {
 
   const orgId = String(parsedState.orgId);
   const connection = (parsedState.connection && typeof parsedState.connection === 'object') ? (parsedState.connection as Record<string, string>) : {};
+  const pkceVerifier = typeof parsedState.codeVerifier === 'string' ? parsedState.codeVerifier : undefined;
   const apiBase = getApiBaseUrl(req);
   const redirectUri = `${apiBase}${spec.oauthConfig.redirectPath}`;
 
@@ -1203,6 +1213,7 @@ router.get('/oauth/callback/:service', async (req, res) => {
           client_secret: clientSecret,
           redirect_uri: redirectUri,
           code,
+          ...(pkceVerifier ? { code_verifier: pkceVerifier } : {}),
         });
       }
     }
