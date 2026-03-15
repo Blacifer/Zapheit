@@ -828,7 +828,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://app.deel.com/oauth2/authorize',
       tokenUrl: 'https://app.deel.com/oauth2/token',
-      scopes: ['read:contracts', 'write:contracts', 'read:employees', 'write:employees', 'read:payroll'],
+      scopes: [],
       redirectPath: `${API_CALLBACK_BASE}/deel`,
     },
     endpoints: {

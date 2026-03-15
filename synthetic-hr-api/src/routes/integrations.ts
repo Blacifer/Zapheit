@@ -481,7 +481,9 @@ async function buildOAuthAuthorizeUrl(params: {
   authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', state);
-  authUrl.searchParams.set('scope', spec.oauthConfig.scopes.join(' '));
+  if (spec.oauthConfig.scopes.length > 0) {
+    authUrl.searchParams.set('scope', spec.oauthConfig.scopes.join(' '));
+  }
 
   if (service === 'google_workspace') {
     authUrl.searchParams.set('access_type', 'offline');
