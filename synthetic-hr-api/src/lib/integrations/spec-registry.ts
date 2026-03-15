@@ -268,7 +268,7 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoRecruit.modules.ALL'],
+      scopes: ['ZohoRecruit.modules.ALL', 'offline_access'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_recruit`,
     },
     endpoints: {
@@ -450,7 +450,7 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoLearn.course.READ'],
+      scopes: ['ZohoLearn.course.READ', 'ZohoLearn.course.ALL', 'offline_access'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_learn`,
     },
     endpoints: {
