@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
-  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield, Bot, ShoppingBag
+  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield, Bot
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -44,6 +44,7 @@ const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
 const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
 const DomainAgentLibraryPage = lazy(() => import('./dashboard/DomainAgentLibraryPage'));
 const MarketplacePage = lazy(() => import('./dashboard/MarketplacePage'));
+const ConnectorsPage = lazy(() => import('./dashboard/ConnectorsPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -916,24 +917,15 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             <div className="px-2 pt-4 pb-1.5">
               <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Apps & Data</div>
             </div>
-            {[
-              { id: 'marketplace', icon: ShoppingBag, label: 'Apps', sublabel: 'Browse & install' },
-              { id: 'integrations', icon: Link2, label: 'Connections', sublabel: 'Manage configured' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">
-                  <span className="block text-[13px] leading-tight">{item.label}</span>
-                  <span className="block text-[10px] text-slate-500 leading-tight mt-0.5">{item.sublabel}</span>
-                </span>
-              </button>
-            ))}
+            <button
+              onClick={() => navigateTo('connectors')}
+              className={cn('nav-item', currentPage === 'connectors' && 'nav-item-active')}
+              aria-current={currentPage === 'connectors' ? 'page' : undefined}
+              aria-label="Connectors"
+            >
+              <Link2 className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 min-w-0 text-left">Connectors</span>
+            </button>
 
             {/* ── Monitor ── */}
             <div className="px-2 pt-4 pb-1.5">
@@ -1304,6 +1296,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       }}
                     />
                   } />
+                  <Route path="connectors" element={<ConnectorsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
                   <Route path="marketplace" element={<MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />} />
                   <Route path="integrations" element={
                     <IntegrationsPage
