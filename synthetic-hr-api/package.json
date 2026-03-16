@@ -24,7 +24,7 @@
     "@opentelemetry/sdk-node": "^0.213.0",
     "@opentelemetry/sdk-trace-node": "^2.6.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "@sentry/node": "^10.42.0",
+    "@sentry/node": "^10.43.0",
     "@supabase/supabase-js": "^2.99.0",
     "@types/multer": "^2.0.0",
     "compression": "^1.7.4",
