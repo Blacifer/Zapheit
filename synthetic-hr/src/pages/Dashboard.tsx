@@ -799,14 +799,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     }
   };
 
-  const saveApiKeys = async (newApiKeys: ApiKey[]) => {
+  const saveApiKeys = useCallback(async (newApiKeys: ApiKey[]) => {
     try {
       setApiKeys(newApiKeys);
     } catch (err) {
       console.error('Failed to save API keys:', err);
       setError('Failed to save API keys. Storage may be full.');
     }
-  };
+  }, []);
 
   // Live Budget Monitoring and Cost Simulation
   useEffect(() => {
