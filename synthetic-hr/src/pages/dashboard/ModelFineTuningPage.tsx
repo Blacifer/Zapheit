@@ -466,21 +466,22 @@ export default function ModelFineTuningPage() {
         const response = await api.fineTunes.getOpenAIJobStatus(job.providerJobId!);
         if (!response.success || !response.data) continue;
 
+        const jobData = response.data;
         setJobs(prev => prev.map(existing => {
           if (existing.id !== job.id) return existing;
 
           let nextStatus: FineTuneJob['status'] = existing.status;
-          if (response.data.status === 'queued' || response.data.status === 'validating_files') nextStatus = 'provider_queued';
-          else if (response.data.status === 'running') nextStatus = 'provider_running';
-          else if (response.data.status === 'succeeded') nextStatus = 'provider_succeeded';
-          else if (response.data.status === 'failed' || response.data.status === 'cancelled') nextStatus = 'provider_failed';
+          if (jobData.status === 'queued' || jobData.status === 'validating_files') nextStatus = 'provider_queued';
+          else if (jobData.status === 'running') nextStatus = 'provider_running';
+          else if (jobData.status === 'succeeded') nextStatus = 'provider_succeeded';
+          else if (jobData.status === 'failed' || jobData.status === 'cancelled') nextStatus = 'provider_failed';
 
           return {
             ...existing,
             status: nextStatus,
-            providerStatusText: response.data.status,
-            fineTunedModel: response.data.fineTunedModel,
-            trainedTokens: response.data.trainedTokens,
+            providerStatusText: jobData.status,
+            fineTunedModel: jobData.fineTunedModel,
+            trainedTokens: jobData.trainedTokens,
           };
         }));
       }
@@ -619,13 +620,14 @@ export default function ModelFineTuningPage() {
           toast.error(response.error || 'OpenAI fine-tune creation failed');
           setJobs(prev => [baseJob, ...prev]);
         } else {
+          const createdJob = response.data;
           setJobs(prev => [{
             ...baseJob,
             status: 'provider_queued',
             providerState: 'openai_submitted',
-            providerJobId: response.data.id,
-            providerStatusText: response.data.status,
-            trainedTokens: response.data.trainedTokens,
+            providerJobId: createdJob.id,
+            providerStatusText: createdJob.status,
+            trainedTokens: createdJob.trainedTokens,
           }, ...prev]);
           toast.success('OpenAI fine-tune job created and queued');
         }

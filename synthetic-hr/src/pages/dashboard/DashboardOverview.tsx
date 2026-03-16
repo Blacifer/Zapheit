@@ -611,7 +611,7 @@ const hasData = agents.length > 0;
       </div>
 
       {/* App Health widget */}
-      {(telemetry?.integrations.total ?? 0) > 0 ? (
+      {telemetry && telemetry.integrations.total > 0 ? (
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
           <div className="flex items-center justify-between gap-4 mb-5">
             <div>

@@ -95,7 +95,7 @@ function isSparseConversation(conversation: ConversationRecord) {
 
 function normalizeConversationDetail(raw: any, agents: AIAgent[]): ConversationDetail {
   const base = normalizeConversation(raw, agents);
-  const messages = Array.isArray(raw?.messages)
+  const messages: ConversationMessage[] = Array.isArray(raw?.messages)
     ? raw.messages.map((message: any) => ({
       id: message.id,
       role: message.role || 'user',

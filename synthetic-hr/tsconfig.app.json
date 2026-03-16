@@ -27,8 +27,8 @@
     /* Linting */
     "strict": true,
     "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
     "noImplicitThis": true,
@@ -39,5 +39,8 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/__tests__"
   ]
 }

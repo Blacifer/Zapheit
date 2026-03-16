@@ -336,7 +336,7 @@ export default function CostsPage({ costData, setCostData, agents, incidents, on
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => chartMode === 'cost' ? `₹${v}` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v)}
+                tickFormatter={(v: number) => chartMode === 'cost' ? `₹${v}` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v)}
                 domain={totalCost === 0 && chartMode === 'cost' ? [0, 10] : undefined}
               />
               <Tooltip content={<SpendingTooltip mode={chartMode} />} />

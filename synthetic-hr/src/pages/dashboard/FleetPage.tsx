@@ -116,6 +116,7 @@ export default function FleetPage({
       return () => window.clearTimeout(timer);
     } catch {
       localStorage.removeItem('rasi_safe_harbor_focus');
+      return;
     }
   }, []);
 

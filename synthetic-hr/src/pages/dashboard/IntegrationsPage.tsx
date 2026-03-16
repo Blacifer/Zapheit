@@ -956,7 +956,7 @@ export default function IntegrationsPage({
       const next = {
         agentId: selectedAgent.id,
         agentName: selectedAgent.name,
-        recommendedPackId: recommendedPackId || selectedAgent.primaryPack || null,
+        recommendedPackId: recommendedPackId || selectedAgent.primaryPack || undefined,
       };
       setPersistedContext(next);
       localStorage.setItem(PUBLISH_CONTEXT_STORAGE_KEY, JSON.stringify(next));
