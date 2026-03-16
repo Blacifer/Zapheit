@@ -1,6 +1,5 @@
 {
   "framework": "vite",
-  "nodeVersion": "20.x",
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
   "rewrites": [
