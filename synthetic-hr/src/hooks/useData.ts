@@ -224,7 +224,15 @@ export const useCostData = (period: '7d' | '30d' | '90d' = '30d', options?: { en
       const res = await api.costs.getAnalytics({ period });
       if (!res.success) throw new Error(res.error ?? 'Failed to fetch cost data');
       return {
-        costData: (res.data?.data ?? []) as CostData[],
+        costData: (res.data?.data ?? []).map((item: any) => ({
+          id: item.id as string,
+          date: item.date as string,
+          cost: (item.cost_usd as number) || 0,
+          tokens: (item.total_tokens as number) || 0,
+          requests: (item.request_count as number) || 0,
+          agent_id: item.agent_id as string | undefined,
+          model: (item.model_name as string | undefined),
+        })) as CostData[],
         totals: res.data?.totals ?? { totalCost: 0, totalTokens: 0, totalRequests: 0 },
       };
     },
