@@ -17,7 +17,7 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -35,7 +35,7 @@ jobs:
     env:
       PNPM_STORE_PATH: ~/.pnpm-store
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 20
