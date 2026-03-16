@@ -194,6 +194,21 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
 };
 
 /**
+ * Immediately evict a specific key from the cache by its database ID.
+ * Call this on revoke and rotate so the old key stops working instantly
+ * rather than waiting for the 5-minute TTL to expire.
+ */
+export const invalidateApiKeyById = (keyId: string): void => {
+  for (const [plaintext, entry] of API_KEY_CACHE.entries()) {
+    if (entry.id === keyId) {
+      API_KEY_CACHE.delete(plaintext);
+      logger.info('API key evicted from cache', { key_id: keyId });
+      break;
+    }
+  }
+};
+
+/**
  * Cache clear function for testing
  */
 export const clearApiKeyCache = () => {

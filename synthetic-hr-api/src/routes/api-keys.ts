@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/rbac';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { buildUsageSeries, getApiKeyUsageState, summarizeUsage } from '../lib/api-key-usage';
+import { invalidateApiKeyById } from '../middleware/api-key-validation';
 
 const router = express.Router();
 
@@ -401,6 +402,10 @@ router.delete('/api-keys/:id', requirePermission('settings.update'), async (req:
       });
     }
 
+    // Immediately evict from in-memory cache so the key stops working now,
+    // not after the 5-minute TTL expires.
+    invalidateApiKeyById(req.params.id);
+
     auditLog.log({
       user_id: req.user?.id || 'unknown',
       action: 'api_key.revoked',
@@ -437,6 +442,9 @@ router.post('/api-keys/:id/refresh', requirePermission('settings.update'), async
       last_used: null,
       updated_at: new Date().toISOString(),
     }, userJwt);
+
+    // Evict the old key from cache — its hash no longer matches the DB record.
+    invalidateApiKeyById(req.params.id);
 
     auditLog.log({
       user_id: req.user?.id || 'unknown',

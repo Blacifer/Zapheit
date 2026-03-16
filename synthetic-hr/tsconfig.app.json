@@ -25,16 +25,17 @@
     "noEmit": true,
     "jsx": "react-jsx",
     /* Linting */
-    "strict": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    /* These two generate too many false positives on index signatures / arrays
+       and should be enabled incrementally after the above are clean. */
     "noUncheckedIndexedAccess": false,
-    "noImplicitReturns": false,
-    "noImplicitThis": false,
-    "noPropertyAccessFromIndexSignature": false,
-    "noUncheckedSideEffectImports": false
+    "noPropertyAccessFromIndexSignature": false
   },
   "include": [
     "src"

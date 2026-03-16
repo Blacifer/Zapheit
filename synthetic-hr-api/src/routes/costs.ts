@@ -1,8 +1,14 @@
 import express, { Request, Response } from 'express';
-import { supabaseRestAsUser, eq, gte, lte } from '../lib/supabase-rest';
-import { requirePermission } from '../middleware/rbac';
-import { logger } from '../lib/logger';
 import { z } from 'zod';
+import { supabaseRestAsUser, eq, gte, lte } from '../lib/supabase-rest';
+import { requirePermission, requireRole } from '../middleware/rbac';
+import { logger } from '../lib/logger';
+import { validateRequestBody, costSchemas } from '../schemas/validation';
+import { fireAndForgetWebhookEvent, getWebhookRelaySettings } from '../lib/webhook-relay';
+import { getPromptCachingState, updatePromptCachingPolicy } from '../lib/prompt-caching';
+import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingConfig } from '../lib/pricing';
+import { generateSafeHarborDocument, getSafeHarborState, updateSafeHarborConfig, updateSafeHarborContract } from '../lib/safe-harbor';
+import { calculateTokenCost } from '../services/ai-service';
 
 const router = express.Router();
 
@@ -373,6 +379,278 @@ router.get('/costs/optimization-recommendations', requirePermission('costs.read'
     res.json({ success: true, recommendations });
   } catch (error: any) {
     logger.error('Cost recommendations failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Cost CRUD ─────────────────────────────────────────────────────────────────
+
+// Get cost analytics (basic period-based summary)
+router.get('/costs', requirePermission('costs.read'), async (req: Request, res: Response) => {
+  try {
+    const { agent_id, period = '30d' } = req.query;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return res.status(400).json({ success: false, error: 'Organization not found' });
+    }
+
+    let days = 30;
+    if (period === '7d') days = 7;
+    if (period === '90d') days = 90;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    logger.info('Fetching cost analytics', { org_id: orgId, period, agent_id });
+
+    const costsQuery = new URLSearchParams();
+    costsQuery.set('organization_id', eq(orgId));
+    costsQuery.set('date', gte(startDateStr));
+    costsQuery.set('order', 'date.asc');
+    if (agent_id) costsQuery.set('agent_id', eq(String(agent_id)));
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', costsQuery);
+
+    const totals = data?.reduce(
+      (acc: any, item: any) => ({
+        totalCost: acc.totalCost + (item.cost_usd || 0),
+        totalTokens: acc.totalTokens + (item.total_tokens || 0),
+        totalRequests: acc.totalRequests + (item.request_count || 0),
+      }),
+      { totalCost: 0, totalTokens: 0, totalRequests: 0 }
+    ) || { totalCost: 0, totalTokens: 0, totalRequests: 0 };
+
+    const byDate = data?.reduce((acc: any, item: any) => {
+      if (!acc[item.date]) {
+        acc[item.date] = { cost: 0, tokens: 0, requests: 0 };
+      }
+      acc[item.date].cost += item.cost_usd || 0;
+      acc[item.date].tokens += item.total_tokens || 0;
+      acc[item.date].requests += item.request_count || 0;
+      return acc;
+    }, {});
+
+    logger.info('Cost analytics fetched successfully', { org_id: orgId, total_cost: totals.totalCost });
+
+    res.json({ success: true, data, totals, byDate, period: days });
+  } catch (error: any) {
+    logger.error('Cost fetch failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create a cost tracking entry
+router.post('/costs', requirePermission('costs.create'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return res.status(400).json({ success: false, error: 'Organization not found' });
+    }
+
+    const { valid, data: validatedData, errors } = validateRequestBody<z.infer<typeof costSchemas.create>>(costSchemas.create, req.body);
+    if (!valid || !validatedData) {
+      logger.warn('Invalid cost record request', { errors });
+      return res.status(400).json({ success: false, errors });
+    }
+
+    const { agent_id, conversation_id, model_name, input_tokens, output_tokens, request_count, avg_latency_ms } = validatedData;
+    const totalTokens = (input_tokens || 0) + (output_tokens || 0);
+
+    const agentLookupQuery = new URLSearchParams();
+    agentLookupQuery.set('id', eq(agent_id));
+    agentLookupQuery.set('organization_id', eq(orgId));
+    const agentData = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', agentLookupQuery);
+    const agent = agentData?.[0];
+    const platform = (agent?.platform as 'openai' | 'anthropic') || 'openai';
+
+    const costUSD = calculateTokenCost(platform, model_name || 'gpt-4o', input_tokens || 0, output_tokens || 0);
+
+    logger.info('Recording cost', { org_id: orgId, agent_id, cost_usd: costUSD });
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id,
+        conversation_id,
+        date: new Date().toISOString().split('T')[0],
+        model_name,
+        input_tokens: input_tokens || 0,
+        output_tokens: output_tokens || 0,
+        total_tokens: totalTokens,
+        cost_usd: costUSD,
+        request_count: request_count || 1,
+        avg_latency_ms,
+      },
+    });
+
+    logger.info('Cost recorded successfully', { cost_id: data?.[0]?.id, cost_usd: costUSD });
+
+    fireAndForgetWebhookEvent(orgId, 'usage.updated', {
+      id: `evt_usage_${data?.[0]?.id || crypto.randomUUID()}`,
+      type: 'usage.updated',
+      created_at: new Date().toISOString(),
+      organization_id: orgId,
+      data: { cost_id: data?.[0]?.id, agent_id, conversation_id, model_name, input_tokens: input_tokens || 0, output_tokens: output_tokens || 0, total_tokens: totalTokens, cost_usd: costUSD, request_count: request_count || 1, avg_latency_ms },
+    });
+
+    try {
+      const relaySettings = await getWebhookRelaySettings(orgId);
+      const billingControls = relaySettings.rasi_billing_controls || {};
+      const monthlyLimitInr = Number(billingControls.monthlyLimitInr || 0);
+      const warnAtPercent = Number(billingControls.warnAtPercent || 0);
+      if (monthlyLimitInr > 0 && warnAtPercent > 0) {
+        const monthStart = new Date();
+        monthStart.setUTCDate(1);
+        const monthQuery = new URLSearchParams();
+        monthQuery.set('organization_id', eq(orgId));
+        monthQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
+        const monthlyCosts = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', monthQuery)) as any[];
+        const totalCostUsd = monthlyCosts.reduce((sum, row) => sum + Number(row.cost_usd || 0), 0);
+        const previousTotalUsd = Math.max(0, totalCostUsd - costUSD);
+        const toInr = (usd: number) => usd * 83;
+        const warnThresholdInr = monthlyLimitInr * (warnAtPercent / 100);
+        if (toInr(previousTotalUsd) < warnThresholdInr && toInr(totalCostUsd) >= warnThresholdInr) {
+          fireAndForgetWebhookEvent(orgId, 'cost.alert', {
+            id: `evt_cost_alert_${data?.[0]?.id || crypto.randomUUID()}`,
+            type: 'cost.alert',
+            created_at: new Date().toISOString(),
+            organization_id: orgId,
+            data: { threshold_percent: warnAtPercent, current_month_spend_inr: Math.round(toInr(totalCostUsd)), configured_limit_inr: monthlyLimitInr, triggered_by_cost_id: data?.[0]?.id, triggered_by_agent_id: agent_id },
+          });
+        }
+      }
+    } catch (webhookError: any) {
+      logger.warn('Failed to evaluate webhook cost alert threshold', { error: webhookError?.message });
+    }
+
+    res.status(201).json({ success: true, data });
+  } catch (error: any) {
+    logger.error('Cost create failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Prompt Caching ────────────────────────────────────────────────────────────
+
+router.get('/caching', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await getPromptCachingState(orgId);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/caching/policy', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await updatePromptCachingPolicy(orgId, req.body || {});
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Pricing ───────────────────────────────────────────────────────────────────
+
+router.get('/pricing', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await getPricingState(orgId);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/pricing/config', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await updatePricingConfig(orgId, req.body || {});
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/pricing/quotes', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await savePricingQuote(orgId, req.body);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/pricing/quotes/:id', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await deletePricingQuote(orgId, req.params.id);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Safe Harbor ───────────────────────────────────────────────────────────────
+
+router.get('/safe-harbor', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await getSafeHarborState(orgId);
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/safe-harbor/config', requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const state = await updateSafeHarborConfig(orgId, req.body || {});
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/safe-harbor/contract', requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    if (!req.user?.id) return res.status(400).json({ success: false, error: 'User not found' });
+    const state = await updateSafeHarborContract(orgId, req.user.id, req.body || {});
+    res.json({ success: true, data: state });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/safe-harbor/documents/:type', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const type = String(req.params.type || '').toLowerCase();
+    if (!['sla', 'dpa', 'security'].includes(type)) {
+      return res.status(400).json({ success: false, error: 'Unknown document type' });
+    }
+    const { filename, buffer } = await generateSafeHarborDocument(orgId, type as 'sla' | 'dpa' | 'security');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
