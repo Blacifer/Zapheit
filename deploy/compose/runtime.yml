@@ -17,6 +17,11 @@ services:
     volumes:
       - runtime-data:/data
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   runtime-data:

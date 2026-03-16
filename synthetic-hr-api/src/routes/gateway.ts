@@ -387,7 +387,7 @@ const checkAgentBudget = async (req: Request, res: Response): Promise<string | n
     const agents = await supabaseRest('ai_agents', query) as any[];
 
     if (!agents || agents.length === 0) {
-      res.status(404).json({ error: { message: 'Agent not found for budget check', type: 'invalid_request_error' } });
+      res.status(404).json({ error: { message: 'Agent not found', type: 'invalid_request_error' } });
       return false;
     }
 
@@ -398,7 +398,7 @@ const checkAgentBudget = async (req: Request, res: Response): Promise<string | n
     if (budgetLimit > 0 && currentSpend >= budgetLimit) {
       res.status(402).json({
         error: {
-          message: `Agent ${agent.name} has exceeded its budget limit of $${budgetLimit}`,
+          message: 'Budget limit exceeded',
           type: 'payment_required_error'
         }
       });
@@ -561,6 +561,9 @@ const pruneIdempotencyCache = () => {
   }
 };
 
+// Prune stale idempotency entries on a background interval instead of per-request
+setInterval(pruneIdempotencyCache, 60_000).unref();
+
 const pruneIdempotencyEntry = (cacheKey: string, entry: IdempotencyEntry) => {
   if (Date.now() - entry.createdAt > IDEMPOTENCY_TTL_MS) {
     idempotencyCache.delete(cacheKey);
@@ -638,8 +641,6 @@ const prepareIdempotency = async (
   if (!rawKey) {
     return { handled: false };
   }
-
-  pruneIdempotencyCache();
 
   if (rawKey.length > IDEMPOTENCY_MAX_KEY_LENGTH) {
     res.status(400).json({
@@ -1310,6 +1311,8 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         messages: normalizedMessages,
         completion: { content: completion.content },
         requestId: req.requestId,
+      }).catch((err: any) => {
+        logger.error('Failed to create incident from completion', { err: err.message, agentId, requestId: req.requestId });
       });
     }
 

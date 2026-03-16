@@ -7,6 +7,11 @@ services:
     ports:
       - "${SYNTHETICHR_API_PORT:-3001}:3001"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
   synthetic-hr-frontend:
     build:
@@ -22,4 +27,9 @@ services:
       SYNTHETICHR_APP_VERSION: ${SYNTHETICHR_APP_VERSION:-}
       SYNTHETICHR_ERROR_REPORTING_URL: ${SYNTHETICHR_ERROR_REPORTING_URL:-}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
 

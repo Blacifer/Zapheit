@@ -25,7 +25,7 @@ jobs:
           cache-dependency-path: synthetic-hr-api/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: npm test
+      - run: npm test -- --coverage
 
   frontend:
     runs-on: ubuntu-latest
@@ -56,4 +56,4 @@ jobs:
             ${{ runner.os }}-pnpm-
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - run: pnpm test
+      - run: pnpm test -- --coverage

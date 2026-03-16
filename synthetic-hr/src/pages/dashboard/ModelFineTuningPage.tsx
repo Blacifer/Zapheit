@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
+import { useFineTuneJobs, type FineTuneJobRecord } from '../../hooks/useData';
 
 interface TrainingRecord {
   prompt: string;
@@ -75,7 +76,6 @@ interface FineTuneJob {
   trainedTokens?: number | null;
 }
 
-const STORAGE_KEY = 'rasi.finetuneJobs';
 const DATASET_STORAGE_KEY = 'rasi.finetunePreparedDataset';
 const INR_PER_USD = 93;
 
@@ -412,6 +412,28 @@ function downloadSampleTemplate() {
   ]);
 }
 
+function recordToJob(r: FineTuneJobRecord): FineTuneJob {
+  return {
+    id: r.id,
+    name: r.name,
+    baseModel: r.base_model,
+    epochs: r.epochs,
+    status: r.status as FineTuneJob['status'],
+    createdAt: new Date(r.created_at).toLocaleString('en-IN'),
+    examples: r.examples,
+    estimatedCostInr: Number(r.estimated_cost_inr),
+    readinessScore: r.readiness_score,
+    issues: r.issues,
+    fileName: r.file_name,
+    providerState: r.provider_state,
+    validationExamples: r.validation_examples,
+    providerJobId: r.provider_job_id ?? undefined,
+    providerStatusText: r.provider_status_text ?? undefined,
+    fineTunedModel: r.fine_tuned_model,
+    trainedTokens: r.trained_tokens,
+  };
+}
+
 export default function ModelFineTuningPage() {
   const [newFineTune, setNewFineTune] = useState({
     name: '',
@@ -430,24 +452,13 @@ export default function ModelFineTuningPage() {
       return null;
     }
   });
-  const [jobs, setJobs] = useState<FineTuneJob[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return [];
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const { jobs: jobRecords, createStagedJob, deleteJob, markJobSubmitted, refetch } = useFineTuneJobs();
+  const jobs = useMemo(() => jobRecords.map(recordToJob), [jobRecords]);
+
   const [isParsing, setIsParsing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchResultsInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
-  }, [jobs]);
 
   useEffect(() => {
     if (!dataset) {
@@ -457,38 +468,30 @@ export default function ModelFineTuningPage() {
     localStorage.setItem(DATASET_STORAGE_KEY, JSON.stringify(dataset));
   }, [dataset]);
 
+  // Stable key over the set of in-flight provider job IDs — avoids resetting the interval on every refetch
+  const queuedJobsKey = useMemo(
+    () =>
+      jobs
+        .filter(j => j.providerState === 'openai_submitted' && j.providerJobId && !['provider_succeeded', 'provider_failed'].includes(j.status))
+        .map(j => j.providerJobId!)
+        .sort()
+        .join(','),
+    [jobs],
+  );
+
   useEffect(() => {
-    const queuedJobs = jobs.filter(job => job.providerState === 'openai_submitted' && job.providerJobId && !['provider_succeeded', 'provider_failed'].includes(job.status));
-    if (queuedJobs.length === 0) return;
+    if (!queuedJobsKey) return;
+    const providerJobIds = queuedJobsKey.split(',');
 
     const interval = window.setInterval(async () => {
-      for (const job of queuedJobs) {
-        const response = await api.fineTunes.getOpenAIJobStatus(job.providerJobId!);
-        if (!response.success || !response.data) continue;
-
-        const jobData = response.data;
-        setJobs(prev => prev.map(existing => {
-          if (existing.id !== job.id) return existing;
-
-          let nextStatus: FineTuneJob['status'] = existing.status;
-          if (jobData.status === 'queued' || jobData.status === 'validating_files') nextStatus = 'provider_queued';
-          else if (jobData.status === 'running') nextStatus = 'provider_running';
-          else if (jobData.status === 'succeeded') nextStatus = 'provider_succeeded';
-          else if (jobData.status === 'failed' || jobData.status === 'cancelled') nextStatus = 'provider_failed';
-
-          return {
-            ...existing,
-            status: nextStatus,
-            providerStatusText: jobData.status,
-            fineTunedModel: jobData.fineTunedModel,
-            trainedTokens: jobData.trainedTokens,
-          };
-        }));
-      }
+      // Fetching each job's status causes the backend to sync the DB row;
+      // then we refetch to pick up the updated state from DB.
+      await Promise.allSettled(providerJobIds.map(id => api.fineTunes.getOpenAIJobStatus(id)));
+      void refetch();
     }, 15000);
 
     return () => window.clearInterval(interval);
-  }, [jobs]);
+  }, [queuedJobsKey, refetch]);
 
   const summary = useMemo(() => {
     const readyJobs = jobs.filter(job => ['ready', 'provider_queued', 'provider_running', 'provider_succeeded'].includes(job.status)).length;
@@ -590,49 +593,50 @@ export default function ModelFineTuningPage() {
 
     setIsSubmitting(true);
 
-    const baseJob: FineTuneJob = {
-      id: `ft_${Math.random().toString(36).slice(2, 9)}`,
+    const stagedJobData = {
       name: newFineTune.name.trim(),
       baseModel: effectiveModelId,
       epochs: newFineTune.epochs,
-      status: dataset.issues.length === 0 ? 'ready' : 'needs_attention',
-      createdAt: new Date().toLocaleString('en-IN'),
+      fileName: dataset.fileName,
       examples: dataset.stats.examples,
+      validationExamples: dataset.validationRecords.length,
       estimatedCostInr: dataset.providerEstimate.estimatedCostInr,
       readinessScore: dataset.stats.readinessScore,
       issues: dataset.issues,
-      fileName: dataset.fileName,
-      providerState: 'staged_local',
-      validationExamples: dataset.validationRecords.length,
+      status: dataset.issues.length === 0 ? 'ready' : 'needs_attention',
     };
 
     try {
       if (dataset.providerEstimate.liveProviderSupported && dataset.issues.length === 0 && effectiveModelId.startsWith('openai/')) {
+        // Stage the job first so we have an ID to link back to after OpenAI submission
+        let stagedId: string | undefined;
+        try {
+          const stageRes = await createStagedJob.mutateAsync(stagedJobData);
+          stagedId = stageRes.data?.id;
+        } catch {
+          // Non-fatal — we still try to submit to OpenAI even if DB staging failed
+        }
+
         const response = await api.fineTunes.createOpenAIJob({
           name: newFineTune.name.trim(),
           baseModel: effectiveModelId,
           epochs: newFineTune.epochs,
           trainingRecords: dataset.trainRecords,
           validationRecords: dataset.validationRecords,
+          stagedJobId: stagedId,
         });
 
         if (!response.success || !response.data) {
           toast.error(response.error || 'OpenAI fine-tune creation failed');
-          setJobs(prev => [baseJob, ...prev]);
+          // If staging succeeded, it's already in DB as 'ready'; otherwise create it now as a fallback
+          if (!stagedId) await createStagedJob.mutateAsync(stagedJobData).catch(() => null);
         } else {
           const createdJob = response.data;
-          setJobs(prev => [{
-            ...baseJob,
-            status: 'provider_queued',
-            providerState: 'openai_submitted',
-            providerJobId: createdJob.id,
-            providerStatusText: createdJob.status,
-            trainedTokens: createdJob.trainedTokens,
-          }, ...prev]);
+          if (stagedId) markJobSubmitted(stagedId, createdJob.id);
           toast.success('OpenAI fine-tune job created and queued');
         }
       } else {
-        setJobs(prev => [baseJob, ...prev]);
+        await createStagedJob.mutateAsync(stagedJobData);
         toast.success(
           dataset.providerEstimate.liveProviderSupported
             ? 'Job staged with warnings. Fix dataset issues before provider training.'
@@ -647,7 +651,7 @@ export default function ModelFineTuningPage() {
   };
 
   const handleDeleteJob = (jobId: string) => {
-    setJobs(prev => prev.filter(job => job.id !== jobId));
+    deleteJob.mutate(jobId);
     toast.success('Fine-tune job removed');
   };
 
@@ -662,7 +666,7 @@ export default function ModelFineTuningPage() {
               Validate your dataset, inspect samples, split train and validation cleanly, and submit directly to OpenAI when the dataset is ready. Anthropic and Google fine-tuning — prepare your dataset now, submit when provider APIs go live.
             </p>
             <p className="text-slate-500 mt-2 text-sm">
-              Jobs are saved in your browser session. Export your JSONL files to preserve training data across devices.
+              Jobs are saved to your account. Export your JSONL files to preserve training data across devices.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-full xl:min-w-[560px]">

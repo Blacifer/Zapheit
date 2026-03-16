@@ -146,6 +146,15 @@ export class RateLimiter {
     return true;
   }
 
+  pruneStaleKeys(): void {
+    const now = Date.now();
+    for (const [key, timestamps] of this.requests.entries()) {
+      if (!timestamps.some(ts => now - ts < this.windowMs)) {
+        this.requests.delete(key);
+      }
+    }
+  }
+
   reset(key: string): void {
     this.requests.delete(key);
   }
@@ -161,3 +170,11 @@ export class RateLimiter {
 // Create default rate limiter instances
 export const webhookRateLimiter = new RateLimiter(60000, 5); // 5 webhooks per minute
 export const apiRateLimiter = new RateLimiter(60000, 60); // 60 API calls per minute
+
+// Prune stale keys every 10 minutes to prevent unbounded Map growth
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    webhookRateLimiter.pruneStaleKeys();
+    apiRateLimiter.pruneStaleKeys();
+  }, 10 * 60 * 1000);
+}

@@ -34,7 +34,8 @@ const PII_PATTERNS = {
   ssn: /\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/g,
 
   // Credit/debit card: 13–19 digits, optional separators
-  creditCard: /\b(?:\d[-\s]?){13,18}\d\b/g,
+  // Uses a simple character class (no optional groups inside repetition) to avoid ReDoS
+  creditCard: /\b\d[\d\s-]{11,17}\d\b/g,
 
   // Aadhaar: exactly 12 digits with separators
   aadhar: /\b\d{4}[-\s]\d{4}[-\s]\d{4}\b/g,

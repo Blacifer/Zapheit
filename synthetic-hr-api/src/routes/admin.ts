@@ -180,6 +180,8 @@ router.get('/coverage-status', requireRole(['admin', 'super_admin']), async (req
       });
     }
 
+    res.set('Cache-Control', 'private, max-age=30');
+
     const buildOrgQuery = () => {
       const query = new URLSearchParams();
       query.set('id', eq(orgId));

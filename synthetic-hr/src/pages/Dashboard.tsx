@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
@@ -8,6 +9,7 @@ import {
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api-client';
+import { useAgents, useIncidents, useCostData, queryKeys } from '../hooks/useData';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
 import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
@@ -240,18 +242,33 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const location = useLocation();
   // Derive current page from URL path: /dashboard/fleet → 'fleet'
   const currentPage = location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || 'overview';
+  const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
-  const [agents, setAgents] = useState<AIAgent[]>([]);
+
+  // Demo mode local state (React Query is disabled in demo mode)
+  const [demoAgents, setDemoAgents] = useState<AIAgent[]>([]);
+  const [demoIncidents, setDemoIncidents] = useState<Incident[]>([]);
+  const [demoCostData, setDemoCostData] = useState<CostData[]>([]);
+  const [demoLoading, setDemoLoading] = useState(!!isDemoMode);
+
+  // React Query hooks (disabled when in demo mode)
+  const { agents: liveAgents, loading: agentsLoading } = useAgents({ enabled: !isDemoMode });
+  const { incidents: liveIncidents } = useIncidents(undefined, { enabled: !isDemoMode });
+  const { costData: liveCostData } = useCostData('30d', { enabled: !isDemoMode });
+
+  // Unified data — demo or live
+  const agents = isDemoMode ? demoAgents : liveAgents;
+  const incidents = isDemoMode ? demoIncidents : liveIncidents;
+  const costData = isDemoMode ? demoCostData : liveCostData;
+  const loading = isDemoMode ? demoLoading : agentsLoading;
+
   const [integrationRows, setIntegrationRows] = useState<IntegrationSummaryRow[]>([]);
   const [agentConnections, setAgentConnections] = useState<Record<string, AgentConnectionDraft>>({});
   const [fleetWorkspaceAgentId, setFleetWorkspaceAgentId] = useState<string | null>(null);
   const [integrationAgentId, setIntegrationAgentId] = useState<string | null>(null);
   const [integrationRecommendedPack, setIntegrationRecommendedPack] = useState<IntegrationPackId | null>(null);
   const [domainAgentPreselect, setDomainAgentPreselect] = useState<{ packId: IntegrationPackId; agentId: string } | null>(null);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [costData, setCostData] = useState<CostData[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const { user, signOut } = useApp();
 
@@ -332,6 +349,22 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     setAgentConnections(readAgentConnectionState(user?.organizationName));
   }, [mounted, user?.organizationName]);
 
+  // Initialise agentConnections from live API data on first successful load
+  const agentConnectionsInitialized = useRef(false);
+  useEffect(() => {
+    if (isDemoMode || liveAgents.length === 0 || agentConnectionsInitialized.current) return;
+    agentConnectionsInitialized.current = true;
+    setAgentConnections(Object.fromEntries(
+      liveAgents.map((agent) => [
+        agent.id,
+        {
+          integrationIds: agent.integrationIds || [],
+          primaryPack: agent.primaryPack || suggestPackForAgent(agent),
+        },
+      ]),
+    ));
+  }, [liveAgents, isDemoMode, suggestPackForAgent]);
+
   useEffect(() => {
     if (!mounted) return;
     const focusedAgentId = readFocusedAgentWorkspace();
@@ -347,10 +380,10 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   }, [fleetWorkspaceAgentId, mounted]);
 
   const refreshData = useCallback(async () => {
-    setLoading(true);
-    // If demo mode, load demo data
+    // Demo mode: populate local demo state directly
     if (isDemoMode) {
-      const demoAgents: AIAgent[] = [
+      setDemoLoading(true);
+      const demoAgentsList: AIAgent[] = [
         { id: '1', name: 'Support Bot', description: 'Customer support AI agent', agent_type: 'support', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 23, conversations: 15420, created_at: '2024-01-15', satisfaction: 94, uptime: 99.5, budget_limit: 1000, current_spend: 462, auto_throttle: true, publishStatus: 'live', primaryPack: 'support', integrationIds: ['zendesk', 'intercom'] },
         { id: '2', name: 'Sales Assistant', description: 'Sales qualification AI agent', agent_type: 'sales', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'medium', risk_score: 45, conversations: 8932, created_at: '2024-02-01', satisfaction: 88, uptime: 98.2, budget_limit: 500, current_spend: 267, auto_throttle: false, publishStatus: 'live', primaryPack: 'sales', integrationIds: ['hubspot'] },
         { id: '3', name: 'HR Bot', description: 'HR internal support agent', agent_type: 'hr', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'idle', risk_level: 'low', risk_score: 18, conversations: 4521, created_at: '2024-02-15', satisfaction: 96, uptime: 99.8, budget_limit: 300, current_spend: 135, auto_throttle: true, publishStatus: 'ready', primaryPack: 'recruitment', integrationIds: [] },
@@ -370,116 +403,57 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         '4': { integrationIds: ['stripe'], primaryPack: 'finance' },
         '5': { integrationIds: [], primaryPack: 'support' },
       });
-      const demoIncidents: Incident[] = [
+      const demoIncidentsList: Incident[] = [
         { id: '1', agent_id: '4', agent_name: 'Refund Handler', incident_type: 'policy_override', severity: 'critical', status: 'open', title: 'Unauthorized Refund Approved', description: 'Bot approved a refund request without proper verification', created_at: new Date().toISOString() },
         { id: '2', agent_id: '2', agent_name: 'Sales Assistant', incident_type: 'hallucination', severity: 'low', status: 'resolved', title: 'Incorrect Pricing Information', description: 'Bot provided wrong pricing for enterprise plan', resolved_at: new Date().toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() },
         { id: '3', agent_id: '1', agent_name: 'Support Bot', incident_type: 'pii_extraction', severity: 'high', status: 'open', title: 'Potential PII Exposure', description: 'Bot may have shared customer email in response', created_at: new Date(Date.now() - 172800000).toISOString() },
       ];
-      const demoCostData: CostData[] = [
+      const demoCostList: CostData[] = [
         { id: '1', tokens: 1542000, cost: 462.60, date: new Date().toISOString(), requests: 5000 },
         { id: '2', tokens: 893200, cost: 267.96, date: new Date().toISOString(), requests: 2800 },
         { id: '3', tokens: 452100, cost: 135.63, date: new Date().toISOString(), requests: 1500 },
         { id: '4', tokens: 234100, cost: 70.23, date: new Date().toISOString(), requests: 750 },
         { id: '5', tokens: 2875400, cost: 862.62, date: new Date().toISOString(), requests: 9200 },
       ];
-      const demoNotifications: DashboardNotification[] = [
+      const demoNotificationsList: DashboardNotification[] = [
         { id: '1', type: 'incident', title: 'Critical Incident Detected', message: 'Refund Handler approved unauthorized refund', read: false, created_at: new Date().toISOString() },
         { id: '2', type: 'cost', title: 'Cost Alert', message: 'Monthly AI costs exceeded budget by 15%', read: false, created_at: new Date(Date.now() - 86400000).toISOString() },
         { id: '3', type: 'system', title: 'Shadow Mode Complete', message: 'New agent passed deployment testing with 92% score', read: true, created_at: new Date(Date.now() - 172800000).toISOString() },
-      ].map((notification: any) => ({
-        id: notification.id,
-        type: notification.type === 'cost' ? 'warning' : notification.type === 'incident' ? 'error' : 'success',
-        title: notification.title,
-        message: notification.message,
-        timestamp: notification.created_at,
-        read: notification.read,
-        source: 'local',
+      ].map((n: any) => ({
+        id: n.id,
+        type: n.type === 'cost' ? 'warning' as const : n.type === 'incident' ? 'error' as const : 'success' as const,
+        title: n.title,
+        message: n.message,
+        timestamp: n.created_at,
+        read: n.read,
+        source: 'local' as const,
       }));
 
-      setAgents(demoAgents);
-      setIncidents(demoIncidents);
-      setCostData(demoCostData);
-      setNotifications(demoNotifications);
+      setDemoAgents(demoAgentsList);
+      setDemoIncidents(demoIncidentsList);
+      setDemoCostData(demoCostList);
+      setNotifications(demoNotificationsList);
       setApiKeys([
         { id: '1', name: 'Production Key', key: 'sk-demo-xxxx', permissions: ['agents.read', 'agents.update'], created: new Date().toISOString(), lastUsed: new Date().toISOString() },
       ]);
-
-      // Save demo data to localStorage (legacy)
-      localStorage.setItem('synthetic_hr_agents', JSON.stringify(demoAgents));
-      localStorage.setItem('synthetic_hr_incidents', JSON.stringify(demoIncidents));
-      localStorage.setItem('synthetic_hr_cost_data', JSON.stringify(demoCostData));
-      localStorage.setItem('synthetic_hr_notifications', JSON.stringify(demoNotifications));
-
-      setLoading(false);
+      setDemoLoading(false);
       return;
     }
 
+    // Live mode: invalidate React Query caches + reload supplemental data
     try {
       setError(null);
-      const [agentsRes, incidentsRes, costsRes, integrationsRes] = await Promise.all([
-        api.agents.getAll(),
-        api.incidents.getAll({ limit: 100 }),
-        api.costs.getAnalytics({ period: '30d' }),
-        api.integrations.getAll(),
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.incidents() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.costAnalytics('30d') }),
       ]);
-      const failures: string[] = [];
 
-      if (agentsRes.success && Array.isArray(agentsRes.data)) {
-        const normalizedAgents: AIAgent[] = agentsRes.data.map((a: any) => ({
-          ...a,
-          lifecycle_state: a.lifecycle_state || 'idle',
-          conversations: a.conversations || 0,
-          satisfaction: a.satisfaction || 0,
-          uptime: a.uptime || 100,
-          budget_limit: a.budget_limit || 0,
-          current_spend: a.current_spend || 0,
-          auto_throttle: a.auto_throttle || false,
-        }));
-        setAgents(normalizedAgents);
-        setAgentConnections(Object.fromEntries(
-          normalizedAgents.map((agent) => [
-            agent.id,
-            {
-              integrationIds: agent.integrationIds || [],
-              primaryPack: agent.primaryPack || suggestPackForAgent(agent),
-            },
-          ]),
-        ));
-      } else {
-        setAgents([]);
-        failures.push(agentsRes.error || 'fleet data');
-      }
-
-      if (incidentsRes.success && Array.isArray(incidentsRes.data)) {
-        const agentNameById = new Map((agentsRes.data || []).map((a: any) => [a.id, a.name]));
-        const normalizedIncidents: Incident[] = incidentsRes.data.map((i: any) => ({
-          ...i,
-          agent_name: i.agent_name || agentNameById.get(i.agent_id) || 'Unknown Agent',
-        }));
-        setIncidents(normalizedIncidents);
-      } else {
-        setIncidents([]);
-        failures.push(incidentsRes.error || 'incident data');
-      }
-
-      const rawCosts = Array.isArray((costsRes.data as any)?.data)
-        ? (costsRes.data as any).data
-        : Array.isArray(costsRes.data)
-          ? costsRes.data
-          : [];
-
-      if (costsRes.success && rawCosts.length >= 0) {
-        const normalizedCosts: CostData[] = rawCosts.map((c: any) => ({
-          id: c.id,
-          date: c.date,
-          cost: c.cost_usd || 0,
-          tokens: c.total_tokens || 0,
-          requests: c.request_count || 0,
-        }));
-        setCostData(normalizedCosts);
-      } else {
-        setCostData([]);
-      }
+      const [integrationsRes, , coverageResult] = await Promise.all([
+        api.integrations.getAll(),
+        Promise.resolve({ apiKeys: [], error: 'unavailable' }),
+        api.admin.getCoverageStatus().catch(() => ({ success: false, error: 'unavailable' } as any)),
+      ]);
 
       if (integrationsRes.success && Array.isArray(integrationsRes.data)) {
         setIntegrationRows((integrationsRes.data as any[]).map((integration) => ({
@@ -495,16 +469,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         setIntegrationRows([]);
       }
 
-      const [apiKeysResult, coverageResult] = await Promise.all([
-        // appwriteDB.getApiKeys().catch(() => ({ apiKeys: [], error: 'unavailable' })),
-        Promise.resolve({ apiKeys: [], error: 'unavailable' }),
-        api.admin.getCoverageStatus().catch(() => ({ success: false, error: 'unavailable' } as any)),
-      ]);
-
-      if (apiKeysResult.apiKeys && apiKeysResult.apiKeys.length > 0) {
-        setApiKeys(apiKeysResult.apiKeys as unknown as ApiKey[]);
-      }
-
       const readIds = readNotificationState(user?.organizationName);
       if (coverageResult?.success && coverageResult.data) {
         setCoverageStatus(coverageResult.data);
@@ -513,21 +477,12 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         setCoverageStatus(null);
         setNotifications([]);
       }
-
-      if (failures.length > 0) {
-        setError(`Some operational data could not be loaded: ${failures.join(' · ')}`);
-      }
-    } catch (error) {
-      console.error('Failed to load backend data:', error);
-      setAgents([]);
-      setIncidents([]);
-      setCostData([]);
+    } catch (err) {
+      console.error('Failed to load supplemental data:', err);
       setNotifications([]);
       setError('Unable to load live operational data right now.');
     }
-
-    setLoading(false);
-  }, [isDemoMode, suggestPackForAgent, user?.organizationName]);
+  }, [isDemoMode, queryClient, user?.organizationName]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -757,7 +712,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         }
       }
 
-      setAgents(nextAgents);
+      if (isDemoMode) {
+        setDemoAgents(nextAgents);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+      }
     } catch (err) {
       console.error('Failed to save agents:', err);
       setError('Failed to save agents to backend.');
@@ -801,7 +760,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         await api.incidents.delete(removed.id);
       }
 
-      setIncidents(nextIncidents);
+      if (isDemoMode) {
+        setDemoIncidents(nextIncidents);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+      }
     } catch (err) {
       console.error('Failed to save incidents:', err);
       setError('Failed to save incidents to backend.');
@@ -825,7 +788,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         }
       }
 
-      setCostData(newCostData);
+      if (isDemoMode) {
+        setDemoCostData(newCostData);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.costAnalytics('30d') });
+      }
     } catch (err) {
       console.error('Failed to save cost data:', err);
       setError('Failed to save cost data to backend.');
@@ -1192,200 +1159,192 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 	                    </button>
 	                  </div>
 	                )}
-              <ErrorBoundary variant="local" fallbackMessage={`Failed to load the ${currentPage} page`}>
-	                {currentPage === 'getting-started' && (
-	                  <GettingStartedPage
-	                    agents={enrichedAgents}
-	                    onNavigate={(page) => navigateTo(page)}
-	                    onRefresh={refreshData}
-	                    storageScope={onboardingStorageScope}
-	                  />
-	                )}
-	                {currentPage === 'connect' && (
-	                  <ConnectAgentPage
-	                    agents={enrichedAgents}
-	                    onNavigate={(page) => navigateTo(page)}
-	                    onRefresh={refreshData}
-	                  />
-	                )}
-	                {currentPage === 'overview' && (
-	                  <DashboardOverview
-	                    agents={enrichedAgents}
-	                    incidents={incidents}
-	                    costData={costData}
-	                    onAddAgent={() => navigateTo('fleet')}
-	                    onNavigate={(page) => navigateTo(page)}
-	                  />
-	                )}
-                {currentPage === 'fleet' && (
-                  <FleetPage
-                    agents={enrichedAgents}
-                    setAgents={saveAgents}
-                    selectedAgentId={fleetWorkspaceAgentId}
-                    onSelectAgent={setFleetWorkspaceAgentId}
-                    onPublishAgent={openIntegrationsForAgent}
-                    onOpenOperationsPage={(page, options) => {
-                      if (options?.agentId) {
-                        writeFocusedAgentWorkspace(options.agentId);
-                      }
-                      navigateTo(page, { userInitiated: false });
-                    }}
-                  />
-                )}
-                {currentPage === 'playbooks' && (
-                  <PlaybooksPage
-                    agents={enrichedAgents}
-                    onNavigate={(page) => navigateTo(page)}
-                  />
-                )}
-                {currentPage === 'jobs' && (
-                  <JobsInboxPage agents={agents} />
-                )}
-                {currentPage === 'work-items' && (
-                  <WorkItemsPage />
-                )}
-                {currentPage === 'action-policies' && (
-                  <ActionPoliciesPage />
-                )}
-	                {currentPage === 'incidents' && (
-	                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} />
-	                )}
-	                {currentPage === 'conversations' && (
-	                  <ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />
-	                )}
-                {currentPage === 'integrations' && (
-                  <IntegrationsPage
-                    selectedAgent={enrichedAgents.find((agent) => agent.id === integrationAgentId) || enrichedAgents.find((agent) => agent.id === fleetWorkspaceAgentId) || null}
-                    recommendedPackId={integrationRecommendedPack}
-                    entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
-                    onNavigate={navigateTo}
-                    onActivateDomainAgent={(packId, agentId) => {
-                      setDomainAgentPreselect({ packId, agentId });
-                      navigateTo('agent-library', { userInitiated: false });
-                    }}
-                    onIntegrationConnected={handleIntegrationConnected}
-                    onIntegrationDisconnected={() => { void refreshData(); }}
-                  />
-                )}
-                {currentPage === 'templates' && (
-                  <AgentTemplatesPage onDeploy={async (template) => {
-                    try {
-                      // Explicitly create via API first to get real backend UUID
-                      const created = await api.agents.create({
-                        name: template.name,
-                        description: template.description,
-                        agent_type: template.type,
-                        platform: template.platform,
-                        model_name: template.model,
-                        budget_limit: template.budget,
-                        config: {},
-                      });
-
-                      if (created.success && created.data) {
-                        const newId = (created.data as any).id;
-                        if (newId) {
-                          const newAgent: AIAgent = {
-                            id: newId,
-                            name: template.name,
-                            description: template.description,
-                            agent_type: template.type,
-                            platform: template.platform,
-                            model_name: template.model,
-                            status: (created.data as any).status || 'active',
-                            lifecycle_state: 'idle',
-                            risk_level: (created.data as any).risk_level || 'low',
-                            risk_score: (created.data as any).risk_score || 50,
-                            created_at: (created.data as any).created_at || new Date().toISOString(),
-                            conversations: 0,
-                            satisfaction: 0,
-                            uptime: 100,
-                            budget_limit: template.budget,
-                            current_spend: 0,
-                            auto_throttle: false,
-                          };
-                          setAgents(prev => [...prev, newAgent]);
-                          addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
-	                          navigateTo('fleet', { userInitiated: false });
-	                        }
-	                      } else {
-	                        throw new Error('Agent creation rejected by server');
-	                      }
-                    } catch (err) {
-                      console.error("Template deploy error:", err);
-                      setError("Failed to add agent from template.");
-                    }
-                  }} />
-                )}
-	                {currentPage === 'costs' && (
-	                  <CostsPage costData={costData} setCostData={saveCostData} agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />
-	                )}
-                {currentPage === 'persona' && <PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />}
-                {currentPage === 'shadow' && <ShadowModePage />}
-	                {currentPage === 'blackbox' && <BlackBoxPage incidents={incidents} onNavigate={navigateTo} />}
-                {currentPage === 'api-access' && <ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />}
-                {currentPage === 'coverage' && <CoverageStatusPage />}
-                {currentPage === 'api-analytics' && <ApiAnalyticsPage isDemoMode={!!isDemoMode} />}
-                {currentPage === 'model-comparison' && <ModelComparisonPage />}
-                {currentPage === 'webhooks' && <WebhooksPage />}
-                {currentPage === 'batch' && <BatchProcessingPage />}
-                {currentPage === 'fine-tuning' && <ModelFineTuningPage />}
-                {currentPage === 'caching' && <CachingPage />}
-                {currentPage === 'marketplace' && <MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />}
-                {currentPage === 'developer' && <DeveloperPage onNavigate={navigateTo} />}
-                {currentPage === 'agent-library' && (
-                  <DomainAgentLibraryPage
-                    initialPackId={domainAgentPreselect?.packId}
-                    initialAgentId={domainAgentPreselect?.agentId}
-                    onNavigate={navigateTo}
-                    onDeploy={async (agentData) => {
+              <ErrorBoundary key={currentPage} variant="local" fallbackMessage={`Failed to load the ${currentPage} page`}>
+                <Routes>
+                  <Route index element={<Navigate to="overview" replace />} />
+                  <Route path="overview" element={
+                    <DashboardOverview
+                      agents={enrichedAgents}
+                      incidents={incidents}
+                      costData={costData}
+                      onAddAgent={() => navigateTo('fleet')}
+                      onNavigate={(page) => navigateTo(page)}
+                    />
+                  } />
+                  <Route path="getting-started" element={
+                    <GettingStartedPage
+                      agents={enrichedAgents}
+                      onNavigate={(page) => navigateTo(page)}
+                      onRefresh={refreshData}
+                      storageScope={onboardingStorageScope}
+                    />
+                  } />
+                  <Route path="connect" element={
+                    <ConnectAgentPage
+                      agents={enrichedAgents}
+                      onNavigate={(page) => navigateTo(page)}
+                      onRefresh={refreshData}
+                    />
+                  } />
+                  <Route path="fleet" element={
+                    <FleetPage
+                      agents={enrichedAgents}
+                      setAgents={saveAgents}
+                      selectedAgentId={fleetWorkspaceAgentId}
+                      onSelectAgent={setFleetWorkspaceAgentId}
+                      onPublishAgent={openIntegrationsForAgent}
+                      onOpenOperationsPage={(page, options) => {
+                        if (options?.agentId) writeFocusedAgentWorkspace(options.agentId);
+                        navigateTo(page, { userInitiated: false });
+                      }}
+                    />
+                  } />
+                  <Route path="templates" element={
+                    <AgentTemplatesPage onDeploy={async (template) => {
                       try {
                         const created = await api.agents.create({
-                          name: agentData.name,
-                          description: agentData.description,
-                          agent_type: agentData.agent_type,
-                          platform: agentData.platform,
-                          model_name: agentData.model_name,
-                          config: { ...agentData.config, system_prompt: agentData.system_prompt },
+                          name: template.name,
+                          description: template.description,
+                          agent_type: template.type,
+                          platform: template.platform,
+                          model_name: template.model,
+                          budget_limit: template.budget,
+                          config: {},
                         });
                         if (created.success && created.data) {
-                          const d = created.data as any;
-                          const newAgent: AIAgent = {
-                            id: d.id,
+                          const newId = (created.data as any).id;
+                          if (newId) {
+                            const newAgent: AIAgent = {
+                              id: newId,
+                              name: template.name,
+                              description: template.description,
+                              agent_type: template.type,
+                              platform: template.platform,
+                              model_name: template.model,
+                              status: (created.data as any).status || 'active',
+                              lifecycle_state: 'idle',
+                              risk_level: (created.data as any).risk_level || 'low',
+                              risk_score: (created.data as any).risk_score || 50,
+                              created_at: (created.data as any).created_at || new Date().toISOString(),
+                              conversations: 0,
+                              satisfaction: 0,
+                              uptime: 100,
+                              budget_limit: template.budget,
+                              current_spend: 0,
+                              auto_throttle: false,
+                            };
+                            if (isDemoMode) {
+                              setDemoAgents(prev => [...prev, newAgent]);
+                            } else {
+                              void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+                            }
+                            addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
+                            navigateTo('fleet', { userInitiated: false });
+                          }
+                        } else {
+                          throw new Error('Agent creation rejected by server');
+                        }
+                      } catch (err) {
+                        console.error('Template deploy error:', err);
+                        setError('Failed to add agent from template.');
+                      }
+                    }} />
+                  } />
+                  <Route path="agent-library" element={
+                    <DomainAgentLibraryPage
+                      initialPackId={domainAgentPreselect?.packId}
+                      initialAgentId={domainAgentPreselect?.agentId}
+                      onNavigate={navigateTo}
+                      onDeploy={async (agentData) => {
+                        try {
+                          const created = await api.agents.create({
                             name: agentData.name,
                             description: agentData.description,
                             agent_type: agentData.agent_type,
                             platform: agentData.platform,
                             model_name: agentData.model_name,
-                            status: d.status || 'active',
-                            lifecycle_state: 'idle',
-                            risk_level: d.risk_level || 'low',
-                            risk_score: d.risk_score || 50,
-                            created_at: d.created_at || new Date().toISOString(),
-                            conversations: 0,
-                            satisfaction: 0,
-                            uptime: 100,
-                            budget_limit: d.budget_limit || 500,
-                            current_spend: 0,
-                            auto_throttle: false,
-                          };
-                          setAgents(prev => [...prev, newAgent]);
-                          addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
-                          setDomainAgentPreselect(null);
-                          navigateTo('fleet', { userInitiated: false });
-                        } else {
-                          throw new Error('Agent creation rejected by server');
+                            config: { ...agentData.config, system_prompt: agentData.system_prompt },
+                          });
+                          if (created.success && created.data) {
+                            const d = created.data as any;
+                            const newAgent: AIAgent = {
+                              id: d.id,
+                              name: agentData.name,
+                              description: agentData.description,
+                              agent_type: agentData.agent_type,
+                              platform: agentData.platform,
+                              model_name: agentData.model_name,
+                              status: d.status || 'active',
+                              lifecycle_state: 'idle',
+                              risk_level: d.risk_level || 'low',
+                              risk_score: d.risk_score || 50,
+                              created_at: d.created_at || new Date().toISOString(),
+                              conversations: 0,
+                              satisfaction: 0,
+                              uptime: 100,
+                              budget_limit: d.budget_limit || 500,
+                              current_spend: 0,
+                              auto_throttle: false,
+                            };
+                            if (isDemoMode) {
+                              setDemoAgents(prev => [...prev, newAgent]);
+                            } else {
+                              void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+                            }
+                            addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
+                            setDomainAgentPreselect(null);
+                            navigateTo('fleet', { userInitiated: false });
+                          } else {
+                            throw new Error('Agent creation rejected by server');
+                          }
+                        } catch (err) {
+                          console.error('Domain agent deploy error:', err);
+                          throw err;
                         }
-                      } catch (err) {
-                        console.error('Domain agent deploy error:', err);
-                        throw err;
-                      }
-                    }}
-                  />
-                )}
-	                {currentPage === 'pricing' && <PricingPage onNavigate={navigateTo} />}
-	                {currentPage === 'legal' && <SafeHarborPage onNavigate={navigateTo} userRole={role} />}
-	                {currentPage === 'settings' && <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />}
-	              </ErrorBoundary>
+                      }}
+                    />
+                  } />
+                  <Route path="marketplace" element={<MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />} />
+                  <Route path="integrations" element={
+                    <IntegrationsPage
+                      selectedAgent={enrichedAgents.find((a) => a.id === integrationAgentId) || enrichedAgents.find((a) => a.id === fleetWorkspaceAgentId) || null}
+                      recommendedPackId={integrationRecommendedPack}
+                      entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
+                      onNavigate={navigateTo}
+                      onActivateDomainAgent={(packId, agentId) => {
+                        setDomainAgentPreselect({ packId, agentId });
+                        navigateTo('agent-library', { userInitiated: false });
+                      }}
+                      onIntegrationConnected={handleIntegrationConnected}
+                      onIntegrationDisconnected={() => { void refreshData(); }}
+                    />
+                  } />
+                  <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
+                  <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} />} />
+                  <Route path="costs" element={<CostsPage costData={costData} setCostData={saveCostData} agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
+                  <Route path="model-comparison" element={<ModelComparisonPage />} />
+                  <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />} />
+                  <Route path="settings" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
+                  <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
+                  <Route path="playbooks" element={<PlaybooksPage agents={enrichedAgents} onNavigate={(page) => navigateTo(page)} />} />
+                  <Route path="blackbox" element={<BlackBoxPage incidents={incidents} onNavigate={navigateTo} />} />
+                  <Route path="coverage" element={<CoverageStatusPage />} />
+                  <Route path="jobs" element={<JobsInboxPage agents={agents} />} />
+                  <Route path="work-items" element={<WorkItemsPage />} />
+                  <Route path="action-policies" element={<ActionPoliciesPage />} />
+                  {/* Settings sub-pages */}
+                  <Route path="persona" element={<PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />} />
+                  <Route path="shadow" element={<ShadowModePage />} />
+                  <Route path="api-analytics" element={<ApiAnalyticsPage isDemoMode={!!isDemoMode} />} />
+                  <Route path="webhooks" element={<WebhooksPage />} />
+                  <Route path="batch" element={<BatchProcessingPage />} />
+                  <Route path="fine-tuning" element={<ModelFineTuningPage />} />
+                  <Route path="caching" element={<CachingPage />} />
+                  <Route path="pricing" element={<PricingPage onNavigate={navigateTo} />} />
+                  <Route path="legal" element={<SafeHarborPage onNavigate={navigateTo} userRole={role} />} />
+                  <Route path="*" element={<Navigate to="overview" replace />} />
+                </Routes>
+              </ErrorBoundary>
 	            </Suspense>
 	          )}
 	        </main>

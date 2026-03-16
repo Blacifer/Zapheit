@@ -47,7 +47,7 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
 
     if (authHeader?.startsWith('Bearer ')) {
       apiKeyPlaintext = authHeader.substring(7);
-    } else if (req.query.api_key) {
+    } else if (req.query.api_key && process.env.NODE_ENV !== 'production') {
       apiKeyPlaintext = req.query.api_key as string;
     }
 
@@ -60,60 +60,49 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ success: false, error: 'Invalid API key format' });
     }
 
-    // Hash the provided key
+    // Hash the provided key — used as the cache key so the raw key is not held in memory
     const providedHash = crypto.createHash('sha256').update(apiKeyPlaintext).digest('hex');
 
-    // Check cache first (with timing-safe comparison)
-    const cached = API_KEY_CACHE.get(apiKeyPlaintext);
-    if (cached && (Date.now() - cached.cachedAt) < CACHE_TTL) {
-      try {
-        const matches = crypto.timingSafeEqual(
-          Buffer.from(providedHash),
-          Buffer.from(cached.hash)
-        );
-        if (matches) {
-          req.apiKey = {
-            id: cached.id,
-            organization_id: cached.orgId,
-            name: cached.name,
-            permissions: cached.permissions,
-            rate_limit: cached.rateLimit,
-          };
+    // Check cache by hash. Finding an entry by its hash key already proves the hash matches —
+    // no secondary comparison needed.
+    const cached = API_KEY_CACHE.get(providedHash);
+    if (cached) {
+      if ((Date.now() - cached.cachedAt) < CACHE_TTL) {
+        req.apiKey = {
+          id: cached.id,
+          organization_id: cached.orgId,
+          name: cached.name,
+          permissions: cached.permissions,
+          rate_limit: cached.rateLimit,
+        };
 
-          const usedAt = new Date().toISOString();
-          let usageRecorded = false;
-          const finalizeUsage = () => {
-            if (usageRecorded) return;
-            usageRecorded = true;
-            void supabaseRest('api_keys', `id=${eq(cached.id)}`, {
-              method: 'PATCH',
-              body: { last_used: usedAt },
-            }).catch((err: any) => {
-              logger.error('Failed to update cached key last_used', { error: err.message });
-            });
-            void recordApiKeyUsage({
-              orgId: cached.orgId,
-              apiKeyId: cached.id,
-              statusCode: res.statusCode,
-              usedAt,
-            }).catch((err: any) => {
-              logger.error('Failed to record cached API key usage', { error: err.message, key_id: cached.id });
-            });
-          };
+        const usedAt = new Date().toISOString();
+        let usageRecorded = false;
+        const finalizeUsage = () => {
+          if (usageRecorded) return;
+          usageRecorded = true;
+          void supabaseRest('api_keys', `id=${eq(cached.id)}`, {
+            method: 'PATCH',
+            body: { last_used: usedAt },
+          }).catch((err: any) => {
+            logger.error('Failed to update cached key last_used', { error: err.message });
+          });
+          void recordApiKeyUsage({
+            orgId: cached.orgId,
+            apiKeyId: cached.id,
+            statusCode: res.statusCode,
+            usedAt,
+          }).catch((err: any) => {
+            logger.error('Failed to record cached API key usage', { error: err.message, key_id: cached.id });
+          });
+        };
 
-          res.on('finish', finalizeUsage);
-          res.on('close', finalizeUsage);
-          return next();
-        }
-      } catch (e) {
-        // timingSafeEqual failed - hashes don't match
-        logger.warn('Cached API key validation failed', { key_prefix: apiKeyPlaintext.substring(0, 20) });
-        return res.status(401).json({ success: false, error: 'Invalid API key' });
+        res.on('finish', finalizeUsage);
+        res.on('close', finalizeUsage);
+        return next();
+      } else {
+        API_KEY_CACHE.delete(providedHash);
       }
-    }
-
-    if (cached && (Date.now() - cached.cachedAt) >= CACHE_TTL) {
-      API_KEY_CACHE.delete(apiKeyPlaintext);
     }
 
     // Query database for matching key
@@ -140,8 +129,8 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
     const permissions = Array.isArray(metadata.permissions) ? metadata.permissions : [];
     const rateLimit = apiKey.rate_limit_per_minute || apiKey.rate_limit || 1000;
 
-    // Cache for future requests
-    API_KEY_CACHE.set(apiKeyPlaintext, {
+    // Cache by hash so the raw key is not stored in memory
+    API_KEY_CACHE.set(providedHash, {
       hash: providedHash,
       id: apiKey.id,
       orgId: apiKey.organization_id,
@@ -199,9 +188,9 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
  * rather than waiting for the 5-minute TTL to expire.
  */
 export const invalidateApiKeyById = (keyId: string): void => {
-  for (const [plaintext, entry] of API_KEY_CACHE.entries()) {
+  for (const [hashKey, entry] of API_KEY_CACHE.entries()) {
     if (entry.id === keyId) {
-      API_KEY_CACHE.delete(plaintext);
+      API_KEY_CACHE.delete(hashKey);
       logger.info('API key evicted from cache', { key_id: keyId });
       break;
     }

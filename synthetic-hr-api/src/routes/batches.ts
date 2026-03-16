@@ -8,6 +8,103 @@ import { errorResponse, getOrgId, getUserJwt } from '../lib/route-helpers';
 
 const router = express.Router();
 
+// GET /api/fine-tunes/jobs — list all fine-tune jobs for the org
+router.get('/fine-tunes/jobs', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'created_at.desc');
+    q.set('limit', '100');
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', q);
+    return res.json({ success: true, data: data || [] });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+// POST /api/fine-tunes/jobs — persist a staged (not yet submitted) fine-tune job
+router.post('/fine-tunes/jobs', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const {
+      name,
+      baseModel,
+      epochs,
+      fileName,
+      examples,
+      validationExamples,
+      estimatedCostInr,
+      readinessScore,
+      issues,
+      status,
+    } = req.body as {
+      name?: string;
+      baseModel?: string;
+      epochs?: number;
+      fileName?: string;
+      examples?: number;
+      validationExamples?: number;
+      estimatedCostInr?: number;
+      readinessScore?: number;
+      issues?: string[];
+      status?: string;
+    };
+
+    if (!name?.trim()) return errorResponse(res, new Error('name is required'), 400);
+    if (!baseModel?.trim()) return errorResponse(res, new Error('baseModel is required'), 400);
+
+    const q = new URLSearchParams();
+    const data = await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', q, {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        name: String(name).trim(),
+        base_model: String(baseModel).trim(),
+        epochs: Number.isFinite(Number(epochs)) ? Number(epochs) : 3,
+        file_name: String(fileName || '').trim(),
+        examples: Number(examples) || 0,
+        validation_examples: Number(validationExamples) || 0,
+        estimated_cost_inr: Number(estimatedCostInr) || 0,
+        readiness_score: Number(readinessScore) || 0,
+        issues: Array.isArray(issues) ? issues : [],
+        status: String(status || 'ready'),
+        provider_state: 'staged_local',
+      },
+    });
+
+    const created = Array.isArray(data) ? data[0] : data;
+    return res.status(201).json({ success: true, data: created });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+// DELETE /api/fine-tunes/jobs/:id — delete a fine-tune job record
+router.delete('/fine-tunes/jobs/:id', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+
+    const deleted = await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', q, { method: 'DELETE' }) as any[];
+    if (!deleted?.length) return errorResponse(res, new Error('Fine-tune job not found'), 404);
+
+    return res.json({ success: true, data: { id } });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
 // POST /api/fine-tunes/openai — create a real OpenAI fine-tuning job
 router.post('/fine-tunes/openai', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {
@@ -128,6 +225,67 @@ router.post('/fine-tunes/openai', requirePermission('dashboard.read'), async (re
       },
     });
 
+    // Persist the submitted job to the DB.
+    // If a stagedJobId is provided the client can pass it so we update the
+    // existing staged row; otherwise we insert a fresh record.
+    const {
+      stagedJobId,
+      fileName = '',
+      examples = trainingRecords.length,
+      validationExamples = validationRecords.length,
+      estimatedCostInr = 0,
+      readinessScore = 100,
+      issues = [],
+    } = req.body as {
+      stagedJobId?: string;
+      fileName?: string;
+      examples?: number;
+      validationExamples?: number;
+      estimatedCostInr?: number;
+      readinessScore?: number;
+      issues?: string[];
+    };
+
+    try {
+      if (stagedJobId) {
+        const uq = new URLSearchParams();
+        uq.set('id', eq(stagedJobId));
+        uq.set('organization_id', eq(orgId));
+        await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', uq, {
+          method: 'PATCH',
+          body: {
+            status: fineTunePayload.status || 'provider_queued',
+            provider_state: 'openai_submitted',
+            provider_job_id: fineTunePayload.id,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      } else {
+        const iq = new URLSearchParams();
+        await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', iq, {
+          method: 'POST',
+          body: {
+            organization_id: orgId,
+            name: String(name).trim(),
+            base_model: `openai/${model}`,
+            epochs: Number.isFinite(Number(epochs)) ? Number(epochs) : 3,
+            file_name: String(fileName),
+            examples: Number(examples),
+            validation_examples: Number(validationExamples),
+            estimated_cost_inr: Number(estimatedCostInr),
+            readiness_score: Number(readinessScore),
+            issues: Array.isArray(issues) ? issues : [],
+            status: fineTunePayload.status || 'provider_queued',
+            provider_state: 'openai_submitted',
+            provider_job_id: fineTunePayload.id,
+          },
+        });
+      }
+    } catch (dbErr) {
+      // Non-fatal: job was submitted to OpenAI successfully; log and continue
+      logger.warn('Failed to persist fine-tune job to DB', { error: dbErr, jobId: fineTunePayload.id });
+    }
+
     res.json({
       success: true,
       data: {
@@ -164,6 +322,36 @@ router.get('/fine-tunes/openai/:jobId', requirePermission('dashboard.read'), asy
     if (!response.ok) {
       logger.error('OpenAI fine-tune status fetch failed', { status: response.status, payload, jobId: req.params.jobId });
       throw new Error(payload?.error?.message || 'OpenAI fine-tune status fetch failed');
+    }
+
+    // Map OpenAI status to our internal status
+    const statusMap: Record<string, string> = {
+      queued: 'provider_queued',
+      validating_files: 'provider_queued',
+      running: 'provider_running',
+      succeeded: 'provider_succeeded',
+      failed: 'provider_failed',
+      cancelled: 'provider_failed',
+    };
+    const mappedStatus = statusMap[payload.status] ?? 'provider_queued';
+
+    // Sync status back to DB (best-effort — non-fatal if it fails)
+    try {
+      const uq = new URLSearchParams();
+      uq.set('provider_job_id', eq(req.params.jobId));
+      uq.set('organization_id', eq(orgId));
+      await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', uq, {
+        method: 'PATCH',
+        body: {
+          status: mappedStatus,
+          fine_tuned_model: payload.fine_tuned_model ?? null,
+          trained_tokens: payload.trained_tokens ?? null,
+          provider_status_text: payload.status,
+          updated_at: new Date().toISOString(),
+        },
+      });
+    } catch (dbErr) {
+      logger.warn('Failed to sync fine-tune job status to DB', { error: dbErr, jobId: req.params.jobId });
     }
 
     res.json({

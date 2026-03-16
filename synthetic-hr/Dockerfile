@@ -29,6 +29,8 @@ ENV SYNTHETICHR_APP_VERSION=""
 ENV SYNTHETICHR_ERROR_REPORTING_URL=""
 
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost/health || exit 1
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
 
