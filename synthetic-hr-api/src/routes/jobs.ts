@@ -210,6 +210,27 @@ router.get('/', requirePermission('agents.read'), async (req: Request, res: Resp
   }
 });
 
+router.get('/:id', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const query = new URLSearchParams();
+    query.set('id', eq(req.params.id));
+    query.set('organization_id', eq(orgId));
+    query.set('select', '*');
+    query.set('limit', '1');
+
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', query)) as any[];
+    const job = rows?.[0];
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+
+    return res.json({ success: true, data: { job } });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
 router.post('/:id/decision', requirePermission('agents.update'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);

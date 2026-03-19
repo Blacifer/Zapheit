@@ -358,6 +358,10 @@ export const jobsApi = {
     return authenticatedFetch(`/jobs${suffix}`, { method: 'GET' });
   },
 
+  async get(jobId: string): Promise<ApiResponse<{ job: AgentJob }>> {
+    return authenticatedFetch(`/jobs/${jobId}`, { method: 'GET' });
+  },
+
   async create(payload: { agent_id: string; type: 'chat_turn' | 'workflow_run' | 'connector_action'; input?: any }): Promise<ApiResponse<{ job: AgentJob; approval: AgentJobApproval | null }>> {
     return authenticatedFetch('/jobs', {
       method: 'POST',

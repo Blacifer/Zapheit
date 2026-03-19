@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
@@ -78,6 +78,31 @@ export default function FleetPage({
   const [testJob, setTestJob] = useState<any | null>(null);
   const [suggestedApps, setSuggestedApps] = useState<any[]>([]);
   const [testJobBusy, setTestJobBusy] = useState(false);
+  const testJobPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopJobPolling = () => {
+    if (testJobPollRef.current) {
+      clearInterval(testJobPollRef.current);
+      testJobPollRef.current = null;
+    }
+  };
+
+  const startJobPolling = (jobId: string) => {
+    stopJobPolling();
+    testJobPollRef.current = setInterval(async () => {
+      try {
+        const res = await api.jobs.get(jobId);
+        if (res.success && res.data?.job) {
+          setTestJob((prev: any) => prev ? { ...prev, job: res.data!.job } : prev);
+          if (['succeeded', 'failed', 'canceled'].includes(res.data.job.status)) {
+            stopJobPolling();
+          }
+        }
+      } catch { /* ignore polling errors */ }
+    }, 2000);
+  };
+
+  useEffect(() => () => stopJobPolling(), []);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Integration Assignment Panel
   const [showAddIntegration, setShowAddIntegration] = useState(false);
@@ -642,6 +667,7 @@ export default function FleetPage({
   };
 
   const closeDeploy = () => {
+    stopJobPolling();
     setDeployAgentId(null);
     setCreatedEnrollment(null);
     setCurrentDeployment(null);
@@ -737,7 +763,11 @@ export default function FleetPage({
         toast.error(res.error || 'Approval failed');
         return;
       }
+      if (res.data?.job) {
+        setTestJob((prev: any) => prev ? { ...prev, job: res.data!.job } : prev);
+      }
       toast.success('Approved. Runtime will pick it up shortly.');
+      startJobPolling(jobId);
     } finally {
       setTestJobBusy(false);
     }
@@ -2063,12 +2093,24 @@ docker compose -f deploy/compose/runtime.yml up`}</code>
                   </button>
                 </div>
 
-                {testJob?.job?.id && (
-                  <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300">
-                    <div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div>
-                    <div className="mt-1">Status: <span className="text-slate-200 font-semibold">{testJob.job.status}</span> (approval required)</div>
-                  </div>
-                )}
+                {testJob?.job?.id && (() => {
+                  const status = testJob.job.status as string;
+                  const statusConfig: Record<string, { color: string; label: string; pulse?: boolean }> = {
+                    pending_approval: { color: 'text-amber-400', label: '(approval required)' },
+                    queued: { color: 'text-blue-400', label: '(waiting for runtime)' },
+                    running: { color: 'text-cyan-400', label: '(executing\u2026)', pulse: true },
+                    succeeded: { color: 'text-emerald-400', label: '(done!)' },
+                    failed: { color: 'text-red-400', label: '(failed)' },
+                    canceled: { color: 'text-slate-400', label: '(canceled)' },
+                  };
+                  const cfg = statusConfig[status] || { color: 'text-slate-200', label: '' };
+                  return (
+                    <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300">
+                      <div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div>
+                      <div className={`mt-1 ${cfg.pulse ? 'animate-pulse' : ''}`}>Status: <span className={`font-semibold ${cfg.color}`}>{status}</span> {cfg.label}</div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
