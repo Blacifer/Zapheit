@@ -71,6 +71,7 @@ export const agentSchemas = {
     publish_status: z.enum(['not_live', 'ready', 'live']).optional(),
     primary_pack: z.enum(['recruitment', 'support', 'sales', 'it', 'finance', 'compliance']).nullable().optional(),
     integration_ids: z.array(z.string().min(1)).max(50).optional(),
+    deploy_method: z.enum(['website', 'api', 'terminal']).nullable().optional(),
   }),
 
   filter: z.object({

@@ -2056,4 +2056,190 @@ export const initializeIdempotencyCache = async (): Promise<void> => {
   }
 };
 
+// ─── Simple Agent Chat Endpoint ──────────────────────────────────────────────
+// Public-facing endpoint for widget embeds, API integrations, and terminal use.
+// Auth: API key (sk_...) — no Supabase JWT required.
+// POST /v1/agents/:agentId/chat
+// Body: { message: string }
+// Response: { success: true, reply: string, agent_id: string, usage: {...} }
+
+// Preflight — allow widget.js to be embedded on any third-party origin.
+// Authentication is via API key so no credentials/cookies are involved.
+router.options('/agents/:agentId/chat', (_req: Request, res: Response) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(204);
+});
+
+router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
+  // Allow widget embeds from any origin — auth is via API key, not cookies
+  res.header('Access-Control-Allow-Origin', '*');
+  if (!(await enforceApiKeyRateLimit(req, res))) {
+    return;
+  }
+
+  try {
+    const { agentId } = req.params;
+    const { message } = req.body ?? {};
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'message is required' });
+    }
+
+    if (!req.apiKey) {
+      return res.status(401).json({ success: false, error: 'API key required' });
+    }
+
+    // Fetch agent and validate org ownership
+    const agentQuery = new URLSearchParams();
+    agentQuery.set('id', eq(agentId));
+    agentQuery.set('organization_id', eq(req.apiKey.organization_id));
+    const agents = (await supabaseRest('ai_agents', agentQuery)) as any[];
+
+    if (!agents || agents.length === 0) {
+      return res.status(404).json({ success: false, error: 'Agent not found' });
+    }
+
+    const agent = agents[0];
+
+    if (agent.status === 'terminated') {
+      return res.status(403).json({ success: false, error: 'Agent is terminated' });
+    }
+
+    // Check budget
+    const budgetLimit = Number(agent.config?.budget_limit ?? 0);
+    const currentSpend = Number(agent.config?.current_spend ?? 0);
+    if (budgetLimit > 0 && currentSpend >= budgetLimit) {
+      return res.status(402).json({ success: false, error: 'Budget limit exceeded' });
+    }
+
+    const modelConfig = normalizeModel(agent.model_name || 'openai/gpt-4o-mini');
+    if (!modelConfig) {
+      return res.status(400).json({ success: false, error: `Unsupported model: ${agent.model_name}` });
+    }
+
+    const providerKey = getProviderKey(modelConfig.provider);
+    if (!providerKey) {
+      return res.status(503).json({ success: false, error: `Provider unavailable for ${modelConfig.provider}` });
+    }
+
+    const messages = [
+      { role: 'system' as const, content: agent.system_prompt || 'You are a helpful assistant.' },
+      { role: 'user' as const, content: message.trim() },
+    ];
+
+    let completion: {
+      content: string;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      costUSD: number;
+      latency: number;
+    };
+
+    if (modelConfig.provider === 'openai') {
+      const aiResponse = await new OpenAIService(providerKey).chat(messages, modelConfig.upstreamModel, {});
+      completion = {
+        content: aiResponse.content,
+        inputTokens: aiResponse.tokenCount.input,
+        outputTokens: aiResponse.tokenCount.output,
+        totalTokens: aiResponse.tokenCount.total,
+        costUSD: aiResponse.costUSD,
+        latency: aiResponse.latency,
+      };
+    } else if (modelConfig.provider === 'anthropic') {
+      const aiResponse = await new AnthropicService(providerKey).chat(messages, modelConfig.upstreamModel, {});
+      completion = {
+        content: aiResponse.content,
+        inputTokens: aiResponse.tokenCount.input,
+        outputTokens: aiResponse.tokenCount.output,
+        totalTokens: aiResponse.tokenCount.total,
+        costUSD: aiResponse.costUSD,
+        latency: aiResponse.latency,
+      };
+    } else {
+      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, messages, {});
+      completion = {
+        content: aiResponse.content,
+        inputTokens: aiResponse.inputTokens,
+        outputTokens: aiResponse.outputTokens,
+        totalTokens: aiResponse.totalTokens,
+        costUSD: aiResponse.costUSD,
+        latency: aiResponse.latency,
+      };
+    }
+
+    // Record conversation (fire and forget — non-blocking)
+    void (async () => {
+      try {
+        const convRows = (await supabaseRest('conversations', '', {
+          method: 'POST',
+          body: {
+            organization_id: req.apiKey!.organization_id,
+            agent_id: agentId,
+            platform: 'api',
+            status: 'active',
+            started_at: new Date().toISOString(),
+          },
+        })) as any[];
+        const conversationId = convRows?.[0]?.id;
+        if (conversationId) {
+          await Promise.all([
+            supabaseRest('messages', '', {
+              method: 'POST',
+              body: { conversation_id: conversationId, role: 'user', content: message.trim(), created_at: new Date().toISOString() },
+            }),
+            supabaseRest('messages', '', {
+              method: 'POST',
+              body: { conversation_id: conversationId, role: 'assistant', content: completion.content, token_count: completion.totalTokens, cost_usd: completion.costUSD, created_at: new Date().toISOString() },
+            }),
+          ]);
+        }
+      } catch (err: any) {
+        logger.error('Failed to record agent chat conversation', { error: err.message, agentId });
+      }
+    })();
+
+    // Incident detection (fire and forget)
+    void maybeCreateIncidentFromCompletion({
+      orgId: req.apiKey.organization_id,
+      agentId,
+      modelId: modelConfig.id,
+      messages,
+      completion: { content: completion.content },
+      requestId: req.requestId,
+    }).catch((err: any) => {
+      logger.error('Failed to run incident detection on agent chat', { err: err.message, agentId });
+    });
+
+    logger.info('Agent chat completed', {
+      agentId,
+      model: modelConfig.id,
+      latency: completion.latency,
+      tokens: completion.totalTokens,
+      requestId: req.requestId,
+    });
+
+    return res.json({
+      success: true,
+      reply: completion.content,
+      agent_id: agentId,
+      usage: {
+        input_tokens: completion.inputTokens,
+        output_tokens: completion.outputTokens,
+        total_tokens: completion.totalTokens,
+        cost_usd: completion.costUSD,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Agent chat failed', {
+      error: error.message,
+      agentId: req.params.agentId,
+      requestId: req.requestId,
+    });
+    return res.status(500).json({ success: false, error: 'Agent chat failed' });
+  }
+});
+
 export default router;

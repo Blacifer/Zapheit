@@ -108,6 +108,7 @@ export const agentApi = {
       publish_status: 'not_live' | 'ready' | 'live';
       primary_pack: 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance' | null;
       integration_ids: string[];
+      deploy_method: 'website' | 'api' | 'terminal' | null;
     }>
   ): Promise<ApiResponse<{
     publishStatus: 'not_live' | 'ready' | 'live';

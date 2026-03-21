@@ -20,6 +20,7 @@ type AgentPublishMetadata = {
   publish_status?: AgentPublishStatus;
   primary_pack?: AgentPackId | null;
   integration_ids?: string[];
+  deploy_method?: 'website' | 'api' | 'terminal' | null;
 };
 
 type IntegrationSummaryRow = {
@@ -95,6 +96,9 @@ const writeAgentPublishMetadata = (agent: any, updates: AgentPublishMetadata) =>
     primary_pack: updates.primary_pack !== undefined ? updates.primary_pack : (current.primary_pack ?? null),
     integration_ids: updates.integration_ids ?? current.integration_ids ?? [],
   };
+  if (updates.deploy_method !== undefined) {
+    metadata.deploy_method = updates.deploy_method;
+  }
   return metadata;
 };
 
@@ -560,7 +564,7 @@ router.put('/agents/:id/publish', requirePermission('agents.update'), async (req
     patchQuery.set('organization_id', eq(orgId));
     const patched = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', patchQuery, {
       method: 'PATCH',
-      body: { metadata: writeAgentPublishMetadata(existingAgent, { publish_status: validatedData.publish_status, primary_pack: validatedData.primary_pack, integration_ids: validatedData.integration_ids }), updated_at: new Date().toISOString() },
+      body: { metadata: writeAgentPublishMetadata(existingAgent, { publish_status: validatedData.publish_status, primary_pack: validatedData.primary_pack, integration_ids: validatedData.integration_ids, deploy_method: validatedData.deploy_method }), updated_at: new Date().toISOString() },
     }) as any[];
 
     const [data] = await enrichAgentRecords(req, orgId, patched, new Map());

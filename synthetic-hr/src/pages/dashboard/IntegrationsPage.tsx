@@ -1095,33 +1095,73 @@ export default function IntegrationsPage({
       </div>
 
 
-      {entryMode === 'publish' && effectiveAgentContext ? (
-        <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/[0.07] p-5">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-[0.18em] text-blue-200/80">Publish flow</div>
-              <h2 className="text-lg font-semibold text-white mt-2">{effectiveAgentName || 'Selected agent'} is ready to connect</h2>
-              <p className="text-sm text-blue-100/75 mt-1 max-w-3xl">
-                Step 1: choose where it should work. Step 2: connect the provider. Step 3: go back to Fleet to supervise conversations, persona, analytics, and controls from one workspace.
-              </p>
+      {entryMode === 'publish' && effectiveAgentContext ? (() => {
+        const publishStep = detailsOpen ? 2 : 1;
+        const steps = [
+          { n: 1, label: 'Choose a channel', desc: 'Pick where this agent should work — Slack, email, or another provider.' },
+          { n: 2, label: 'Connect the provider', desc: 'Authenticate and configure the channel. Your agent goes live immediately after.' },
+        ];
+        return (
+          <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/[0.07] p-5">
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.18em] text-blue-200/60 mb-1">Publishing</div>
+                <h2 className="text-base font-semibold text-white">{effectiveAgentName || 'Selected agent'}</h2>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => openWizard(3)}
+                  className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-100 hover:bg-blue-500/25 transition-colors text-xs font-semibold"
+                >
+                  Guided setup
+                </button>
+                <button
+                  onClick={() => onNavigate?.('fleet')}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-xs font-semibold"
+                >
+                  Back to Fleet
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => openWizard(3)}
-                className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-100 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
-              >
-                Start guided setup
-              </button>
-              <button
-                onClick={() => onNavigate?.('fleet')}
-                className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm font-semibold"
-              >
-                Back to Fleet
-              </button>
+
+            {/* Step tracker */}
+            <div className="flex items-start gap-0">
+              {steps.map((step, idx) => {
+                const isDone = publishStep > step.n;
+                const isActive = publishStep === step.n;
+                return (
+                  <div key={step.n} className="flex items-start flex-1 min-w-0">
+                    {/* Step node + content */}
+                    <div className="flex flex-col items-center mr-3 flex-shrink-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                        isDone
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : isActive
+                            ? 'bg-blue-500 border-blue-400 text-white'
+                            : 'bg-transparent border-slate-600 text-slate-500'
+                      }`}>
+                        {isDone ? '✓' : step.n}
+                      </div>
+                      {idx < steps.length - 1 && (
+                        <div className={`w-px flex-1 mt-1 min-h-[24px] ${isDone ? 'bg-emerald-500/40' : 'bg-slate-700'}`} />
+                      )}
+                    </div>
+                    <div className="pb-4 min-w-0">
+                      <p className={`text-sm font-semibold leading-tight ${isActive ? 'text-white' : isDone ? 'text-emerald-300' : 'text-slate-500'}`}>
+                        Step {step.n} of {steps.length} — {step.label}
+                      </p>
+                      {isActive && (
+                        <p className="text-xs text-blue-100/70 mt-0.5 leading-snug">{step.desc}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      ) : null}
+        );
+      })() : null}
 
       {loadError ? (
         <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100 flex items-start gap-3">

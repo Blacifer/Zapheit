@@ -3,7 +3,8 @@ import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
-  ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
+  ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3,
+  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
@@ -21,7 +22,9 @@ interface FleetPageProps {
   onOpenOperationsPage?: (page: string, options?: { agentId?: string }) => void;
 }
 
-type WorkspaceTab = 'overview' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
+type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
+type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
+type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
 type WorkspaceState = {
   summary: AgentWorkspaceSummary | null;
   conversations: AgentWorkspaceConversation[];
@@ -48,7 +51,11 @@ export default function FleetPage({
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [configureAgentId, setConfigureAgentId] = useState<string | null>(null);
-  const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(selectedAgentId || null);
+  const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(
+    selectedAgentId && (agents.length === 0 || agents.some((a) => a.id === selectedAgentId))
+      ? selectedAgentId
+      : null
+  );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
     summary: null,
@@ -69,6 +76,14 @@ export default function FleetPage({
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'paused' | 'terminated'>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [deployAgentId, setDeployAgentId] = useState<string | null>(null);
+  const [deployMethod, setDeployMethod] = useState<DeployMethod | null>(null);
+  const [deployCodeTab, setDeployCodeTab] = useState<DeployCodeTab>('curl');
+  const [deployApiKey, setDeployApiKey] = useState<string | null>(null);
+  const [deployApiKeyId, setDeployApiKeyId] = useState<string | null>(null);
+  const [deployApiKeyMasked, setDeployApiKeyMasked] = useState<string | null>(null);
+  const [deployApiKeyLoading, setDeployApiKeyLoading] = useState(false);
+  const [wsKeyRegenerating, setWsKeyRegenerating] = useState(false);
+  const [wsKeyNew, setWsKeyNew] = useState<string | null>(null);
   const [runtimesLoading, setRuntimesLoading] = useState(false);
   const [runtimes, setRuntimes] = useState<Array<{ id: string; name: string; mode: string; status: string; last_heartbeat_at: string | null }>>([]);
   const [selectedRuntimeId, setSelectedRuntimeId] = useState<string>('');
@@ -239,6 +254,13 @@ export default function FleetPage({
         loadingAnalytics: false,
         analyticsError: null,
       });
+      return;
+    }
+
+    // If the agents list has loaded and this ID isn't in it, it's stale — skip the request
+    if (agents.length > 0 && !agents.find((a) => a.id === workspaceAgentId)) {
+      setWorkspaceAgentId(null);
+      onSelectAgent?.(null);
       return;
     }
 
@@ -664,13 +686,48 @@ export default function FleetPage({
     }
   };
 
-  const openDeploy = (agent: AIAgent) => {
+  const openDeploy = async (agent: AIAgent) => {
     setDeployAgentId(agent.id);
+    setDeployMethod(null);
+    setDeployApiKey(null);
+    setDeployApiKeyId(null);
+    setDeployApiKeyMasked(null);
+    setDeployApiKeyLoading(true);
+    try {
+      const res = await api.apiKeys.list();
+      if (res.success && res.data && res.data.length > 0) {
+        const active = res.data.find((k) => k.status === 'active');
+        if (active) {
+          setDeployApiKeyId(active.id);
+          setDeployApiKeyMasked(active.masked_key || null);
+        }
+      }
+      if (!res.data || res.data.filter((k) => k.status === 'active').length === 0) {
+        // No active keys — create one silently
+        const created = await api.apiKeys.create({
+          name: `Deployment key — ${agent.name}`,
+          environment: 'production',
+          preset: 'full_access',
+        });
+        if (created.success && created.data) {
+          setDeployApiKey((created.data as any).key || null);
+          setDeployApiKeyId(created.data.id);
+        }
+      }
+    } catch {
+      // Non-fatal — user can still see code snippets with placeholder
+    } finally {
+      setDeployApiKeyLoading(false);
+    }
   };
 
   const closeDeploy = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setDeployAgentId(null);
+    setDeployMethod(null);
+    setDeployApiKey(null);
+    setDeployApiKeyId(null);
+    setDeployApiKeyMasked(null);
     setCreatedEnrollment(null);
     setCurrentDeployment(null);
     setSelectedRuntimeId('');
@@ -928,21 +985,42 @@ export default function FleetPage({
                             Budget ₹{agent.budget_limit.toLocaleString()}
                           </span>
                         )}
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          agent.publishStatus === 'live'
-                            ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20'
-                            : agent.publishStatus === 'ready'
-                              ? 'bg-amber-400/10 text-amber-300 border-amber-400/20'
-                              : 'bg-slate-400/10 text-slate-300 border-slate-400/20'
-                        }`}>
-                          {agent.publishStatus === 'live' ? 'Live' : agent.publishStatus === 'ready' ? 'Ready to go live' : 'Not live yet'}
-                        </span>
+                        {agent.publishStatus === 'live' ? (
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
+                          </span>
+                        ) : agent.publishStatus === 'ready' ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-400/10 text-amber-300 border border-amber-400/20" title="Agent has connected channels — deploy to go live">
+                            Ready to go live
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => void openDeploy(agent)}
+                            className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-400/10 text-slate-400 border border-slate-400/20 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-400/30 transition-colors cursor-pointer"
+                            title="Deploy this agent to make it available"
+                          >
+                            Not live yet
+                          </button>
+                        )}
+                        {(() => {
+                          const method = (agent as any).metadata?.deploy_method as string | undefined;
+                          if (!method) return null;
+                          const methodLabels: Record<string, { label: string; cls: string }> = {
+                            website: { label: '🌐 Website', cls: 'bg-teal-500/10 text-teal-300 border-teal-400/20' },
+                            api: { label: '</> API', cls: 'bg-blue-500/10 text-blue-300 border-blue-400/20' },
+                            terminal: { label: '>_ Terminal', cls: 'bg-purple-500/10 text-purple-300 border-purple-400/20' },
+                          };
+                          const meta = methodLabels[method];
+                          if (!meta) return null;
+                          return <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${meta.cls}`}>{meta.label}</span>;
+                        })()}
                       </div>
                       <p className="text-slate-400 text-sm mb-2.5">{agent.description}</p>
-                      <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span>Type: <span className="text-slate-300">{agent.agent_type}</span></span>
                         <span>Provider: <span className="text-slate-300">{agent.platform}</span></span>
                         <span>Model: <span className="text-slate-300 font-mono">{agent.model_name}</span></span>
+                        <span className="w-full sm:w-auto" />
                         <span>Conversations: <span className="text-slate-300">{agent.conversations}</span></span>
                         <span>Connected targets: <span className="text-slate-300">{agent.connectedTargets?.length || 0}</span></span>
                         {agent.primaryPack ? (
@@ -956,7 +1034,7 @@ export default function FleetPage({
                       <button
                         onClick={() => onPublishAgent?.(agent, agent.primaryPack || null)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-500/15 text-blue-200 border border-blue-400/30 hover:bg-blue-500/20"
-                        title="Connect this agent to a channel"
+                        title={agent.connectedTargets?.length ? 'Add another channel (Slack, email, web…)' : 'Connect a channel so your agent can send and receive messages'}
                       >
                         <Link2 className="w-3.5 h-3.5" />
                         {agent.connectedTargets?.length ? 'Add channel' : 'Publish'}
@@ -972,14 +1050,29 @@ export default function FleetPage({
                       </button>
 
                       {/* Deploy */}
-                      <button
-                        onClick={() => openDeploy(agent)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white"
-                        title="Deploy agent to runtime"
-                      >
-                        <Server className="w-3.5 h-3.5" />
-                        Deploy
-                      </button>
+                      {(() => {
+                        const isNew = agent.created_at
+                          ? Date.now() - new Date(agent.created_at).getTime() < 24 * 60 * 60 * 1000
+                          : false;
+                        const isNotLive = agent.publishStatus !== 'live';
+                        return (
+                          <button
+                            onClick={() => void openDeploy(agent)}
+                            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                              isNotLive
+                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25'
+                                : 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
+                            }`}
+                            title="Deploy this agent"
+                          >
+                            {isNew && isNotLive && (
+                              <span className="absolute -inset-px rounded-lg border border-cyan-400/60 animate-pulse pointer-events-none" />
+                            )}
+                            <Rocket className="w-3.5 h-3.5" />
+                            Deploy
+                          </button>
+                        );
+                      })()}
 
                       {/* Configure */}
                       <button
@@ -1189,6 +1282,7 @@ export default function FleetPage({
           <div className="px-6 pt-4 flex flex-wrap gap-2">
             {([
               ['overview', 'Overview'],
+              ['deployment', 'Deployment'],
               ['conversations', 'Conversations'],
               ['integrations', 'Integrations'],
               ['policies', 'Policies / Persona'],
@@ -1210,7 +1304,121 @@ export default function FleetPage({
           </div>
 
           <div className="p-6">
-            {workspaceTab === 'overview' ? (
+            {workspaceTab === 'deployment' ? (() => {
+              const deployMethod = (activeWorkspaceAgent as any).metadata?.deploy_method as string | undefined;
+              const gatewayBase = controlPlaneBaseUrl;
+              const isDeployed = !!deployMethod;
+              const methodMeta: Record<string, { label: string; icon: typeof Globe; color: string; desc: string }> = {
+                website: { label: 'Website Embed', icon: Globe, color: 'text-teal-400', desc: 'Embedded via JavaScript widget on a website' },
+                api: { label: 'API Integration', icon: Code2, color: 'text-blue-400', desc: 'Called via REST API from an application' },
+                terminal: { label: 'Terminal', icon: Terminal, color: 'text-purple-400', desc: 'Accessed via curl or terminal script' },
+              };
+              const meta = deployMethod ? methodMeta[deployMethod] : null;
+              const chatEndpoint = `${gatewayBase}/v1/agents/${activeWorkspaceAgent.id}/chat`;
+              const copyText = (text: string, label = 'Copied') =>
+                void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
+
+              return (
+                <div className="space-y-4">
+                  {isDeployed && meta ? (() => {
+                    const Icon = meta.icon;
+                    return (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-9 w-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                            <Icon className={`w-4 h-4 ${meta.color}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{meta.label}</p>
+                            <p className="text-xs text-slate-500">{meta.desc}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 flex items-center justify-between gap-3">
+                          <code className="text-xs text-slate-300 font-mono truncate">{chatEndpoint}</code>
+                          <button onClick={() => copyText(chatEndpoint, 'Endpoint copied')} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => void openDeploy(activeWorkspaceAgent)}
+                            className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline"
+                          >
+                            Switch deployment method
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/20 p-8 text-center">
+                      <Rocket className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-slate-300 mb-1">Not deployed yet</p>
+                      <p className="text-xs text-slate-500 mb-4">Deploy this agent to use it on your website, in your app, or from your terminal.</p>
+                      <button
+                        onClick={() => void openDeploy(activeWorkspaceAgent)}
+                        className="px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/25 transition-colors"
+                      >
+                        Deploy Now
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500 mb-3">API Endpoint</p>
+                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 flex items-center justify-between gap-3">
+                      <code className="text-xs text-slate-300 font-mono truncate">POST {chatEndpoint}</code>
+                      <button onClick={() => copyText(`POST ${chatEndpoint}`, 'Endpoint copied')} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-2 rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
+                      <pre className="text-xs text-slate-300 font-mono whitespace-pre overflow-x-auto">{`curl -X POST ${chatEndpoint} \\\n  -H "Authorization: Bearer sk_YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "Hello"}'`}</pre>
+                      <button onClick={() => copyText(`curl -X POST ${chatEndpoint} \\\n  -H "Authorization: Bearer sk_YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "Hello"}'`, 'Command copied')} className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Key className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                        {wsKeyNew ? (
+                          <span className="text-xs text-emerald-300 font-mono truncate">{wsKeyNew} <span className="text-amber-400">(shown once — copy it now)</span></span>
+                        ) : (
+                          <span className="text-xs text-slate-500 truncate">API key · <button onClick={() => onOpenOperationsPage?.('api-keys')} className="underline hover:text-slate-300 transition-colors">manage keys</button></span>
+                        )}
+                      </div>
+                      <button
+                        disabled={wsKeyRegenerating}
+                        onClick={() => void (async () => {
+                          if (!window.confirm('This will revoke your current API key and create a new one. Any code using the old key will stop working. Continue?')) return;
+                          setWsKeyRegenerating(true);
+                          setWsKeyNew(null);
+                          try {
+                            const listRes = await api.apiKeys.list();
+                            const active = listRes.data?.find((k: any) => k.status === 'active');
+                            if (active) await api.apiKeys.revoke(active.id);
+                            const created = await api.apiKeys.create({ name: `Deployment key — ${activeWorkspaceAgent.name}`, environment: 'production', preset: 'full_access' });
+                            if (created.success && (created.data as any)?.key) {
+                              setWsKeyNew((created.data as any).key);
+                              toast.success('New API key generated');
+                            } else {
+                              toast.error('Failed to generate new key');
+                            }
+                          } catch {
+                            toast.error('Something went wrong');
+                          } finally {
+                            setWsKeyRegenerating(false);
+                          }
+                        })()}
+                        className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 text-xs font-medium hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${wsKeyRegenerating ? 'animate-spin' : ''}`} />
+                        {wsKeyRegenerating ? 'Generating…' : 'Regenerate'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : workspaceTab === 'overview' ? (
               <><div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-2">
                   <h3 className="text-sm font-semibold text-white">Publish status</h3>
@@ -1511,10 +1719,21 @@ export default function FleetPage({
 
                 {/* Connected targets */}
                 {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
-                    <Link2 className="w-6 h-6 text-slate-500 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400">No integrations assigned yet.</p>
-                    <p className="text-xs text-slate-500 mt-1">Click "Add integration" to wire a connected provider to this agent.</p>
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6">
+                    <div className="flex items-start gap-3">
+                      <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-200 mb-1">What is publishing?</p>
+                        <p className="text-xs text-slate-400 mb-3">Publishing connects your agent to a channel — like Slack or email — so it can send and receive real messages. Think of it as giving your agent a "phone number" to reach your team or customers.</p>
+                        <button
+                          onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/25 transition-colors"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          Connect a channel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1956,209 +2175,336 @@ export default function FleetPage({
 
 
       {/* Deploy Modal */}
-      {deployAgentId && (
+      {deployAgentId && (() => {
+        const deployAgent = agents.find((a) => a.id === deployAgentId);
+        const agentName = deployAgent?.name || 'Agent';
+        const gatewayBase = controlPlaneBaseUrl;
+        const widgetSrc = typeof window !== 'undefined' ? `${window.location.origin}/widget.js` : '/widget.js';
+        const apiKeyDisplay = deployApiKey || deployApiKeyMasked || 'YOUR_API_KEY';
+        const chatEndpoint = `${gatewayBase}/v1/agents/${deployAgentId}/chat`;
+
+        const copyText = (text: string, label = 'Copied') =>
+          void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
+
+        const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-api-key="${apiKeyDisplay}"\n></script>`;
+
+        const codeSnippets: Record<DeployCodeTab, string> = {
+          curl: `curl -X POST ${chatEndpoint} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKeyDisplay}" \\\n  -d '{"message": "Hello"}'`,
+          python: `import requests\n\nresponse = requests.post(\n    "${chatEndpoint}",\n    headers={"Authorization": "Bearer ${apiKeyDisplay}"},\n    json={"message": "Hello"}\n)\nprint(response.json()["reply"])`,
+          nodejs: `const res = await fetch("${chatEndpoint}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer ${apiKeyDisplay}",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ message: "Hello" })\n});\nconst { reply } = await res.json();\nconsole.log(reply);`,
+          php: `<?php\n$ch = curl_init("${chatEndpoint}");\ncurl_setopt($ch, CURLOPT_POST, 1);\ncurl_setopt($ch, CURLOPT_HTTPHEADER, [\n  "Authorization: Bearer ${apiKeyDisplay}",\n  "Content-Type: application/json"\n]);\ncurl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["message" => "Hello"]));\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\n$body = json_decode(curl_exec($ch), true);\necho $body["reply"];`,
+        };
+
+        const terminalChat = `curl -fsSL ${window.location.origin}/chat.sh | bash -s -- ${apiKeyDisplay} ${deployAgentId}`;
+        const terminalCurl = `curl -X POST ${chatEndpoint} \\\n  -H "Authorization: Bearer ${apiKeyDisplay}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "Hello"}'`;
+
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 bg-slate-950/95 shadow-2xl overflow-hidden flex flex-col">
+          <div className={`w-full ${deployMethod === 'advanced' ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] rounded-3xl border border-slate-700 bg-slate-950/95 shadow-2xl overflow-hidden flex flex-col transition-all`}>
+            {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
-                  <Rocket className="w-5 h-5 text-cyan-300" />
+                {deployMethod && deployMethod !== null && (
+                  <button
+                    onClick={() => setDeployMethod(null)}
+                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors mr-1"
+                    aria-label="Back"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                )}
+                <div className="h-9 w-9 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
+                  <Rocket className="w-4 h-4 text-cyan-300" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Deploy Agent</h2>
-                  <p className="text-xs text-slate-400">
-                    Agent: <span className="text-slate-200 font-semibold">{agents.find((a) => a.id === deployAgentId)?.name || 'Unknown'}</span>
-                  </p>
+                  <h2 className="text-base font-bold text-white">
+                    {!deployMethod ? 'Deploy Agent' : deployMethod === 'website' ? 'My Website' : deployMethod === 'api' ? 'In My App' : deployMethod === 'terminal' ? 'Terminal' : 'Advanced (Self-Host)'}
+                  </h2>
+                  <p className="text-xs text-slate-500">{agentName}</p>
                 </div>
               </div>
-              <button onClick={closeDeploy} className="p-2 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white" aria-label="Close deploy modal">
+              <button onClick={closeDeploy} className="p-2 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white" aria-label="Close">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current deployment</p>
-                  {currentDeployment ? (
-                    <p className="mt-2 text-sm text-slate-200">
-                      Runtime: <span className="font-mono text-cyan-200">{currentDeployment.runtime_instance_id}</span>
-                      <span className="ml-3 px-2 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900 text-slate-300">{currentDeployment.status}</span>
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-400">Not deployed yet.</p>
+            {/* Modal body */}
+            <div className="flex-1 overflow-y-auto">
+              {/* ── Method Picker ── */}
+              {!deployMethod && (
+                <div className="p-6">
+                  <p className="text-sm text-slate-400 mb-5">Where do you want to use <span className="text-white font-medium">{agentName}</span>?</p>
+
+                  {deployApiKeyLoading && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                      <Loader2 className="w-3 h-3 animate-spin" />Preparing your access key…
+                    </div>
                   )}
-                </div>
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Approval policy</p>
-                  <p className="mt-2 text-sm text-emerald-200">Always require approval</p>
-                </div>
-              </div>
 
-              {/* Step 1: Select or create runtime */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-xs font-bold text-cyan-300">1</span>
-                  <p className="text-sm font-semibold text-white">Select or create a runtime</p>
-                </div>
-
-                {runtimes.length > 0 && (
-                  <div className="flex gap-2 mb-3">
-                    <select
-                      value={selectedRuntimeId}
-                      onChange={(e) => setSelectedRuntimeId(e.target.value)}
-                      className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
-                      disabled={runtimesLoading}
-                    >
-                      {runtimes.map((r) => (
-                        <option key={r.id} value={r.id}>{r.name} &bull; {r.mode} &bull; {r.status}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void deleteRuntime(selectedRuntimeId)}
-                      className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors"
-                      title="Delete this runtime"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    {([
+                      { id: 'website', icon: Globe, label: 'My Website', desc: 'Paste one line into any site', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20 hover:border-teal-400/40' },
+                      { id: 'api', icon: Code2, label: 'In My App', desc: 'Python, JS, curl — your code', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20 hover:border-blue-400/40' },
+                      { id: 'terminal', icon: Terminal, label: 'Terminal', desc: 'Chat from your computer', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40' },
+                    ] as const).map(({ id, icon: Icon, label, desc, color, bg }) => (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          setDeployMethod(id);
+                          if (deployAgentId) {
+                            void api.agents.updatePublishState(deployAgentId, { deploy_method: id }).then((res) => {
+                              if (res.success) {
+                                setAgents((prev) => (prev as AIAgent[]).map((a) =>
+                                  a.id === deployAgentId
+                                    ? { ...a, metadata: { ...(a as any).metadata, deploy_method: id } }
+                                    : a
+                                ));
+                              }
+                            });
+                          }
+                        }}
+                        className={`flex flex-col items-center text-center p-4 rounded-2xl border ${bg} transition-all cursor-pointer group`}
+                      >
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center mb-3 ${bg}`}>
+                          <Icon className={`w-5 h-5 ${color}`} />
+                        </div>
+                        <p className="text-sm font-semibold text-white mb-1">{label}</p>
+                        <p className="text-xs text-slate-500 leading-snug">{desc}</p>
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newRuntimeName}
-                    onChange={(e) => setNewRuntimeName(e.target.value)}
-                    placeholder={runtimes.length > 0 ? 'New runtime name…' : 'Runtime name (e.g. Production VPC)'}
-                    className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 placeholder:text-slate-600"
-                  />
                   <button
-                    type="button"
-                    onClick={() => {
-                      const agentName = agents.find((a) => a.id === deployAgentId)?.name || 'Agent';
-                      void createRuntime(agentName);
-                    }}
-                    disabled={runtimesLoading}
-                    className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap transition-colors"
+                    onClick={() => setDeployMethod('advanced')}
+                    className="w-full text-center text-xs text-slate-500 hover:text-slate-300 transition-colors py-1"
                   >
-                    {runtimesLoading ? 'Creating…' : '+ Create runtime'}
+                    Need to self-host on your own server? <span className="underline">Advanced →</span>
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Runtimes run in customer VPC/on-prem and pull approved jobs from SyntheticHR.</p>
-              </div>
+              )}
 
-              {/* Step 2: Enrollment (shown after creating a runtime) */}
-              {createdEnrollment && (
-                <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-xs font-bold text-emerald-300">2</span>
-                    <p className="text-sm font-semibold text-white">Enroll the runtime</p>
-                    <span className="ml-auto text-xs text-slate-500">Expires: {new Date(createdEnrollment.expiresAt).toLocaleString('en-IN')}</span>
+              {/* ── Website method ── */}
+              {deployMethod === 'website' && (
+                <div className="p-6 space-y-5">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                    <p className="text-xs text-slate-400 mb-1">Paste this inside your website's HTML, before <code className="text-slate-300">&lt;/body&gt;</code>:</p>
+                    <div className="mt-3 rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+                      <pre className="text-xs text-teal-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{scriptTag}</pre>
+                    </div>
+                    <button
+                      onClick={() => copyText(scriptTag, 'Code copied!')}
+                      className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-500/15 border border-teal-500/25 text-teal-300 text-xs font-semibold hover:bg-teal-500/25 transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" />Copy code
+                    </button>
                   </div>
 
-                  <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-slate-400">Enrollment token <span className="text-amber-400">(shown once)</span></p>
-                      <button
-                        type="button"
-                        onClick={() => void navigator.clipboard.writeText(createdEnrollment.token).then(() => toast.success('Token copied')).catch(() => toast.error('Copy failed'))}
-                        className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors"
-                      >
-                        Copy
-                      </button>
+                  {deployApiKey && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-amber-300">Your API key is shown above. <strong>Copy it now</strong> — it won't be shown again.</p>
                     </div>
-                    <code className="block break-all font-mono text-xs text-cyan-200 leading-relaxed">{createdEnrollment.token}</code>
-                  </div>
+                  )}
 
-                  <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-slate-400">Quick start (Docker)</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cmd = `export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"\nexport SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"\nexport SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"\nexport SYNTHETICHR_API_KEY="sk_..."\n\ndocker compose -f deploy/compose/runtime.yml up`;
-                          void navigator.clipboard.writeText(cmd).then(() => toast.success('Commands copied')).catch(() => toast.error('Copy failed'));
-                        }}
-                        className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors"
-                      >
-                        Copy all
-                      </button>
-                    </div>
-                    <pre className="text-xs text-slate-200 overflow-x-auto leading-relaxed"><code>{`export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"
-export SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"
-export SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"
-export SYNTHETICHR_API_KEY="sk_..."
-
-docker compose -f deploy/compose/runtime.yml up`}</code></pre>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 text-xs text-slate-400 space-y-1">
+                    <p className="font-medium text-slate-300">What happens next:</p>
+                    <p>• A chat bubble appears in the bottom-right corner of your site</p>
+                    <p>• Visitors can click it and message your agent directly</p>
+                    <p>• All conversations appear in your Workspace</p>
                   </div>
                 </div>
               )}
 
-              {/* Step 3: Deploy agent to runtime */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">3</span>
-                  <p className="text-sm font-semibold text-white">Deploy agent to runtime</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void deployToRuntime()}
-                  disabled={deploymentLoading || !selectedRuntimeId}
-                  className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-40 transition-all"
-                >
-                  {deploymentLoading ? 'Deploying…' : !selectedRuntimeId ? 'Select a runtime first' : `Deploy to ${runtimes.find(r => r.id === selectedRuntimeId)?.name || 'runtime'}`}
-                </button>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Execution</p>
-                <p className="mt-2 text-sm text-slate-300">Once enrolled and online, SyntheticHR will queue approved jobs to this runtime; results and audit logs remain visible in SyntheticHR.</p>
-
-                <div className="mt-4 flex flex-col md:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void createTestChatJob()}
-                    disabled={testJobBusy || !currentDeployment}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900/60 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60"
-                    title={currentDeployment ? 'Creates a pending-approval chat_turn job' : 'Deploy the agent first'}
-                  >
-                    {testJobBusy ? 'Working…' : 'Create test job'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void approveTestJob()}
-                    disabled={testJobBusy || !testJob?.job?.id}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-500 disabled:opacity-60"
-                    title={testJob?.job?.id ? 'Approves the job (moves it to queued)' : 'Create a test job first'}
-                  >
-                    {testJobBusy ? 'Working…' : 'Approve test job'}
-                  </button>
-                </div>
-
-                {testJob?.job?.id && (() => {
-                  const s = testJob.job.status as string;
-                  const m: Record<string, [string, string]> = {
-                    pending_approval: ['text-amber-400', 'approval required'],
-                    queued: ['text-blue-400', 'waiting for runtime'],
-                    running: ['text-cyan-400 animate-pulse', 'executing\u2026'],
-                    succeeded: ['text-emerald-400', 'done!'],
-                    failed: ['text-red-400', 'failed'],
-                    canceled: ['text-slate-400', 'canceled'],
-                  };
-                  const [c, l] = m[s] || ['text-slate-200', s];
-                  return (
-                    <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300">
-                      <div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div>
-                      <div className="mt-1">Status: <span className={`font-semibold ${c}`}>{s}</span> <span className="text-slate-500">({l})</span></div>
+              {/* ── API method ── */}
+              {deployMethod === 'api' && (
+                <div className="p-6 space-y-4">
+                  <div className="flex gap-2">
+                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-0.5">API Key</p>
+                        <code className="text-xs text-blue-200 font-mono">{apiKeyDisplay.length > 30 ? apiKeyDisplay.slice(0, 12) + '...' + apiKeyDisplay.slice(-8) : apiKeyDisplay}</code>
+                      </div>
+                      <button onClick={() => copyText(apiKeyDisplay, 'API key copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })()}
-              </div>
+                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
+                        <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
+                      </div>
+                      <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex gap-1 mb-2">
+                      {(['curl', 'python', 'nodejs', 'php'] as DeployCodeTab[]).map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setDeployCodeTab(tab)}
+                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${deployCodeTab === tab ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                          {tab === 'nodejs' ? 'Node.js' : tab}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
+                      <pre className="text-xs text-slate-200 font-mono whitespace-pre overflow-x-auto leading-relaxed">{codeSnippets[deployCodeTab]}</pre>
+                      <button
+                        onClick={() => copyText(codeSnippets[deployCodeTab], 'Code copied!')}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {deployApiKey && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-amber-300">API key shown once. Copy it now and store it securely.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Terminal method ── */}
+              {deployMethod === 'terminal' && (
+                <div className="p-6 space-y-5">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-2">Open your terminal and run this to start chatting:</p>
+                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
+                      <pre className="text-xs text-purple-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{terminalChat}</pre>
+                      <button
+                        onClick={() => copyText(terminalChat, 'Command copied!')}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-xs text-slate-500">No installation needed. Works on Mac, Linux, and WSL.</p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-slate-400 mb-2">Or send a single message:</p>
+                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
+                      <pre className="text-xs text-slate-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{terminalCurl}</pre>
+                      <button
+                        onClick={() => copyText(terminalCurl, 'Command copied!')}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Advanced (original runtime enrollment flow) ── */}
+              {deployMethod === 'advanced' && (
+                <div className="p-6 space-y-4 overflow-y-auto">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 flex items-start gap-2 mb-2">
+                    <Info className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-slate-400">For self-hosting on your own server or VPC. Most users should use Website, API, or Terminal instead.</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current deployment</p>
+                      {currentDeployment ? (
+                        <p className="mt-2 text-sm text-slate-200">
+                          Runtime: <span className="font-mono text-cyan-200">{currentDeployment.runtime_instance_id}</span>
+                          <span className="ml-3 px-2 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900 text-slate-300">{currentDeployment.status}</span>
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm text-slate-400">Not deployed yet.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-xs font-bold text-cyan-300">1</span>
+                      <p className="text-sm font-semibold text-white">Select or create a runtime</p>
+                    </div>
+                    {runtimes.length > 0 && (
+                      <div className="flex gap-2 mb-3">
+                        <select value={selectedRuntimeId} onChange={(e) => setSelectedRuntimeId(e.target.value)} className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500" disabled={runtimesLoading}>
+                          {runtimes.map((r) => (<option key={r.id} value={r.id}>{r.name} • {r.mode} • {r.status}</option>))}
+                        </select>
+                        <button type="button" onClick={() => void deleteRuntime(selectedRuntimeId)} className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors" title="Delete runtime"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input type="text" value={newRuntimeName} onChange={(e) => setNewRuntimeName(e.target.value)} placeholder={runtimes.length > 0 ? 'New runtime name…' : 'Runtime name (e.g. Production VPC)'} className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 placeholder:text-slate-600" />
+                      <button type="button" onClick={() => void createRuntime(agentName)} disabled={runtimesLoading} className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap transition-colors">
+                        {runtimesLoading ? 'Creating…' : '+ Create runtime'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Runtimes run in your VPC/on-prem and pull approved jobs from RASI.</p>
+                  </div>
+
+                  {createdEnrollment && (
+                    <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-xs font-bold text-emerald-300">2</span>
+                        <p className="text-sm font-semibold text-white">Enroll the runtime</p>
+                        <span className="ml-auto text-xs text-slate-500">Expires: {new Date(createdEnrollment.expiresAt).toLocaleString()}</span>
+                      </div>
+                      <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-slate-400">Enrollment token <span className="text-amber-400">(shown once)</span></p>
+                          <button type="button" onClick={() => void navigator.clipboard.writeText(createdEnrollment.token).then(() => toast.success('Token copied')).catch(() => toast.error('Copy failed'))} className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors">Copy</button>
+                        </div>
+                        <code className="block break-all font-mono text-xs text-cyan-200 leading-relaxed">{createdEnrollment.token}</code>
+                      </div>
+                      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-slate-400">Quick start (Docker)</p>
+                          <button type="button" onClick={() => { const cmd = `export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"\nexport SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"\nexport SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"\nexport SYNTHETICHR_API_KEY="sk_..."\n\ndocker compose -f deploy/compose/runtime.yml up`; void navigator.clipboard.writeText(cmd).then(() => toast.success('Commands copied')).catch(() => toast.error('Copy failed')); }} className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors">Copy all</button>
+                        </div>
+                        <pre className="text-xs text-slate-200 overflow-x-auto leading-relaxed"><code>{`export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"\nexport SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"\nexport SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"\nexport SYNTHETICHR_API_KEY="sk_..."\n\ndocker compose -f deploy/compose/runtime.yml up`}</code></pre>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">3</span>
+                      <p className="text-sm font-semibold text-white">Deploy agent to runtime</p>
+                    </div>
+                    <button type="button" onClick={() => void deployToRuntime()} disabled={deploymentLoading || !selectedRuntimeId} className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-40 transition-all">
+                      {deploymentLoading ? 'Deploying…' : !selectedRuntimeId ? 'Select a runtime first' : `Deploy to ${runtimes.find((r) => r.id === selectedRuntimeId)?.name || 'runtime'}`}
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">Test execution</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => void createTestChatJob()} disabled={testJobBusy || !currentDeployment} className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/60 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60">
+                        {testJobBusy ? 'Working…' : 'Create test job'}
+                      </button>
+                      <button type="button" onClick={() => void approveTestJob()} disabled={testJobBusy || !testJob?.job?.id} className="flex-1 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-sm font-semibold disabled:opacity-60">
+                        {testJobBusy ? 'Working…' : 'Approve test job'}
+                      </button>
+                    </div>
+                    {testJob?.job?.id && (() => {
+                      const s = testJob.job.status as string;
+                      const statusMap: Record<string, [string, string]> = { pending_approval: ['text-amber-400', 'approval required'], queued: ['text-blue-400', 'waiting for runtime'], running: ['text-cyan-400 animate-pulse', 'executing…'], succeeded: ['text-emerald-400', 'done!'], failed: ['text-red-400', 'failed'], canceled: ['text-slate-400', 'canceled'] };
+                      const [c, l] = statusMap[s] || ['text-slate-200', s];
+                      return <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300"><div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div><div className="mt-1">Status: <span className={`font-semibold ${c}`}>{s}</span> <span className="text-slate-500">({l})</span></div></div>;
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showAddModal && (
         <AddAgentModal onClose={() => setShowAddModal(false)} onAdd={addAgent} />
