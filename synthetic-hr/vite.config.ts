@@ -19,7 +19,7 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -37,7 +37,7 @@ export default defineConfig({
             return 'vendor-ui';
           }
 
-          return 'vendor-misc';
+          return undefined;
         },
       },
     },
