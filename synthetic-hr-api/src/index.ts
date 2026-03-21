@@ -31,6 +31,7 @@ import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
+import approvalsRoutes from './routes/approvals';
 import recruitmentRoutes from './routes/recruitment';
 import hubsRoutes from './routes/hubs';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
@@ -326,6 +327,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/integrations/oauth/callback')) {
     return next();
   }
+  if (req.path.startsWith('/api/marketplace/oauth/callback')) {
+    return next();
+  }
   if (req.path.startsWith('/api') || req.path.startsWith('/admin')) {
     // Chain auth -> org isolation in a single middleware so the OAuth callback can remain public.
     return authenticateToken(req, res, (err?: any) => {
@@ -346,6 +350,7 @@ app.use('/api/jobs', jobsRoutes);
 app.use('/api/work-items', workItemsRoutes);
 app.use('/api/playbooks', playbooksRoutes);
 app.use('/api/action-policies', actionPoliciesRoutes);
+app.use('/api/approvals', approvalsRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/hubs', hubsRoutes);
 app.use('/api', escalationsRoutes);

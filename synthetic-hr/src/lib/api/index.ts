@@ -16,6 +16,8 @@ export {
   actionPoliciesApi,
 } from './platform';
 export { marketplaceApi } from './marketplace';
+export { approvalsApi } from './approvals';
+export type { ApprovalRequest } from './approvals';
 export { recruitmentApi } from './recruitment';
 export { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 export {
@@ -64,6 +66,7 @@ import {
   actionPoliciesApi,
 } from './platform';
 import { marketplaceApi } from './marketplace';
+import { approvalsApi } from './approvals';
 import { recruitmentApi } from './recruitment';
 import { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 import {
@@ -106,6 +109,7 @@ export const api = {
   playbooks: playbooksApi,
   actionPolicies: actionPoliciesApi,
   marketplace: marketplaceApi,
+  approvals: approvalsApi,
   slack: slackApi,
   recruitment: recruitmentApi,
   hubs: {

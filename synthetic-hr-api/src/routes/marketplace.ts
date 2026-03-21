@@ -438,8 +438,10 @@ async function getInstalledAppHealth(orgId: string): Promise<Map<string, Install
     // Fetch all integrations for the org — both marketplace-installed and spec-driven.
     // This lets marketplace apps appear "installed" even when connected via the
     // Integrations/Connections flow, giving users a unified view.
+    // Exclude waitlisted entries — those are not yet installed.
     const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
+      status: 'neq.waitlisted',
       select: 'service_type,status,last_sync_at,last_error_at,last_error_msg,metadata',
     }))) as Array<{
       service_type: string;
@@ -553,14 +555,39 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
     }
 
-    // For OAuth apps return a placeholder auth URL (real OAuth per-partner handled by edge functions)
+    // For OAuth apps: build real auth URL and store state for callback verification
     if (app.installMethod === 'oauth2') {
       const state = crypto.randomUUID();
+      const callbackUrl = `${process.env.API_URL || 'http://localhost:3001'}/api/marketplace/oauth/callback`;
+      const authUrl = buildOAuthUrl(app.id, state, callbackUrl);
+
+      if (!authUrl) {
+        return res.status(400).json({
+          success: false,
+          error: `OAuth for ${app.name} is not yet configured. Contact your administrator to set up the required credentials.`,
+        });
+      }
+
+      // Store state for verification on callback
+      await supabaseRestAsService('integration_oauth_states', '', {
+        method: 'POST',
+        body: {
+          state,
+          organization_id: orgId,
+          user_id: (req.user as any)?.id ?? null,
+          provider_name: app.id,
+          app_id: app.id,
+          redirect_uri: callbackUrl,
+          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        },
+      });
+
       return res.json({
         success: true,
         oauth: true,
         state,
-        message: `OAuth flow for ${app.name} — redirect user to partner authorization page.`,
+        authUrl,
+        message: `Redirect to ${app.name} to authorize access.`,
       });
     }
 
@@ -576,30 +603,55 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
 
     const now = new Date().toISOString();
 
-    // Create integration record
-    const integrationBody = {
-      organization_id: orgId,
-      service_type: app.id,
-      service_name: app.name,
-      category: app.category.toUpperCase(),
-      auth_type: app.installMethod,
-      status: 'configured',
-      ai_enabled: true,
-      created_at: now,
-      updated_at: now,
-      metadata: { marketplace_app: 'true', developer: app.developer },
-    };
+    // Check if a waitlisted row already exists — if so, update it instead of inserting
+    const existingRows = (await supabaseRestAsService('integrations', new URLSearchParams({
+      organization_id: eq(orgId),
+      service_type: eq(app.id),
+      'metadata->>marketplace_app': eq('true'),
+      select: 'id,status',
+      limit: '1',
+    }))) as Array<{ id: string; status: string }>;
 
-    const created = (await supabaseRestAsService('integrations', '', {
-      method: 'POST',
-      body: integrationBody,
-    })) as any[];
+    let integrationId: string;
 
-    const integration = Array.isArray(created) ? created[0] : created;
-    const integrationId = integration?.id;
+    if (existingRows?.length > 0 && existingRows[0].status === 'waitlisted') {
+      // Upgrade waitlisted row to configured
+      integrationId = existingRows[0].id;
+      await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
+        method: 'PATCH',
+        body: {
+          status: 'configured',
+          ai_enabled: true,
+          updated_at: now,
+          metadata: { marketplace_app: 'true', developer: app.developer },
+        },
+      });
+    } else {
+      // Create integration record
+      const integrationBody = {
+        organization_id: orgId,
+        service_type: app.id,
+        service_name: app.name,
+        category: app.category.toUpperCase(),
+        auth_type: app.installMethod,
+        status: 'configured',
+        ai_enabled: true,
+        created_at: now,
+        updated_at: now,
+        metadata: { marketplace_app: 'true', developer: app.developer },
+      };
 
-    if (!integrationId) {
-      return res.status(500).json({ success: false, error: 'Failed to create integration record' });
+      const created = (await supabaseRestAsService('integrations', '', {
+        method: 'POST',
+        body: integrationBody,
+      })) as any[];
+
+      const integration = Array.isArray(created) ? created[0] : created;
+      integrationId = integration?.id;
+
+      if (!integrationId) {
+        return res.status(500).json({ success: false, error: 'Failed to create integration record' });
+      }
     }
 
     // Store credentials (encrypted)
@@ -675,5 +727,408 @@ router.delete('/apps/:id', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// PATCH /marketplace/apps/:id/credentials — update credentials for an installed app
+router.patch('/apps/:id/credentials', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const app = PARTNER_APP_CATALOG.find((a) => a.id === req.params.id);
+    if (!app) return res.status(404).json({ success: false, error: 'App not found' });
+
+    const parsed = z.object({ credentials: z.record(z.string()) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+
+    const creds: Record<string, string> = parsed.data.credentials;
+
+    if (Object.keys(creds).length === 0) {
+      return res.status(400).json({ success: false, error: 'No credentials provided' });
+    }
+
+    // Find the existing integration
+    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
+      organization_id: eq(orgId),
+      service_type: eq(app.id),
+      'metadata->>marketplace_app': eq('true'),
+      select: 'id',
+      limit: '1',
+    }))) as Array<{ id: string }>;
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'App not installed' });
+    }
+
+    const integrationId = rows[0].id;
+    const now = new Date().toISOString();
+
+    // Upsert each credential
+    await Promise.allSettled(
+      Object.entries(creds).map(async ([key, value]) => {
+        const field = app.requiredFields?.find((f) => f.name === key);
+        const isSensitive = field?.type === 'password';
+        const stored = isSensitive ? await encryptSecret(value) : value;
+        return supabaseRestAsService(
+          'integration_credentials',
+          new URLSearchParams({ on_conflict: 'integration_id,key' }),
+          {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+            body: {
+              integration_id: integrationId,
+              key,
+              value: stored,
+              is_sensitive: isSensitive,
+              label: field?.label || key,
+              updated_at: now,
+            },
+          }
+        );
+      })
+    );
+
+    // Touch updated_at on the integration itself
+    await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
+      method: 'PATCH',
+      body: { updated_at: now },
+    });
+
+    logger.info('Marketplace credentials updated', { app_id: app.id, org_id: orgId });
+    return res.json({ success: true, message: 'Credentials updated successfully.' });
+  } catch (error: any) {
+    logger.error('Failed to update credentials', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /marketplace/apps/:id/test — test an app's credentials
+router.post('/apps/:id/test', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const app = PARTNER_APP_CATALOG.find((a) => a.id === req.params.id);
+    if (!app) return res.status(404).json({ success: false, error: 'App not found' });
+
+    const { credentials = {} } = req.body as { credentials?: Record<string, string> };
+
+    // Validate all required fields are present and non-empty
+    if (app.requiredFields) {
+      const missing = app.requiredFields
+        .filter((f) => f.required && !credentials[f.name]?.trim())
+        .map((f) => f.label);
+      if (missing.length > 0) {
+        return res.json({ success: false, message: `Missing required fields: ${missing.join(', ')}` });
+      }
+    }
+
+    let testSuccess = true;
+    let testMessage = `${app.name} credentials look valid.`;
+
+    // Provider-specific live check for apps where it's easy and safe
+    if (app.id === 'stripe' && credentials.secret_key) {
+      try {
+        const stripeRes = await fetch('https://api.stripe.com/v1/account', {
+          headers: { Authorization: `Bearer ${credentials.secret_key}` },
+        });
+        if (stripeRes.ok) {
+          testMessage = 'Stripe connection verified successfully.';
+        } else {
+          testSuccess = false;
+          testMessage = stripeRes.status === 401
+            ? 'Invalid Stripe secret key. Please check and try again.'
+            : `Stripe returned status ${stripeRes.status}.`;
+        }
+      } catch {
+        testSuccess = false;
+        testMessage = 'Could not reach Stripe API. Check your network connectivity.';
+      }
+    }
+
+    // Update integration status if we have one stored
+    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
+      organization_id: eq(orgId),
+      service_type: eq(app.id),
+      'metadata->>marketplace_app': eq('true'),
+      select: 'id',
+      limit: '1',
+    }))) as Array<{ id: string }>;
+
+    if (rows?.length > 0) {
+      await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(rows[0].id) }), {
+        method: 'PATCH',
+        body: {
+          status: testSuccess ? 'connected' : 'error',
+          last_error_msg: testSuccess ? null : testMessage,
+          last_error_at: testSuccess ? null : new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+    }
+
+    return res.json({ success: testSuccess, message: testMessage });
+  } catch (error: any) {
+    logger.error('Failed to test connection', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /marketplace/apps/:id/notify — join the waitlist for a Coming Soon app
+router.post('/apps/:id/notify', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const app = PARTNER_APP_CATALOG.find((a) => a.id === req.params.id);
+    if (!app) return res.status(404).json({ success: false, error: 'App not found' });
+    if (!app.comingSoon) {
+      return res.status(400).json({ success: false, error: 'This app is already available to install.' });
+    }
+
+    // Check for existing entry (idempotent)
+    const existing = (await supabaseRestAsService('integrations', new URLSearchParams({
+      organization_id: eq(orgId),
+      service_type: eq(app.id),
+      'metadata->>marketplace_app': eq('true'),
+      select: 'id,status',
+      limit: '1',
+    }))) as Array<{ id: string; status: string }>;
+
+    if (existing?.length > 0) {
+      return res.json({ success: true, message: `You're already on the waitlist for ${app.name}.` });
+    }
+
+    const now = new Date().toISOString();
+    await supabaseRestAsService('integrations', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        service_type: app.id,
+        service_name: app.name,
+        category: app.category.toUpperCase(),
+        auth_type: app.installMethod,
+        status: 'waitlisted',
+        ai_enabled: false,
+        created_at: now,
+        updated_at: now,
+        metadata: { marketplace_app: 'true', waitlisted: 'true', developer: app.developer },
+      },
+    });
+
+    logger.info('Marketplace waitlist signup', { app_id: app.id, org_id: orgId });
+    return res.json({ success: true, message: `You'll be notified when ${app.name} is available.` });
+  } catch (error: any) {
+    logger.error('Failed to join waitlist', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /marketplace/oauth/callback — OAuth2 authorization callback (public route — no auth middleware)
+router.get('/oauth/callback', async (req: Request, res: Response) => {
+  const enc = encodeURIComponent;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  const { code, state, error: oauthError } = req.query as Record<string, string>;
+
+  if (oauthError) {
+    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc(oauthError)}`);
+  }
+  if (!code || !state) {
+    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('MissingCodeOrState')}`);
+  }
+
+  // Look up the state record
+  const stateRows = (await supabaseRestAsService('integration_oauth_states', new URLSearchParams({
+    state: eq(state),
+    consumed_at: 'is.null',
+    select: '*',
+    limit: '1',
+  }))) as any[];
+
+  if (!stateRows?.length) {
+    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('InvalidOrExpiredState')}`);
+  }
+
+  const stateRow = stateRows[0];
+  const appId = (stateRow.app_id || stateRow.provider_name) as string;
+  const app = PARTNER_APP_CATALOG.find((a) => a.id === appId);
+
+  if (!app) {
+    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('UnknownApp')}`);
+  }
+
+  // Exchange code for tokens
+  let accessToken: string | null = null;
+  let refreshToken: string | null = null;
+  let exchangeError: string | null = null;
+
+  try {
+    const result = await exchangeOAuthCode(appId, code, stateRow.redirect_uri as string);
+    accessToken = result.accessToken;
+    refreshToken = result.refreshToken ?? null;
+  } catch (e: any) {
+    exchangeError = e.message;
+  }
+
+  if (!accessToken) {
+    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc(exchangeError || 'TokenExchangeFailed')}&marketplace_app=${enc(appId)}`);
+  }
+
+  const now = new Date().toISOString();
+  const orgId = stateRow.organization_id as string;
+
+  // Create or update integration — handle waitlisted rows
+  const existingRows = (await supabaseRestAsService('integrations', new URLSearchParams({
+    organization_id: eq(orgId),
+    service_type: eq(appId),
+    'metadata->>marketplace_app': eq('true'),
+    select: 'id',
+    limit: '1',
+  }))) as Array<{ id: string }>;
+
+  let integrationId: string;
+
+  if (existingRows?.length > 0) {
+    integrationId = existingRows[0].id;
+    await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
+      method: 'PATCH',
+      body: { status: 'connected', ai_enabled: true, updated_at: now },
+    });
+  } else {
+    const created = (await supabaseRestAsService('integrations', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        service_type: appId,
+        service_name: app.name,
+        category: app.category.toUpperCase(),
+        auth_type: 'oauth2',
+        status: 'connected',
+        ai_enabled: true,
+        created_at: now,
+        updated_at: now,
+        metadata: { marketplace_app: 'true', developer: app.developer },
+      },
+    })) as any[];
+    const record = Array.isArray(created) ? created[0] : created;
+    integrationId = record?.id;
+  }
+
+  // Store tokens
+  if (integrationId) {
+    const encAccess = await encryptSecret(accessToken);
+    await supabaseRestAsService(
+      'integration_credentials',
+      new URLSearchParams({ on_conflict: 'integration_id,key' }),
+      {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: { integration_id: integrationId, key: 'access_token', value: encAccess, is_sensitive: true, label: 'Access Token', updated_at: now },
+      }
+    );
+    if (refreshToken) {
+      const encRefresh = await encryptSecret(refreshToken);
+      await supabaseRestAsService(
+        'integration_credentials',
+        new URLSearchParams({ on_conflict: 'integration_id,key' }),
+        {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: { integration_id: integrationId, key: 'refresh_token', value: encRefresh, is_sensitive: true, label: 'Refresh Token', updated_at: now },
+        }
+      );
+    }
+  }
+
+  // Mark state consumed
+  await supabaseRestAsService('integration_oauth_states', new URLSearchParams({ id: eq(stateRow.id) }), {
+    method: 'PATCH',
+    body: { consumed_at: now },
+  });
+
+  logger.info('Marketplace OAuth completed', { app_id: appId, org_id: orgId });
+  return res.redirect(`${frontendUrl}/dashboard?marketplace_connected=true&marketplace_app=${enc(appId)}`);
+});
+
+// ---------------------------------------------------------------------------
+// OAuth helpers
+// ---------------------------------------------------------------------------
+
+function buildOAuthUrl(appId: string, state: string, redirectUri: string): string | null {
+  const enc = encodeURIComponent;
+  switch (appId) {
+    case 'hubspot':
+      if (!process.env.HUBSPOT_CLIENT_ID) return null;
+      return `https://app.hubspot.com/oauth/authorize?client_id=${enc(process.env.HUBSPOT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=contacts%20crm.objects.contacts.read%20crm.objects.deals.read&state=${state}`;
+    case 'salesforce':
+      if (!process.env.SALESFORCE_CLIENT_ID) return null;
+      return `https://login.salesforce.com/services/oauth2/authorize?response_type=code&client_id=${enc(process.env.SALESFORCE_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
+    case 'quickbooks':
+      if (!process.env.QUICKBOOKS_CLIENT_ID) return null;
+      return `https://appcenter.intuit.com/connect/oauth2?client_id=${enc(process.env.QUICKBOOKS_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&response_type=code&scope=com.intuit.quickbooks.accounting&state=${state}`;
+    case 'intercom':
+      if (!process.env.INTERCOM_CLIENT_ID) return null;
+      return `https://app.intercom.com/oauth?client_id=${enc(process.env.INTERCOM_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
+    case 'linkedin-recruiter':
+      if (!process.env.LINKEDIN_CLIENT_ID) return null;
+      return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${enc(process.env.LINKEDIN_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=r_liteprofile%20r_emailaddress&state=${state}`;
+    case 'xero':
+      if (!process.env.XERO_CLIENT_ID) return null;
+      return `https://login.xero.com/identity/connect/authorize?response_type=code&client_id=${enc(process.env.XERO_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=offline_access%20accounting.transactions&state=${state}`;
+    default:
+      return null;
+  }
+}
+
+async function exchangeOAuthCode(
+  appId: string,
+  code: string,
+  redirectUri: string
+): Promise<{ accessToken: string; refreshToken?: string }> {
+  let tokenUrl: string;
+  let params: Record<string, string>;
+
+  switch (appId) {
+    case 'hubspot':
+      tokenUrl = 'https://api.hubapi.com/oauth/v1/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.HUBSPOT_CLIENT_ID!, client_secret: process.env.HUBSPOT_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'salesforce':
+      tokenUrl = 'https://login.salesforce.com/services/oauth2/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.SALESFORCE_CLIENT_ID!, client_secret: process.env.SALESFORCE_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'quickbooks':
+      tokenUrl = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+      params = { grant_type: 'authorization_code', client_id: process.env.QUICKBOOKS_CLIENT_ID!, client_secret: process.env.QUICKBOOKS_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'intercom':
+      tokenUrl = 'https://api.intercom.io/auth/eagle/token';
+      params = { code, client_id: process.env.INTERCOM_CLIENT_ID!, client_secret: process.env.INTERCOM_CLIENT_SECRET! };
+      break;
+    case 'linkedin-recruiter':
+      tokenUrl = 'https://www.linkedin.com/oauth/v2/accessToken';
+      params = { grant_type: 'authorization_code', code, client_id: process.env.LINKEDIN_CLIENT_ID!, client_secret: process.env.LINKEDIN_CLIENT_SECRET!, redirect_uri: redirectUri };
+      break;
+    case 'xero':
+      tokenUrl = 'https://identity.xero.com/connect/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.XERO_CLIENT_ID!, client_secret: process.env.XERO_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    default:
+      throw new Error(`No token exchange configured for app: ${appId}`);
+  }
+
+  const resp = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params),
+  });
+  const json = await resp.json() as any;
+  if (!resp.ok || !json.access_token) {
+    throw new Error(json.error_description || json.error || `Token exchange failed (${resp.status})`);
+  }
+  return { accessToken: json.access_token as string, refreshToken: json.refresh_token as string | undefined };
+}
 
 export default router;

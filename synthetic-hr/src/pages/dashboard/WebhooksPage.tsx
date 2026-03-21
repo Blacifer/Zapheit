@@ -21,9 +21,12 @@ import { toast } from '../../lib/toast';
 type EventId =
   | 'usage.updated'
   | 'cost.alert'
+  | 'reconciliation.alert'
   | 'error.occurred'
   | 'rate_limit.exceeded'
-  | 'model.deprecated';
+  | 'model.deprecated'
+  | 'approval.requested'
+  | 'approval.resolved';
 
 type WebhookStatus = 'not_tested' | 'healthy' | 'failing' | 'disabled';
 type DeliveryStatus = 'delivered' | 'failed';
@@ -57,9 +60,12 @@ type DeliveryLog = {
 const EVENT_OPTIONS: Array<{ id: EventId; label: string; description: string }> = [
   { id: 'usage.updated', label: 'Usage Updated', description: 'Triggered when billable runtime usage changes.' },
   { id: 'cost.alert', label: 'Cost Alert', description: 'Triggered when spend crosses configured thresholds.' },
+  { id: 'reconciliation.alert', label: 'Reconciliation Alert', description: 'Triggered when provider-reported spend drifts from observed spend.' },
   { id: 'error.occurred', label: 'Error Occurred', description: 'Triggered when platform or delivery errors happen.' },
   { id: 'rate_limit.exceeded', label: 'Rate Limit Exceeded', description: 'Triggered when a tenant or agent is rate limited.' },
   { id: 'model.deprecated', label: 'Model Deprecated', description: 'Triggered when an active model reaches deprecation or EOL.' },
+  { id: 'approval.requested', label: 'Approval Requested', description: 'Triggered when an agent raises a new human-in-the-loop approval request.' },
+  { id: 'approval.resolved', label: 'Approval Resolved', description: 'Triggered when an approval request is approved, denied, expired, or cancelled.' },
 ];
 
 const SAMPLE_EVENT: Record<EventId, Record<string, unknown>> = {
@@ -84,6 +90,18 @@ const SAMPLE_EVENT: Record<EventId, Record<string, unknown>> = {
       threshold_percent: 85,
       projected_monthly_spend_inr: 248000,
       configured_limit_inr: 250000,
+    },
+  },
+  'reconciliation.alert': {
+    id: 'evt_reconciliation_001',
+    type: 'reconciliation.alert',
+    created_at: new Date().toISOString(),
+    organization_id: 'org_demo',
+    data: {
+      provider: 'openrouter',
+      severity: 'warning',
+      title: 'Provider-reported spend drift detected',
+      message: 'The current provider-reported total differs from RASI-observed spend by 14.20 USD across the last 30-day window.',
     },
   },
   'error.occurred': {
@@ -118,6 +136,34 @@ const SAMPLE_EVENT: Record<EventId, Record<string, unknown>> = {
       model: 'gpt-4',
       replacement: 'gpt-4.1',
       effective_date: '2026-05-31',
+    },
+  },
+  'approval.requested': {
+    id: 'evt_approval_001',
+    type: 'approval.requested',
+    created_at: new Date().toISOString(),
+    organization_id: 'org_demo',
+    data: {
+      approval_id: 'apr_abc123',
+      agent_id: 'agent_sales_support',
+      service: 'internal',
+      action: 'sales.lead.create',
+      requested_by: 'Sales Assistant',
+      required_role: 'manager',
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
+    },
+  },
+  'approval.resolved': {
+    id: 'evt_approval_resolve_001',
+    type: 'approval.resolved',
+    created_at: new Date().toISOString(),
+    organization_id: 'org_demo',
+    data: {
+      approval_id: 'apr_abc123',
+      decision: 'approved',
+      reviewer_id: 'usr_manager_001',
+      service: 'internal',
+      action: 'sales.lead.create',
     },
   },
 };
@@ -346,9 +392,12 @@ export default function WebhooksPage() {
     ? [
         `curl -X POST '${selectedWebhook.url}'`,
         `  -H 'Content-Type: application/json'`,
-        `  -H 'X-Rasi-Signature: ${selectedWebhook.secret}'`,
         `  -H 'X-Rasi-Event: ${selectedTestEvent}'`,
+        `  -H 'X-Rasi-Delivery-Id: dlv_<uuid>'`,
+        `  -H 'X-Rasi-Timestamp: <unix-seconds>'`,
+        `  -H 'X-Rasi-Signature: sha256=<HMAC-SHA256(secret, "<timestamp>.<body>")>'`,
         `  -d '${JSON.stringify(selectedPayload)}'`,
+        `# Secret: ${selectedWebhook.secret}`,
       ].join(' \\\n')
     : '';
 
