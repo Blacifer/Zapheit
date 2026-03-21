@@ -1,4 +1,4 @@
--- migration_016: add missing DELETE RLS policy for ai_agents
+-- migration_020: add missing DELETE RLS policy for ai_agents
 -- Without this, all agent deletes are blocked by row-level security
 -- even for authenticated org members with agents.delete permission.
 

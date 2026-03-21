@@ -51,7 +51,7 @@ export const marketplaceApi = {
     return authenticatedFetch<MarketplaceApp[]>('/marketplace/apps/installed', { method: 'GET' });
   },
 
-  async install(appId: string, credentials: Record<string, string> = {}): Promise<ApiResponse<{ integration_id?: string; oauth?: boolean; state?: string; message: string }>> {
+  async install(appId: string, credentials: Record<string, string> = {}): Promise<ApiResponse<{ integration_id?: string; oauth?: boolean; state?: string; authUrl?: string; message: string }>> {
     return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}/install`, {
       method: 'POST',
       body: JSON.stringify({ credentials }),
@@ -60,5 +60,25 @@ export const marketplaceApi = {
 
   async uninstall(appId: string): Promise<ApiResponse<{ message: string }>> {
     return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}`, { method: 'DELETE' });
+  },
+
+  async updateCredentials(appId: string, credentials: Record<string, string>): Promise<ApiResponse<{ message: string }>> {
+    return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}/credentials`, {
+      method: 'PATCH',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  async testConnection(appId: string, credentials: Record<string, string> = {}): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}/test`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  async notifyMe(appId: string): Promise<ApiResponse<{ message: string }>> {
+    return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}/notify`, {
+      method: 'POST',
+    });
   },
 };

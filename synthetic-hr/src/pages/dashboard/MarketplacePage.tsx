@@ -96,7 +96,13 @@ function InstallModal({ app, onClose, onInstalled }: { app: MarketplaceApp; onCl
       const res = await api.marketplace.install(app.id, credentials);
       if (!res.success) throw new Error((res as any).error || 'Install failed');
       if ((res.data as any)?.oauth) {
-        toast.info(`OAuth flow for ${app.name} — opening authorization…`);
+        const authUrl = (res.data as any)?.authUrl as string | undefined;
+        if (authUrl) {
+          // Redirect browser to OAuth provider — page will reload on return
+          window.location.href = authUrl;
+          return;
+        }
+        toast.info(`OAuth for ${app.name} is coming soon — we'll notify you when it's ready.`);
       } else {
         toast.success(`${app.name} added to your workspace`);
       }
@@ -249,6 +255,133 @@ function InstallModal({ app, onClose, onInstalled }: { app: MarketplaceApp; onCl
   );
 }
 
+// ─── Edit Credentials Modal ───────────────────────────────────────────────────
+
+function EditCredentialsModal({ app, onClose, onUpdated }: { app: MarketplaceApp; onClose: () => void; onUpdated: () => void }) {
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await api.marketplace.testConnection(app.id, credentials);
+      if (res.success && res.data) {
+        setTestResult(res.data);
+      } else {
+        setTestResult({ success: false, message: (res as any).error || 'Test failed' });
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: err.message || 'Test failed' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (Object.keys(credentials).length === 0) {
+      toast.error('Enter at least one credential to update.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.marketplace.updateCredentials(app.id, credentials);
+      if (!res.success) throw new Error((res as any).error || 'Update failed');
+      toast.success('Credentials updated successfully');
+      onUpdated();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update credentials');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0e1117] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-6 border-b border-white/8">
+          <div className="flex items-center gap-3">
+            <AppLogo app={app} />
+            <div>
+              <p className="text-sm font-bold text-white">Update Credentials</p>
+              <p className="text-xs text-slate-500">{app.name} · {app.developer}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <p className="text-xs text-slate-400">
+            Leave fields blank to keep existing values. Only filled fields will be updated.
+          </p>
+
+          {app.requiredFields && app.requiredFields.length > 0 && (
+            <div className="space-y-3">
+              {app.requiredFields.map((field) => (
+                <div key={field.name}>
+                  <label className="block text-xs text-slate-400 mb-1.5">
+                    {field.label}
+                    {field.required && <span className="text-rose-400 ml-0.5">*</span>}
+                  </label>
+                  <input
+                    type={field.type}
+                    placeholder={field.placeholder || `Enter new ${field.label.toLowerCase()}`}
+                    value={credentials[field.name] || ''}
+                    onChange={(e) => setCredentials((prev) => ({ ...prev, [field.name]: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Test result */}
+          {testResult && (
+            <div className={cn(
+              'rounded-xl border px-4 py-3 flex items-start gap-2.5',
+              testResult.success
+                ? 'border-emerald-400/20 bg-emerald-500/[0.06] text-emerald-300'
+                : 'border-rose-400/20 bg-rose-500/[0.06] text-rose-300',
+            )}>
+              {testResult.success
+                ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+              <p className="text-xs">{testResult.message}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 p-6 border-t border-white/8">
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 text-sm font-medium transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleTest}
+              disabled={testing || Object.keys(credentials).length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Test
+            </button>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving || Object.keys(credentials).length === 0}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+          >
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Key className="w-4 h-4" /> Save</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App Card ─────────────────────────────────────────────────────────────────
 
 function AppCard({ app, onInstall, onUninstall, onNavigate, agentNames }: {
@@ -259,6 +392,8 @@ function AppCard({ app, onInstall, onUninstall, onNavigate, agentNames }: {
   agentNames?: string[];
 }) {
   const [uninstalling, setUninstalling] = useState(false);
+  const [notified, setNotified] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const catMeta = CATEGORY_META[app.category] || CATEGORY_META['all'];
   const { Icon: CatIcon, color: catColor } = catMeta;
   const viaConnections = app.installed && app.connectionSource === 'connections';
@@ -347,10 +482,36 @@ function AppCard({ app, onInstall, onUninstall, onNavigate, agentNames }: {
       <div className="flex items-center gap-2 pt-1 border-t border-white/5 mt-auto">
         {app.comingSoon ? (
           <button
-            disabled
-            className="ml-auto flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border border-white/5 bg-white/[0.02] text-slate-600 cursor-not-allowed"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (notified || notifying) return;
+              setNotifying(true);
+              try {
+                const res = await api.marketplace.notifyMe(app.id);
+                if (res.success) {
+                  setNotified(true);
+                  toast.success(res.data?.message || `You'll be notified when ${app.name} is available.`);
+                } else {
+                  toast.error((res as any).error || 'Failed to join waitlist');
+                }
+              } catch (err: any) {
+                toast.error(err.message || 'Failed to join waitlist');
+              } finally {
+                setNotifying(false);
+              }
+            }}
+            disabled={notified || notifying}
+            className={cn(
+              'ml-auto flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition-colors',
+              notified
+                ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300 cursor-default'
+                : notifying
+                  ? 'border-white/10 bg-white/[0.04] text-slate-400 cursor-wait'
+                  : 'border-white/10 bg-white/[0.04] text-slate-400 hover:text-white hover:border-white/20 cursor-pointer',
+            )}
           >
-            <Bell className="w-3 h-3" /> Notify Me
+            {notifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
+            {notified ? 'Notified ✓' : 'Notify Me'}
           </button>
         ) : viaConnections ? (
           <>
@@ -437,6 +598,7 @@ function MyAppCard({ app, onRemove, agentNames }: {
 }) {
   const [removing, setRemoving] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const catMeta = CATEGORY_META[app.category] || CATEGORY_META['all'];
   const hasError = app.connectionStatus === 'error' || Boolean(app.lastErrorMsg);
   const isExpired = app.connectionStatus === 'expired';
@@ -500,6 +662,14 @@ function MyAppCard({ app, onRemove, agentNames }: {
               {expanded ? 'Hide' : 'Details'}
             </button>
           )}
+          {app.installMethod === 'api_key' && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-400 hover:text-blue-300 hover:border-blue-400/20 transition-colors flex items-center gap-1.5"
+            >
+              <Key className="w-3 h-3" /> Edit
+            </button>
+          )}
           <button
             onClick={handleRemove}
             disabled={removing}
@@ -525,6 +695,13 @@ function MyAppCard({ app, onRemove, agentNames }: {
         <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-500/[0.05] px-4 py-3">
           <p className="text-xs text-amber-200">OAuth token has expired. Re-connect from the App Store to refresh it.</p>
         </div>
+      )}
+      {editOpen && (
+        <EditCredentialsModal
+          app={app}
+          onClose={() => setEditOpen(false)}
+          onUpdated={() => setEditOpen(false)}
+        />
       )}
     </div>
   );
@@ -689,6 +866,7 @@ export default function MarketplacePage({ onNavigate, agents = [] }: Marketplace
   const [installTarget, setInstallTarget] = useState<MarketplaceApp | null>(null);
   const [showIntentPicker, setShowIntentPicker] = useState(true);
   const [highlightedBundleId, setHighlightedBundleId] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -707,6 +885,46 @@ export default function MarketplacePage({ onNavigate, agents = [] }: Marketplace
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  // Handle OAuth return — check URL params on mount once
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('marketplace_connected');
+    const appName = params.get('marketplace_app');
+    const errMsg = params.get('marketplace_error');
+
+    if (connected === 'true' && appName) {
+      toast.success(`${appName} connected successfully`);
+      window.history.replaceState({}, '', window.location.pathname);
+      setTab('my-apps');
+      void loadData();
+    }
+    if (errMsg) {
+      toast.error(`OAuth failed: ${decodeURIComponent(errMsg)}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh health every 30s when My Apps tab is active
+  useEffect(() => {
+    if (tab !== 'my-apps') return;
+    const refresh = async () => {
+      try {
+        const res = await api.marketplace.getInstalled();
+        if (res.success && Array.isArray(res.data)) {
+          const installedMap = new Map(res.data.map((a) => [a.id, a]));
+          setApps((prev) => prev.map((a) =>
+            installedMap.has(a.id)
+              ? { ...installedMap.get(a.id)!, installed: true }
+              : { ...a, installed: false }
+          ));
+          setLastUpdated(new Date());
+        }
+      } catch { /* silent */ }
+    };
+    const id = setInterval(() => { void refresh(); }, 30_000);
+    return () => clearInterval(id);
+  }, [tab]);
 
   // Hide intent picker once any app is installed
   useEffect(() => {
@@ -970,12 +1188,17 @@ export default function MarketplacePage({ onNavigate, agents = [] }: Marketplace
                 <h1 className="text-2xl font-bold text-white">My Apps</h1>
                 <p className="text-slate-400 text-sm mt-1">Apps your workspace has connected.</p>
               </div>
-              <button
-                onClick={() => void loadData()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white text-xs font-medium transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
-              </button>
+              <div className="flex items-center gap-3">
+                {lastUpdated && (
+                  <span className="text-[11px] text-slate-600">{formatTimeAgo(lastUpdated.toISOString())}</span>
+                )}
+                <button
+                  onClick={() => void loadData()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white text-xs font-medium transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+              </div>
             </div>
 
             {loading ? (

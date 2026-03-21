@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
   TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -53,6 +53,7 @@ const ITHubPage = lazy(() => import('./dashboard/ITHubPage'));
 const FinanceHubPage = lazy(() => import('./dashboard/FinanceHubPage'));
 const ComplianceHubPage = lazy(() => import('./dashboard/ComplianceHubPage'));
 const IdentityHubPage = lazy(() => import('./dashboard/IdentityHubPage'));
+const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -986,6 +987,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             {[
               { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
               { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
+              { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
               { id: 'costs', icon: DollarSign, label: 'Costs' },
               { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
             ].map((item) => (
@@ -1373,6 +1375,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   } />
                   <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} />} />
+                  <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage costData={costData} setCostData={saveCostData} agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
                   <Route path="model-comparison" element={<ModelComparisonPage />} />
                   <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />} />
