@@ -332,7 +332,7 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
     description: 'UIDAI Aadhaar authentication and KYC verification. Use a sandbox for testing.',
     authType: 'api_key',
     tags: ['INDIA PRIORITY', 'KYC', 'GOVERNMENT', 'AI-READY'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#059669',
     priority: 2,
     apiKeyConfig: {
@@ -373,7 +373,7 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     description: 'Government digital locker. Document processing, verification, and AI-ready evidence intake.',
     authType: 'oauth2',
     tags: ['INDIA PRIORITY', 'DOCUMENTS', 'GOVERNMENT', 'AI-READY'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#0284C7',
     priority: 3,
     oauthConfig: {
@@ -1024,7 +1024,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     description: "Employees' Provident Fund Organization. PF compliance telemetry and filing posture.",
     authType: 'api_key',
     tags: ['INDIA PRIORITY', 'GOVERNMENT', 'COMPLIANCE'],
-    status: 'READY',
+    status: 'COMING_SOON',
     color: '#1D4ED8',
     priority: 4,
     apiKeyConfig: {
