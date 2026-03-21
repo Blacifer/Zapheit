@@ -187,6 +187,11 @@ export default function FleetPage({
 
     const workspaceResponse = await api.agents.getWorkspace(agentId);
     if (!workspaceResponse.success || !workspaceResponse.data) {
+      if (workspaceResponse.error?.toLowerCase().includes('not found')) {
+        setWorkspaceAgentId(null);
+        onSelectAgent?.(null);
+        return;
+      }
       setWorkspaceState({
         summary: null,
         conversations: [],
@@ -252,6 +257,11 @@ export default function FleetPage({
       }));
 
       if (!workspaceResponse.success || !workspaceResponse.data) {
+        if (workspaceResponse.error?.toLowerCase().includes('not found')) {
+          setWorkspaceAgentId(null);
+          onSelectAgent?.(null);
+          return;
+        }
         setWorkspaceState({
           summary: null,
           conversations: [],
