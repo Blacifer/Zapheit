@@ -217,6 +217,21 @@ export const authHelpers = {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(callback);
     return subscription;
   },
+
+  // OAuth sign-in (Google, Microsoft/Azure)
+  signInWithOAuth: async (provider: 'google' | 'azure') => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      return { data, error: error?.message || null };
+    } catch (err: any) {
+      return { data: null, error: err.message };
+    }
+  },
 };
 
 // Data query helpers

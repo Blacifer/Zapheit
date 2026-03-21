@@ -12,6 +12,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 const OAuthCallbackPage = lazy(() => import('./pages/OAuthCallbackPage'));
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -65,7 +66,8 @@ function App() {
   // Inactivity timeout — only active while on the dashboard
   useEffect(() => {
     const isDashboard = location.pathname.startsWith('/dashboard');
-    if (!mounted || !isDashboard || isDemoMode) return;
+    const rememberMe = localStorage.getItem('synthetic_hr_remember_me') === 'true';
+    if (!mounted || !isDashboard || isDemoMode || rememberMe) return;
 
     let timeoutId: NodeJS.Timeout;
 
@@ -102,8 +104,8 @@ function App() {
 
     const loadSession = async () => {
       try {
-        // OAuth popup — let the route handle rendering; just unblock loading.
-        if (location.pathname === '/oauth/popup') {
+        // OAuth routes — let the dedicated pages handle auth; just unblock loading.
+        if (location.pathname === '/oauth/popup' || location.pathname === '/auth/callback') {
           setLoading(false);
           return;
         }
@@ -216,6 +218,20 @@ function App() {
     }
   };
 
+  // OAuth sign-in handler (Google, Microsoft)
+  const signInWithOAuth = async (provider: 'google' | 'azure') => {
+    try {
+      const result = await authHelpers.signInWithOAuth(provider);
+      if (result.error) {
+        return { error: result.error };
+      }
+      // Browser will redirect to OAuth provider — no further action needed here
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  };
+
   // Sign out handler
   const signOut = async () => {
     localStorage.removeItem('has_session');
@@ -241,7 +257,7 @@ function App() {
   }
 
   return (
-    <AppContext.Provider value={{ user, loading: false, signUp, signIn, signOut }}>
+    <AppContext.Provider value={{ user, loading: false, signUp, signIn, signInWithOAuth, signOut }}>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/" element={<LandingPage onSignUp={() => navigate('/signup')} onLogin={() => navigate('/login')} onDemo={demoEnabled ? enterDemoMode : undefined} />} />
@@ -256,6 +272,7 @@ function App() {
             />
           } />
           <Route path="/oauth/popup" element={<OAuthCallbackPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/dashboard/*" element={
             user
               ? <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />

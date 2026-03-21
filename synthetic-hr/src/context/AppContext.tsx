@@ -11,6 +11,7 @@ export interface AppContextType {
   loading: boolean;
   signUp: (email: string, password: string, orgName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithOAuth: (provider: 'google' | 'azure') => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
