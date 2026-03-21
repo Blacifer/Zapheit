@@ -1060,13 +1060,13 @@ export default function FleetPage({
                             onClick={() => void openDeploy(agent)}
                             className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                               isNotLive
-                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25'
-                                : 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
+                                ? 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
+                                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
                             }`}
                             title="Deploy this agent"
                           >
                             {isNew && isNotLive && (
-                              <span className="absolute -inset-px rounded-lg border border-cyan-400/60 animate-pulse pointer-events-none" />
+                              <span className="absolute -inset-px rounded-lg border border-slate-400/50 animate-pulse pointer-events-none" />
                             )}
                             <Rocket className="w-3.5 h-3.5" />
                             Deploy
