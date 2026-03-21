@@ -436,21 +436,14 @@ export default function FleetPage({
     });
   };
 
-  const openAddIntegrationPanel = async (agent: AIAgent) => {
+  const openAddIntegrationPanel = async (_agent: AIAgent) => {
     setShowAddIntegration(true);
     setAddIntegrationLoading(true);
-    const [intRes, catalogRes] = await Promise.all([
-      api.integrations.getAll(),
-      api.integrations.getActionCatalog(),
-    ]);
+    const intRes = await api.integrations.getAll();
     if (intRes.success && Array.isArray(intRes.data)) {
       setAvailableIntegrations((intRes.data as any[]).filter((i: any) => i.status === 'connected'));
     }
-    if (catalogRes.success && Array.isArray(catalogRes.data)) {
-      setActionCatalog(catalogRes.data as any[]);
-    }
     setAddIntegrationLoading(false);
-    void agent; // keep linter happy — agent used by caller for pack filtering in JSX
   };
 
   const assignIntegration = async (agent: AIAgent, serviceId: string) => {
@@ -632,6 +625,7 @@ export default function FleetPage({
     if (!vals) return;
     const agent = agents.find((item) => item.id === agentId);
     if (!agent) return;
+    if (vals.budget === 0 && !window.confirm(`Setting the budget to ₹0 will immediately stop ${agent.name} from processing any requests. Continue?`)) return;
     try {
       const response = await api.agents.update(agentId, {
         budget_limit: vals.budget,
@@ -1060,13 +1054,13 @@ export default function FleetPage({
                             onClick={() => void openDeploy(agent)}
                             className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                               isNotLive
-                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25'
-                                : 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
+                                ? 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
+                                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
                             }`}
                             title="Deploy this agent"
                           >
                             {isNew && isNotLive && (
-                              <span className="absolute -inset-px rounded-lg border border-cyan-400/60 animate-pulse pointer-events-none" />
+                              <span className="absolute -inset-px rounded-lg border border-slate-400/50 animate-pulse pointer-events-none" />
                             )}
                             <Rocket className="w-3.5 h-3.5" />
                             Deploy
@@ -1179,48 +1173,35 @@ export default function FleetPage({
                           </div>
                         </label>
                         <div className="pt-4 border-t border-slate-700/50">
-                          <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
-                            <Bot className="w-4 h-4 text-cyan-400" /> Diagnostics
-                          </h4>
-                          <button
-                            onClick={() => {
-                              toast.info(`Shadow test initiated for ${agent.name}...`);
-                              setTimeout(() => {
-                                toast.success(`${agent.name} shadow test completed without new violations.`);
-                              }, 1600);
-                            }}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-all text-sm font-semibold"
-                          >
-                            <Play className="w-4 h-4 text-cyan-400" /> Run Shadow Test
-                          </button>
+                          <p className="text-xs text-slate-500">Shadow testing is available in the <button onClick={() => setWorkspaceTab('analytics')} className="underline hover:text-slate-300 transition-colors">Analytics tab</button> of the workspace.</p>
                         </div>
                       </div>
 
                       {/* Kill Switch — always visible danger zone */}
                       <div className="space-y-3">
                         <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4" /> Kill Switch Protocol
+                          <ShieldAlert className="w-4 h-4" /> Emergency Controls
                         </h4>
-                        <p className="text-xs text-slate-400">Escalating levels of intervention. Use with caution.</p>
+                        <p className="text-xs text-slate-400">Use these if the agent is behaving incorrectly or causing harm.</p>
                         <div className="space-y-2">
                           <button
                             onClick={() => handleKillSwitch(agent.id, 1)}
                             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all text-sm font-medium"
                           >
-                            <span className="text-base">⚠️</span>
+                            <span className="text-base">⏸</span>
                             <div className="text-left">
-                              <p className="font-semibold">Level 1 – Warning &amp; Pause</p>
-                              <p className="text-xs text-amber-400/70">Temporarily pause the agent</p>
+                              <p className="font-semibold">Pause agent</p>
+                              <p className="text-xs text-amber-400/70">Temporarily stop the agent — you can resume it later</p>
                             </div>
                           </button>
                           <button
                             onClick={() => handleKillSwitch(agent.id, 2)}
                             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 transition-all text-sm font-medium"
                           >
-                            <span className="text-base">🚨</span>
+                            <span className="text-base">🚩</span>
                             <div className="text-left">
-                              <p className="font-semibold">Level 2 – Escalate to Human</p>
-                              <p className="text-xs text-orange-400/70">Flag for human review, raise risk score</p>
+                              <p className="font-semibold">Flag for human review</p>
+                              <p className="text-xs text-orange-400/70">Pause the agent and alert your team to investigate</p>
                             </div>
                           </button>
                           <button
@@ -1229,8 +1210,8 @@ export default function FleetPage({
                           >
                             <span className="text-base">🛑</span>
                             <div className="text-left">
-                              <p className="font-semibold">Level 3 – Permanent Shutdown</p>
-                              <p className="text-xs text-rose-400/70">Irreversibly terminate this agent</p>
+                              <p className="font-semibold">Permanently shut down</p>
+                              <p className="text-xs text-rose-400/70 font-semibold">This cannot be undone — the agent will be terminated forever</p>
                             </div>
                           </button>
                         </div>
@@ -1690,7 +1671,7 @@ export default function FleetPage({
                     className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add integration
+                    Connect a channel
                   </button>
                 </div>
 
@@ -1819,17 +1800,20 @@ export default function FleetPage({
                           {/* Card footer actions */}
                           <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
                             <button
-                              onClick={() => void runAgentAction(
-                                activeWorkspaceAgent.id,
-                                `disconnect:${target.integrationId}`,
-                                async () => {
-                                  const disconnect = await api.integrations.disconnect(target.integrationId);
-                                  if (!disconnect.success) return disconnect;
-                                  await removeIntegration(activeWorkspaceAgent, target.integrationId);
-                                  return { success: true, data: { id: activeWorkspaceAgent.id } };
-                                },
-                                `${target.integrationName} disconnected.`
-                              )}
+                              onClick={() => {
+                                if (!window.confirm(`Disconnecting ${target.integrationName} will stop this agent from sending and receiving messages through it. Continue?`)) return;
+                                void runAgentAction(
+                                  activeWorkspaceAgent.id,
+                                  `disconnect:${target.integrationId}`,
+                                  async () => {
+                                    const disconnect = await api.integrations.disconnect(target.integrationId);
+                                    if (!disconnect.success) return disconnect;
+                                    await removeIntegration(activeWorkspaceAgent, target.integrationId);
+                                    return { success: true, data: { id: activeWorkspaceAgent.id } };
+                                  },
+                                  `${target.integrationName} disconnected.`
+                                );
+                              }}
                               className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
                               disabled={actionBusy === `disconnect:${target.integrationId}`}
                             >
@@ -1863,8 +1847,8 @@ export default function FleetPage({
                     <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10">
                         <div>
-                          <p className="font-semibold text-white text-sm">Assign an integration</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Select a connected provider to wire to this agent</p>
+                          <p className="font-semibold text-white text-sm">Connect a channel</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Assign a connected provider to this agent</p>
                         </div>
                         <button onClick={() => setShowAddIntegration(false)} className="text-slate-400 hover:text-white">
                           <X className="w-4 h-4" />
@@ -1877,9 +1861,16 @@ export default function FleetPage({
                             <span className="text-sm">Loading integrations…</span>
                           </div>
                         ) : availableIntegrations.length === 0 ? (
-                          <div className="text-center py-6">
-                            <p className="text-sm text-slate-400">No connected integrations found.</p>
-                            <p className="text-xs text-slate-500 mt-1">Connect providers on the Integrations page first.</p>
+                          <div className="py-6 px-2 text-center space-y-3">
+                            <p className="text-sm text-slate-300 font-medium">No providers connected yet</p>
+                            <p className="text-xs text-slate-400 leading-relaxed">Connect Slack, email, or another service first — then come back here to assign it to this agent.</p>
+                            <button
+                              onClick={() => { setShowAddIntegration(false); onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/25 transition-colors"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                              Go to Integration Hub →
+                            </button>
                           </div>
                         ) : (
                           <div className="space-y-2">
@@ -1904,6 +1895,14 @@ export default function FleetPage({
                                 </div>
                               );
                             })}
+                            <div className="pt-2 border-t border-white/10 text-center">
+                              <button
+                                onClick={() => { setShowAddIntegration(false); onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null); }}
+                                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                              >
+                                Don't see what you need? <span className="underline">Connect a new provider →</span>
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2180,11 +2179,31 @@ export default function FleetPage({
         const agentName = deployAgent?.name || 'Agent';
         const gatewayBase = controlPlaneBaseUrl;
         const widgetSrc = typeof window !== 'undefined' ? `${window.location.origin}/widget.js` : '/widget.js';
-        const apiKeyDisplay = deployApiKey || deployApiKeyMasked || 'YOUR_API_KEY';
+        // Only use the full key in code — masked values can't be used and would confuse users
+        const hasFullKey = !!deployApiKey;
+        const apiKeyDisplay = deployApiKey || 'YOUR_API_KEY';
         const chatEndpoint = `${gatewayBase}/v1/agents/${deployAgentId}/chat`;
 
         const copyText = (text: string, label = 'Copied') =>
           void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
+
+        const generateFreshKey = async () => {
+          setDeployApiKeyLoading(true);
+          try {
+            if (deployApiKeyId) await api.apiKeys.revoke(deployApiKeyId);
+            const created = await api.apiKeys.create({ name: `Deployment key — ${agentName}`, environment: 'production', preset: 'full_access' });
+            if (created.success && (created.data as any)?.key) {
+              setDeployApiKey((created.data as any).key);
+              setDeployApiKeyId((created.data as any).id || null);
+              setDeployApiKeyMasked(null);
+              toast.success('Fresh key ready — copy it now');
+            } else {
+              toast.error('Failed to generate key');
+            }
+          } finally {
+            setDeployApiKeyLoading(false);
+          }
+        };
 
         const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-api-key="${apiKeyDisplay}"\n></script>`;
 
@@ -2299,10 +2318,25 @@ export default function FleetPage({
                     </button>
                   </div>
 
-                  {deployApiKey && (
+                  {hasFullKey ? (
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-300">Your API key is shown above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                      <p className="text-xs text-amber-300">Your API key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
+                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-300 mb-2">The code above has a placeholder — <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code>. Generate a key to replace it with the real value.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -2318,26 +2352,47 @@ export default function FleetPage({
               {/* ── API method ── */}
               {deployMethod === 'api' && (
                 <div className="p-6 space-y-4">
-                  <div className="flex gap-2">
-                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-0.5">API Key</p>
-                        <code className="text-xs text-blue-200 font-mono">{apiKeyDisplay.length > 30 ? apiKeyDisplay.slice(0, 12) + '...' + apiKeyDisplay.slice(-8) : apiKeyDisplay}</code>
+                  {/* API Key row */}
+                  {hasFullKey ? (
+                    <div className="flex gap-2">
+                      <div className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-emerald-400/80 mb-0.5">Your API Key <span className="text-amber-400">(shown once — copy it now)</span></p>
+                          <code className="text-xs text-emerald-200 font-mono break-all">{deployApiKey}</code>
+                        </div>
+                        <button onClick={() => copyText(deployApiKey!, 'API key copied')} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => copyText(apiKeyDisplay, 'API key copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
-                        <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
+                      <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
+                          <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
+                        </div>
+                        <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Key className="w-4 h-4 text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white mb-0.5">Your key is hidden for security</p>
+                        <p className="text-xs text-slate-400 mb-3">API keys can only be seen once when first created. Generate a fresh key to copy it and use it in your code.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate a fresh key'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <div className="flex gap-1 mb-2">
@@ -2362,10 +2417,10 @@ export default function FleetPage({
                     </div>
                   </div>
 
-                  {deployApiKey && (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
-                      <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-300">API key shown once. Copy it now and store it securely.</p>
+                  {hasFullKey && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs text-emerald-300">Your key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
                     </div>
                   )}
                 </div>
@@ -2374,6 +2429,28 @@ export default function FleetPage({
               {/* ── Terminal method ── */}
               {deployMethod === 'terminal' && (
                 <div className="p-6 space-y-5">
+                  {!hasFullKey && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
+                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-300 mb-2">The commands below use <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code> as a placeholder. Generate a real key first.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {hasFullKey && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs text-emerald-300">Your key is already in the commands below. <strong>Copy and run them now</strong> — the key won't be shown again.</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs text-slate-400 mb-2">Open your terminal and run this to start chatting:</p>
                     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">

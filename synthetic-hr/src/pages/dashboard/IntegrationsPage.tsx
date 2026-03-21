@@ -307,6 +307,7 @@ export default function IntegrationsPage({
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
   const [logsError, setLogsError] = useState<string | null>(null);
 
+  const [publishSuccess, setPublishSuccess] = useState<{ agentName: string; integrationName: string } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [selectedNaukri, setSelectedNaukri] = useState(true);
@@ -683,6 +684,7 @@ export default function IntegrationsPage({
             integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), service])),
           });
           focusAgentWorkspace(effectiveAgentId);
+          if (entryMode === 'publish') setPublishSuccess({ agentName: effectiveAgentName || 'Your agent', integrationName: connectedProvider?.name || service });
           onIntegrationConnected?.({
             agentId: effectiveAgentId,
             integrationId: service,
@@ -794,6 +796,7 @@ export default function IntegrationsPage({
       toast.success(`Connected ${provider.name}.`);
       setCredentials((prev) => ({ ...prev, [providerId]: {} }));
       await load();
+      if (entryMode === 'publish') setPublishSuccess({ agentName: effectiveAgentName || 'Your agent', integrationName: provider.name });
       if (selectedAgent && onIntegrationConnected) {
         onIntegrationConnected({
           agentId: selectedAgent.id,
@@ -937,6 +940,7 @@ export default function IntegrationsPage({
         integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), oauthResult.service])),
       });
       focusAgentWorkspace(effectiveAgentId);
+      if (entryMode === 'publish') setPublishSuccess({ agentName: effectiveAgentName || 'Your agent', integrationName: connectedProvider?.name || oauthResult.service });
       onIntegrationConnected?.({
         agentId: effectiveAgentId,
         integrationId: oauthResult.service,
@@ -1095,7 +1099,30 @@ export default function IntegrationsPage({
       </div>
 
 
-      {entryMode === 'publish' && effectiveAgentContext ? (() => {
+      {entryMode === 'publish' && publishSuccess ? (
+        <div className="mt-6 rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.07] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-base">✓</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-300">Your agent is now live!</p>
+                <p className="text-sm text-slate-300 mt-0.5">
+                  <span className="font-medium text-white">{publishSuccess.agentName}</span> is connected to <span className="font-medium text-white">{publishSuccess.integrationName}</span> and ready to work.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">Go back to Fleet to supervise conversations, manage settings, and view analytics.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigate?.('fleet')}
+              className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-semibold hover:bg-emerald-500/30 transition-colors whitespace-nowrap"
+            >
+              Open Fleet workspace →
+            </button>
+          </div>
+        </div>
+      ) : entryMode === 'publish' && effectiveAgentContext ? (() => {
         const publishStep = detailsOpen ? 2 : 1;
         const steps = [
           { n: 1, label: 'Choose a channel', desc: 'Pick where this agent should work — Slack, email, or another provider.' },
