@@ -2180,11 +2180,31 @@ export default function FleetPage({
         const agentName = deployAgent?.name || 'Agent';
         const gatewayBase = controlPlaneBaseUrl;
         const widgetSrc = typeof window !== 'undefined' ? `${window.location.origin}/widget.js` : '/widget.js';
-        const apiKeyDisplay = deployApiKey || deployApiKeyMasked || 'YOUR_API_KEY';
+        // Only use the full key in code — masked values can't be used and would confuse users
+        const hasFullKey = !!deployApiKey;
+        const apiKeyDisplay = deployApiKey || 'YOUR_API_KEY';
         const chatEndpoint = `${gatewayBase}/v1/agents/${deployAgentId}/chat`;
 
         const copyText = (text: string, label = 'Copied') =>
           void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
+
+        const generateFreshKey = async () => {
+          setDeployApiKeyLoading(true);
+          try {
+            if (deployApiKeyId) await api.apiKeys.revoke(deployApiKeyId);
+            const created = await api.apiKeys.create({ name: `Deployment key — ${agentName}`, environment: 'production', preset: 'full_access' });
+            if (created.success && (created.data as any)?.key) {
+              setDeployApiKey((created.data as any).key);
+              setDeployApiKeyId((created.data as any).id || null);
+              setDeployApiKeyMasked(null);
+              toast.success('Fresh key ready — copy it now');
+            } else {
+              toast.error('Failed to generate key');
+            }
+          } finally {
+            setDeployApiKeyLoading(false);
+          }
+        };
 
         const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-api-key="${apiKeyDisplay}"\n></script>`;
 
@@ -2299,10 +2319,25 @@ export default function FleetPage({
                     </button>
                   </div>
 
-                  {deployApiKey && (
+                  {hasFullKey ? (
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-300">Your API key is shown above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                      <p className="text-xs text-amber-300">Your API key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
+                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-300 mb-2">The code above has a placeholder — <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code>. Generate a key to replace it with the real value.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -2318,26 +2353,47 @@ export default function FleetPage({
               {/* ── API method ── */}
               {deployMethod === 'api' && (
                 <div className="p-6 space-y-4">
-                  <div className="flex gap-2">
-                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-0.5">API Key</p>
-                        <code className="text-xs text-blue-200 font-mono">{apiKeyDisplay.length > 30 ? apiKeyDisplay.slice(0, 12) + '...' + apiKeyDisplay.slice(-8) : apiKeyDisplay}</code>
+                  {/* API Key row */}
+                  {hasFullKey ? (
+                    <div className="flex gap-2">
+                      <div className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-emerald-400/80 mb-0.5">Your API Key <span className="text-amber-400">(shown once — copy it now)</span></p>
+                          <code className="text-xs text-emerald-200 font-mono break-all">{deployApiKey}</code>
+                        </div>
+                        <button onClick={() => copyText(deployApiKey!, 'API key copied')} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => copyText(apiKeyDisplay, 'API key copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
-                        <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
+                      <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
+                          <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
+                        </div>
+                        <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Key className="w-4 h-4 text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white mb-0.5">Your key is hidden for security</p>
+                        <p className="text-xs text-slate-400 mb-3">API keys can only be seen once when first created. Generate a fresh key to copy it and use it in your code.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate a fresh key'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <div className="flex gap-1 mb-2">
@@ -2362,10 +2418,10 @@ export default function FleetPage({
                     </div>
                   </div>
 
-                  {deployApiKey && (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
-                      <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-300">API key shown once. Copy it now and store it securely.</p>
+                  {hasFullKey && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs text-emerald-300">Your key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
                     </div>
                   )}
                 </div>
@@ -2374,6 +2430,28 @@ export default function FleetPage({
               {/* ── Terminal method ── */}
               {deployMethod === 'terminal' && (
                 <div className="p-6 space-y-5">
+                  {!hasFullKey && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
+                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-300 mb-2">The commands below use <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code> as a placeholder. Generate a real key first.</p>
+                        <button
+                          onClick={() => void generateFreshKey()}
+                          disabled={deployApiKeyLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {hasFullKey && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs text-emerald-300">Your key is already in the commands below. <strong>Copy and run them now</strong> — the key won't be shown again.</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs text-slate-400 mb-2">Open your terminal and run this to start chatting:</p>
                     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
