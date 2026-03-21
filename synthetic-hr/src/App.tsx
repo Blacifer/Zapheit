@@ -66,7 +66,8 @@ function App() {
   // Inactivity timeout — only active while on the dashboard
   useEffect(() => {
     const isDashboard = location.pathname.startsWith('/dashboard');
-    if (!mounted || !isDashboard || isDemoMode) return;
+    const rememberMe = localStorage.getItem('synthetic_hr_remember_me') === 'true';
+    if (!mounted || !isDashboard || isDemoMode || rememberMe) return;
 
     let timeoutId: NodeJS.Timeout;
 
