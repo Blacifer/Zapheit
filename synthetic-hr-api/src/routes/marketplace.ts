@@ -1197,7 +1197,7 @@ function buildOAuthUrl(appId: string, state: string, redirectUri: string): strin
   switch (appId) {
     case 'hubspot':
       if (!process.env.HUBSPOT_CLIENT_ID) return null;
-      return `https://app.hubspot.com/oauth/authorize?client_id=${enc(process.env.HUBSPOT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=contacts%20crm.objects.contacts.read%20crm.objects.deals.read&state=${state}`;
+      return `https://app.hubspot.com/oauth/authorize?client_id=${enc(process.env.HUBSPOT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=oauth%20crm.objects.contacts.read%20crm.objects.deals.read&state=${state}`;
     case 'salesforce':
       if (!process.env.SALESFORCE_CLIENT_ID) return null;
       return `https://login.salesforce.com/services/oauth2/authorize?response_type=code&client_id=${enc(process.env.SALESFORCE_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
