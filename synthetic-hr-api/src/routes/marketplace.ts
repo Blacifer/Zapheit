@@ -404,6 +404,7 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Popular',
     colorHex: '#0A66C2',
     logoLetter: 'L',
+    comingSoon: true,
   },
   {
     id: 'greenhouse',
