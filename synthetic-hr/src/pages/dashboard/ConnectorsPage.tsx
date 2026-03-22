@@ -1311,10 +1311,11 @@ function ConnectorCard({ connector: c, popLabel, onConnect, onManage }: {
 
 // ─── Connector Row (connected list) ──────────────────────────────────────────
 
-function ConnectorRow({ connector, agentNames, onClick, onConfigure }: {
+function ConnectorRow({ connector, agentNames, onClick, onConfigure, onDisconnect }: {
   connector: UnifiedConnector; agentNames: string[];
   onClick: (c: UnifiedConnector) => void;
   onConfigure: (c: UnifiedConnector) => void;
+  onDisconnect: (c: UnifiedConnector) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1373,6 +1374,10 @@ function ConnectorRow({ connector, agentNames, onClick, onConfigure }: {
               </button>
               <button onClick={() => { onClick(connector); setShowMenu(false); }} className="w-full text-left px-3.5 py-2.5 text-xs text-slate-300 hover:bg-white/5 hover:text-white transition-colors">
                 View details
+              </button>
+              <div className="border-t border-white/8" />
+              <button onClick={() => { onDisconnect(connector); setShowMenu(false); }} className="w-full text-left px-3.5 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors">
+                {connector.source === 'marketplace' ? 'Remove app' : 'Disconnect'}
               </button>
             </div>
           )}
@@ -1544,6 +1549,7 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
               agentNames={agentNamesFor(c)}
               onClick={setDrawerConnector}
               onConfigure={(connector) => openModal(connector, 'configure')}
+              onDisconnect={handleDisconnect}
             />
           ))}
         </div>
