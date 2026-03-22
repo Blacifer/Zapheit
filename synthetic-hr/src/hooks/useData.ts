@@ -216,6 +216,9 @@ export const useIncidentMutations = () => {
 // ---------------------------------------------------------------------------
 // Cost analytics
 // ---------------------------------------------------------------------------
+// Fixed USD → INR conversion rate
+const USD_TO_INR = 94;
+
 export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', options?: { enabled?: boolean }) => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.costAnalytics(period),
@@ -232,7 +235,7 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
         costData: rows.map((item: any) => ({
           id: item.id as string,
           date: item.date as string,
-          cost: (item.cost_usd as number) || 0,
+          cost: ((item.cost_usd as number) || 0) * USD_TO_INR,
           // fall back to input+output when total_tokens was not stored
           tokens: (item.total_tokens as number) || ((item.input_tokens as number || 0) + (item.output_tokens as number || 0)),
           // request_count defaults to 1 per gateway insert but guard against 0
@@ -240,7 +243,9 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
           agent_id: item.agent_id as string | undefined,
           model: (item.model_name as string | undefined),
         })) as CostData[],
-        totals: rawRes.totals ?? { totalCost: 0, totalTokens: 0, totalRequests: 0 },
+        totals: rawRes.totals
+          ? { ...rawRes.totals, totalCost: (rawRes.totals.totalCost || 0) * USD_TO_INR }
+          : { totalCost: 0, totalTokens: 0, totalRequests: 0 },
       };
     },
     staleTime: 5 * 60_000, // costs change infrequently — 5 min stale time
