@@ -223,8 +223,13 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
     queryFn: async () => {
       const res = await api.costs.getAnalytics({ period });
       if (!res.success) throw new Error(res.error ?? 'Failed to fetch cost data');
+      // Backend returns { success, data: [...rows], totals, byDate, period }
+      // authenticatedFetch spreads it, so res.data is the raw row array
+      // and res.totals / res.byDate are at the top level (not nested under res.data)
+      const rawRes = res as any;
+      const rows: any[] = Array.isArray(rawRes.data) ? rawRes.data : [];
       return {
-        costData: (res.data?.data ?? []).map((item: any) => ({
+        costData: rows.map((item: any) => ({
           id: item.id as string,
           date: item.date as string,
           cost: (item.cost_usd as number) || 0,
@@ -235,7 +240,7 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
           agent_id: item.agent_id as string | undefined,
           model: (item.model_name as string | undefined),
         })) as CostData[],
-        totals: res.data?.totals ?? { totalCost: 0, totalTokens: 0, totalRequests: 0 },
+        totals: rawRes.totals ?? { totalCost: 0, totalTokens: 0, totalRequests: 0 },
       };
     },
     staleTime: 5 * 60_000, // costs change infrequently — 5 min stale time
