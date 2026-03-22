@@ -838,11 +838,10 @@ router.delete('/apps/:id', async (req: Request, res: Response) => {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    // Find and remove the integration record
+    // Find and remove the integration record (any row for this org + service_type)
     const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
       service_type: eq(req.params.id),
-      'metadata->>marketplace_app': eq('true'),
       select: 'id',
       limit: '1',
     }))) as Array<{ id: string }>;
@@ -886,11 +885,10 @@ router.patch('/apps/:id/credentials', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'No credentials provided' });
     }
 
-    // Find the existing integration
+    // Find the existing integration (any row for this org + service_type)
     const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
       service_type: eq(app.id),
-      'metadata->>marketplace_app': eq('true'),
       select: 'id',
       limit: '1',
     }))) as Array<{ id: string }>;
