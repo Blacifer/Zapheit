@@ -1396,10 +1396,11 @@ function ConnectorRow({ connector, agentNames, onClick, onConfigure, onDisconnec
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }: ConnectorsPageProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const agentIdParam = searchParams.get('agentId');
   const domainParam = searchParams.get('domain');
+  const oauthConnectedApp = searchParams.get('marketplace_connected') === 'true' ? searchParams.get('marketplace_app') : null;
 
   const [apps, setApps] = useState<MarketplaceApp[]>([]);
   const [integrations, setIntegrations] = useState<any[]>([]);
@@ -1428,6 +1429,16 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  // Handle OAuth callback redirect: ?marketplace_connected=true&marketplace_app=hubspot
+  useEffect(() => {
+    if (!oauthConnectedApp) return;
+    void loadData().then(() => {
+      toast.success(`${oauthConnectedApp.charAt(0).toUpperCase() + oauthConnectedApp.slice(1)} connected successfully`);
+    });
+    // Strip the OAuth params from the URL so a refresh doesn't re-trigger this
+    setSearchParams((p: URLSearchParams) => { p.delete('marketplace_connected'); p.delete('marketplace_app'); return p; }, { replace: true });
+  }, [oauthConnectedApp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allConnectors = useMemo<UnifiedConnector[]>(() => [
     ...apps.map(fromApp),
@@ -1470,15 +1481,14 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
       if (connector.source === 'marketplace') {
         const res = await api.marketplace.uninstall(connector.appData!.id);
         if (!res.success) throw new Error((res as any).error);
-        setApps((p) => p.map((a) => a.id === connector.appData!.id ? { ...a, installed: false } : a));
       } else {
         const res = await api.integrations.disconnect(connector.integrationData.id);
         if (!res.success) throw new Error((res as any).error);
-        setIntegrations((p) => p.map((i) => i.id === connector.integrationData.id ? { ...i, lifecycleStatus: 'disconnected', status: 'disconnected' } : i));
       }
       toast.success(`${connector.name} disconnected`);
+      void loadData();
     } catch (e: any) { toast.error(e.message || 'Disconnect failed'); }
-  }, []);
+  }, [loadData]);
 
   const totalActions = connectedList.reduce((s, c) => s + (c.actionsUnlocked?.length || 0), 0);
   const errorCount = connectedList.filter((c) => c.status === 'error' || c.status === 'expired').length;
