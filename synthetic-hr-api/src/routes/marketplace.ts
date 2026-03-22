@@ -1067,7 +1067,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   const enc = encodeURIComponent;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-  const { code, state, error: oauthError } = req.query as Record<string, string>;
+  const { code, state, error: oauthError, 'accounts-server': zohoAccountsServer } = req.query as Record<string, string>;
 
   if (oauthError) {
     return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc(oauthError)}`);
@@ -1102,7 +1102,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   let exchangeError: string | null = null;
 
   try {
-    const result = await exchangeOAuthCode(appId, code, stateRow.redirect_uri as string);
+    const result = await exchangeOAuthCode(appId, code, stateRow.redirect_uri as string, zohoAccountsServer ? { zohoAccountsServer } : undefined);
     accessToken = result.accessToken;
     refreshToken = result.refreshToken ?? null;
   } catch (e: any) {
@@ -1243,7 +1243,8 @@ function buildOAuthUrl(appId: string, state: string, redirectUri: string): strin
 async function exchangeOAuthCode(
   appId: string,
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  extraParams?: Record<string, string>
 ): Promise<{ accessToken: string; refreshToken?: string }> {
   let tokenUrl: string;
   let params: Record<string, string>;
@@ -1286,7 +1287,7 @@ async function exchangeOAuthCode(
       params = { grant_type: 'authorization_code', client_id: process.env.SLACK_CLIENT_ID!, client_secret: process.env.SLACK_CLIENT_SECRET!, redirect_uri: redirectUri, code };
       break;
     case 'zoho':
-      tokenUrl = 'https://accounts.zoho.com/oauth/v2/token';
+      tokenUrl = `${extraParams?.zohoAccountsServer || 'https://accounts.zoho.com'}/oauth/v2/token`;
       params = { grant_type: 'authorization_code', client_id: process.env.ZOHO_CLIENT_ID!, client_secret: process.env.ZOHO_CLIENT_SECRET!, redirect_uri: redirectUri, code };
       break;
     case 'deel':
