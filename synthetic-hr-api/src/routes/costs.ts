@@ -416,8 +416,10 @@ router.get('/costs', requirePermission('costs.read'), async (req: Request, res: 
     const totals = data?.reduce(
       (acc: any, item: any) => ({
         totalCost: acc.totalCost + (item.cost_usd || 0),
-        totalTokens: acc.totalTokens + (item.total_tokens || 0),
-        totalRequests: acc.totalRequests + (item.request_count || 0),
+        // fall back to input+output when total_tokens not stored by gateway
+        totalTokens: acc.totalTokens + (item.total_tokens || ((item.input_tokens || 0) + (item.output_tokens || 0))),
+        // default to 1 request per row when request_count not stored
+        totalRequests: acc.totalRequests + (item.request_count || 1),
       }),
       { totalCost: 0, totalTokens: 0, totalRequests: 0 }
     ) || { totalCost: 0, totalTokens: 0, totalRequests: 0 };
@@ -427,8 +429,8 @@ router.get('/costs', requirePermission('costs.read'), async (req: Request, res: 
         acc[item.date] = { cost: 0, tokens: 0, requests: 0 };
       }
       acc[item.date].cost += item.cost_usd || 0;
-      acc[item.date].tokens += item.total_tokens || 0;
-      acc[item.date].requests += item.request_count || 0;
+      acc[item.date].tokens += item.total_tokens || ((item.input_tokens || 0) + (item.output_tokens || 0));
+      acc[item.date].requests += item.request_count || 1;
       return acc;
     }, {});
 
