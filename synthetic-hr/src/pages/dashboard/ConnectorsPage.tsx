@@ -1114,6 +1114,8 @@ function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, on
     // Sub-integrations covered by a parent marketplace app (e.g. zoho_people covered by zoho)
     const coveredByMarketplace: Record<string, string[]> = {
       'zoho': ['zoho_people'],
+      'google-workspace': ['google_workspace'],
+      'microsoft-365': ['microsoft_365'],
     };
     const coveredIntegrationIds = new Set(
       Object.entries(coveredByMarketplace)
