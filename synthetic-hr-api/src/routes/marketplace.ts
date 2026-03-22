@@ -520,6 +520,7 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#FF6B35',
     logoLetter: 'D',
+    comingSoon: true,
   },
   {
     id: 'gusto',
