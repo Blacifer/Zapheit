@@ -454,6 +454,8 @@ export type PlaybookSettingRow = {
   overrides: Record<string, any>;
   updated_by: string | null;
   updated_at: string;
+  api_enabled?: boolean;
+  api_slug?: string | null;
 };
 
 export type PlaybookSchedule = {

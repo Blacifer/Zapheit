@@ -294,11 +294,11 @@ describe('Runtime + Jobs orchestration', () => {
     expect(depRes.status).toBe(201);
     expect(depRes.body.success).toBe(true);
 
-    // Create job (pending approval)
+    // Create job (pending approval — connector_action requires approval)
     const jobRes = await request(server)
       .post('/api/jobs')
       .set('Authorization', 'Bearer manager')
-      .send({ agent_id: TEST_AGENT_ID, type: 'chat_turn', input: { model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] } });
+      .send({ agent_id: TEST_AGENT_ID, type: 'connector_action', input: { connector: { service: 'support', action: 'support.test', params: {} } } });
     expect(jobRes.status).toBe(201);
     expect(jobRes.body.success).toBe(true);
 

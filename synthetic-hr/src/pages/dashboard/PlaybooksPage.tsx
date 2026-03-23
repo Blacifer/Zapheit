@@ -2670,7 +2670,7 @@ export default function PlaybooksPage({
                   key={cp.id}
                   cp={cp}
                   agents={agents}
-                  agentId={agentId}
+                  agentId={selectedAgentId}
                   onUpdate={(updated) => setCustomPlaybooks((prev) => prev.map((x) => x.id === updated.id ? updated : x))}
                   onDelete={() => setCustomPlaybooks((prev) => prev.filter((x) => x.id !== cp.id))}
                 />

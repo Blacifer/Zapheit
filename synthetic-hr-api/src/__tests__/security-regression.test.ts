@@ -22,6 +22,10 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'marketplace.ts'),
   // Slack OAuth callback arrives without a user session (server-to-server flow).
   path.join(ROUTES_DIR, 'slack.ts'),
+  // Approvals: service-role used only for action_policies lookup (routing rule enforcement — server-side policy, not user data).
+  path.join(ROUTES_DIR, 'approvals.ts'),
+  // Playbooks: service-role used only for public API endpoint (B5, API-key auth) and public share endpoint (B6, no user JWT).
+  path.join(ROUTES_DIR, 'playbooks.ts'),
 ]);
 
 function walk(dir: string): string[] {
