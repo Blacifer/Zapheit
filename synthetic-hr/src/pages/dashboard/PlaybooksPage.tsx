@@ -651,7 +651,7 @@ function CustomPlaybookCard({
                                     updateBranchStep(bs.id, { conditions: conds });
                                   }}
                                   rows={2}
-                                  placeholder="Ask a yes/no question about the output, e.g. "Is the severity critical?""
+                                  placeholder={`Ask a yes/no question about the output, e.g. "Is the severity critical?"`}
                                   className="w-full bg-slate-900/60 border border-amber-500/20 rounded px-2 py-1 text-xs text-slate-200 font-mono resize-none focus:outline-none focus:border-amber-500/50"
                                 />
                               )}

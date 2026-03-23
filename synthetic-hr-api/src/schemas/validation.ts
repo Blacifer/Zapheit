@@ -168,6 +168,9 @@ export const runtimeSchemas = {
     agent_id: z.string().uuid('Invalid agent ID'),
     type: z.enum(['chat_turn', 'workflow_run', 'connector_action']),
     input: z.record(z.any()).optional(),
+    playbook_id: z.string().optional(),
+    batch_id: z.string().uuid().optional(),
+    parent_job_id: z.string().uuid().optional(),
   }),
 
   approveJob: z.object({
