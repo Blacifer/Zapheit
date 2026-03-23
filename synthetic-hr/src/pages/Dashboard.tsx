@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
   TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server, Shield,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -985,6 +985,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
               { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
               { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
+              { id: 'action-policies', icon: Shield, label: 'Action Policies' },
               { id: 'costs', icon: DollarSign, label: 'Costs' },
               { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
               { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },

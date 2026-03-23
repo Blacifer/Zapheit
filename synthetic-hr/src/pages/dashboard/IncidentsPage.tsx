@@ -675,11 +675,9 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${SEVERITY_STYLES[incident.severity]}`}>{incident.severity}</span>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${STATUS_STYLES[incident.status]}`}>{normalizeLabel(incident.status)}</span>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${SOURCE_STYLES[meta.source]}`}>{meta.source === 'manual_test' ? 'Simulated' : normalizeLabel(meta.source)}</span>
-                            {incident.confidence != null && (
-                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em] ${incident.confidence >= 0.8 ? 'border-rose-500/20 bg-rose-500/10 text-rose-300' : incident.confidence >= 0.5 ? 'border-amber-500/20 bg-amber-500/10 text-amber-300' : 'border-slate-600 bg-slate-800/80 text-slate-400'}`}>
-                                {Math.round(incident.confidence * 100)}% confidence
-                              </span>
-                            )}
+                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em] ${incident.confidence == null ? 'border-slate-700 bg-slate-800/50 text-slate-500' : incident.confidence >= 0.8 ? 'border-rose-500/20 bg-rose-500/10 text-rose-300' : incident.confidence >= 0.5 ? 'border-amber-500/20 bg-amber-500/10 text-amber-300' : 'border-slate-600 bg-slate-800/80 text-slate-400'}`}>
+                              {incident.confidence == null ? '— confidence' : `${Math.round(incident.confidence * 100)}% confidence`}
+                            </span>
                           </div>
                           <p className="mt-2 line-clamp-2 text-sm text-slate-300">{incident.description}</p>
                           <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">

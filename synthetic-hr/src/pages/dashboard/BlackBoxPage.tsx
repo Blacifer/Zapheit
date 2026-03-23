@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Database, Shield, Filter, Search, Download, FileJson,
-  Activity, Zap, Lock, Eye, AlertTriangle, Key, ChevronRight, Hash, Code, X
+  Activity, Zap, Lock, Eye, AlertTriangle, Key, ChevronRight, Hash, X
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import type { Incident } from '../../types';
@@ -325,48 +325,99 @@ export default function BlackBoxPage({ incidents, onNavigate }: BlackBoxPageProp
 
         {/* Forensic Detail Panel (splits view bottom) */}
         {selectedLog && (
-          <div className="h-64 border-t border-cyan-500/30 bg-slate-900 flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
+          <div className="border-t border-cyan-500/30 bg-slate-900 flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
             <div className="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
               <div className="flex items-center gap-2 text-sm font-semibold text-cyan-400">
-                <Code className="w-4 h-4" /> Forensic Payload View
+                <Eye className="w-4 h-4" /> Incident Detail
               </div>
-              <button onClick={() => setSelectedLog(null)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateForensicPayload(selectedLog));
+                    toast.success('Copied evidence JSON to clipboard');
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors px-2 py-1 rounded hover:bg-slate-800"
+                  title="Copy raw JSON evidence"
+                >
+                  <FileJson className="w-3.5 h-3.5" /> Raw JSON
+                </button>
+                <button onClick={() => setSelectedLog(null)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-auto p-4 flex">
-              {/* Left sidebar with meta */}
-              <div className="w-48 flex-shrink-0 border-r border-slate-800 pr-4 space-y-4 text-xs">
-                <div>
-                  <p className="text-slate-500 font-semibold mb-1">RECORD INTEGRITY</p>
-                  <p className="text-emerald-400 flex items-center gap-1 font-mono"><Lock className="w-3 h-3" /> VERIFIED</p>
+            <div className="overflow-auto p-4">
+              {/* Title row */}
+              <div className="flex flex-wrap items-start gap-3 mb-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-semibold text-white truncate">{selectedLog.title}</p>
+                  <p className="text-sm text-slate-400 mt-0.5">{selectedLog.description}</p>
                 </div>
-                <div>
-                  <p className="text-slate-500 font-semibold mb-1">INCIDENT TYPE</p>
-                  <p className="text-slate-300 font-mono capitalize">{selectedLog.incident_type.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 font-semibold mb-1">LIFECYCLE STATUS</p>
-                  <p className={`font-mono capitalize ${selectedLog.status === 'resolved' ? 'text-emerald-400' : 'text-amber-400'}`}>{selectedLog.status}</p>
-                </div>
+                {(() => {
+                  let sevColor = 'border-slate-600 bg-slate-800/80 text-slate-300';
+                  if (selectedLog.severity === 'critical') sevColor = 'border-rose-500/30 bg-rose-500/10 text-rose-300';
+                  else if (selectedLog.severity === 'high') sevColor = 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+                  else if (selectedLog.severity === 'medium') sevColor = 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+                  return (
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest ${sevColor}`}>
+                      {selectedLog.severity}
+                    </span>
+                  );
+                })()}
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${selectedLog.status === 'resolved' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+                  {selectedLog.status}
+                </span>
               </div>
-              {/* Right side with JSON */}
-              <div className="flex-1 pl-4 relative">
-                <div className="absolute top-0 right-4 flex gap-2">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(generateForensicPayload(selectedLog));
-                      toast.success('Copied payload to clipboard');
-                    }}
-                    className="text-slate-400 hover:text-cyan-400 transition-colors"
-                    title="Copy JSON"
-                  >
-                    <FileJson className="w-4 h-4" />
-                  </button>
+              {/* Detail grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Agent</p>
+                  <p className="text-slate-200 font-medium">{selectedLog.agent_name || '—'}</p>
                 </div>
-                <pre className="font-mono text-xs text-indigo-200/90 whitespace-pre-wrap select-text">
-                  {generateForensicPayload(selectedLog)}
-                </pre>
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Detection Type</p>
+                  <p className="text-slate-200 font-medium capitalize">{selectedLog.incident_type.replace(/_/g, ' ')}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Detected</p>
+                  <p className="text-slate-200 font-medium">{new Date(selectedLog.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Confidence</p>
+                  {selectedLog.confidence != null ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 rounded-full bg-slate-800">
+                        <div
+                          className={`h-1.5 rounded-full ${selectedLog.confidence >= 0.8 ? 'bg-rose-500' : selectedLog.confidence >= 0.5 ? 'bg-amber-500' : 'bg-slate-500'}`}
+                          style={{ width: `${Math.round(selectedLog.confidence * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-slate-200 font-semibold">{Math.round(selectedLog.confidence * 100)}%</span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500">Not scored</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Record Integrity</p>
+                  <p className="text-emerald-400 flex items-center gap-1 font-medium"><Lock className="w-3 h-3" /> Verified</p>
+                </div>
+                {selectedLog.resolved_at && (
+                  <div>
+                    <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Resolved</p>
+                    <p className="text-slate-200 font-medium">{new Date(selectedLog.resolved_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+                  </div>
+                )}
+                {selectedLog.resolved_by && (
+                  <div>
+                    <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Resolved By</p>
+                    <p className="text-slate-200 font-medium">{selectedLog.resolved_by}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-slate-500 font-semibold uppercase tracking-wider mb-1">Trace ID</p>
+                  <p className="text-slate-400 font-mono text-[11px] truncate">{selectedLog.id}</p>
+                </div>
               </div>
             </div>
           </div>

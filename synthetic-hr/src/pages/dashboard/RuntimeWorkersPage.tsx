@@ -396,7 +396,10 @@ export default function RuntimeWorkersPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Runtime Workers</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Manage secure execution workers — hosted or deployed inside your VPC.
+            Backend async job execution workers — run agent jobs securely inside your VPC or on Rasi-managed infrastructure.
+          </p>
+          <p className="text-slate-500 text-xs mt-1">
+            Workers process jobs from the queue (playbook runs, connector actions, batch tasks). Separate from Fleet — agents are defined in Fleet, workers are the machines that execute them.
           </p>
         </div>
         <div className="flex items-center gap-2">
