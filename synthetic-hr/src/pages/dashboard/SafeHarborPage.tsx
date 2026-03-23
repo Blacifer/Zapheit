@@ -200,6 +200,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
   const [configDraft, setConfigDraft] = useState<SafeHarborState['config'] | null>(null);
   const [contractDraft, setContractDraft] = useState<SafeHarborState['contract'] | null>(null);
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [activeComplianceTab, setActiveComplianceTab] = useState<'dpdpa' | 'nist' | 'india_ai'>('dpdpa');
 
   const canEdit = ['super_admin', 'admin'].includes(String(userRole || '').toLowerCase());
 
@@ -637,6 +638,122 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
           )}
         </SectionCard>
       </div>
+
+      <SectionCard title="Regulatory Compliance" description="How Rasi's governance features map to India and international AI regulatory frameworks." icon={Shield}>
+        {/* Tab bar */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {([
+            { id: 'dpdpa', label: 'DPDPA (India)' },
+            { id: 'nist', label: 'NIST AI RMF' },
+            { id: 'india_ai', label: 'India AI Governance 2025' },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveComplianceTab(tab.id as 'dpdpa' | 'nist' | 'india_ai')}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                activeComplianceTab === tab.id
+                  ? 'bg-cyan-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* DPDPA */}
+        {activeComplianceTab === 'dpdpa' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400 mb-4">Digital Personal Data Protection Act (India, 2023) — maps Rasi features to Data Fiduciary obligations.</p>
+            {([
+              { requirement: 'Data Principal rights & consent', feature: 'Audit logs + action policies', status: 'covered' },
+              { requirement: 'PII detection & Data Fiduciary obligations', feature: 'Real-time Aadhaar, PAN, UPI ID, email, phone detection', status: 'covered' },
+              { requirement: 'Breach notification', feature: 'Kill switch + incident webhooks + alert routing', status: 'covered' },
+              { requirement: 'Purpose limitation', feature: 'Action policies with scope restrictions', status: 'covered' },
+              { requirement: 'Data localization', feature: 'VPC/On-prem runtime workers (Enterprise)', status: 'partial' },
+              { requirement: 'Data Protection Officer obligations', feature: 'Evidence export for DPO reporting (Black Box)', status: 'partial' },
+              { requirement: 'Consent Manager integration', feature: 'Not yet implemented', status: 'gap' },
+            ]).map((item) => (
+              <div key={item.requirement} className="flex items-start gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3">
+                <span className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${item.status === 'covered' ? 'bg-green-400' : item.status === 'partial' ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{item.requirement}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.feature}</p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0 ${item.status === 'covered' ? 'bg-green-400/10 text-green-400' : item.status === 'partial' ? 'bg-yellow-400/10 text-yellow-400' : 'bg-red-400/10 text-red-400'}`}>
+                  {item.status === 'covered' ? 'Covered' : item.status === 'partial' ? 'Partial' : 'Gap'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* NIST AI RMF */}
+        {activeComplianceTab === 'nist' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400 mb-4">NIST AI Risk Management Framework — maps Rasi capabilities to the four core functions.</p>
+            {([
+              { function: 'GOVERN', requirement: 'Policies, roles & accountability', feature: 'Action policies, RBAC (admin/manager/viewer), audit logs', status: 'covered' },
+              { function: 'GOVERN', requirement: 'Organizational AI risk strategy', feature: 'Safe Harbor config, SLA tiers, contract records', status: 'partial' },
+              { function: 'MAP', requirement: 'AI system inventory', feature: 'Agent fleet registry with metadata', status: 'covered' },
+              { function: 'MAP', requirement: 'Integration & dependency tracking', feature: 'Integration catalog (100+ connectors)', status: 'covered' },
+              { function: 'MEASURE', requirement: 'Incident detection & monitoring', feature: 'Real-time PII, hallucination, toxicity, prompt injection detection', status: 'covered' },
+              { function: 'MEASURE', requirement: 'Adversarial testing', feature: 'Shadow Mode red-teaming', status: 'covered' },
+              { function: 'MEASURE', requirement: 'Cost & performance tracking', feature: 'Multi-provider cost dashboard (OpenAI, Anthropic, OpenRouter)', status: 'covered' },
+              { function: 'MANAGE', requirement: 'Incident response & controls', feature: 'Kill switch, approval workflows (HITL), action policies', status: 'covered' },
+              { function: 'MANAGE', requirement: 'Automated remediation', feature: 'Not yet implemented', status: 'gap' },
+            ]).map((item) => (
+              <div key={`${item.function}-${item.requirement}`} className="flex items-start gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3">
+                <span className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${item.status === 'covered' ? 'bg-green-400' : item.status === 'partial' ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-cyan-400 mb-0.5">{item.function}</p>
+                  <p className="text-sm font-medium text-white">{item.requirement}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.feature}</p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0 ${item.status === 'covered' ? 'bg-green-400/10 text-green-400' : item.status === 'partial' ? 'bg-yellow-400/10 text-yellow-400' : 'bg-red-400/10 text-red-400'}`}>
+                  {item.status === 'covered' ? 'Covered' : item.status === 'partial' ? 'Partial' : 'Gap'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* India AI Governance Framework */}
+        {activeComplianceTab === 'india_ai' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400 mb-4">India AI Governance Framework 2025–26 (MeitY) — maps Rasi capabilities to core principles.</p>
+            {([
+              { principle: 'Human-centricity', requirement: 'Human oversight of AI decisions', feature: 'HITL approval workflows, kill switch', status: 'covered' },
+              { principle: 'Accountability', requirement: 'Audit trails & evidence', feature: 'Black Box forensics, immutable audit logs, Safe Harbor evidence export', status: 'covered' },
+              { principle: 'Transparency', requirement: 'Explainability of AI agent actions', feature: 'Conversation history, incident details, cost attribution per agent', status: 'covered' },
+              { principle: 'Risk proportionality', requirement: 'Risk-based incident response', feature: 'Severity-based incident classification (critical/high/medium/low)', status: 'covered' },
+              { principle: 'Privacy & data protection', requirement: 'India-specific PII safeguards', feature: 'Aadhaar, PAN, UPI ID, Passport detection in real time', status: 'covered' },
+              { principle: 'Inclusion & accessibility', requirement: 'Multi-provider, multi-framework support', feature: 'OpenAI + Anthropic + OpenRouter + custom agents', status: 'covered' },
+              { principle: 'Security', requirement: 'Adversarial robustness testing', feature: 'Shadow Mode prompt injection & policy override testing', status: 'covered' },
+              { principle: 'Regulatory framework mapping', requirement: 'Automated compliance reporting', feature: 'Not yet implemented', status: 'gap' },
+            ]).map((item) => (
+              <div key={item.principle} className="flex items-start gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3">
+                <span className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${item.status === 'covered' ? 'bg-green-400' : item.status === 'partial' ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-cyan-400 mb-0.5">{item.principle}</p>
+                  <p className="text-sm font-medium text-white">{item.requirement}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.feature}</p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0 ${item.status === 'covered' ? 'bg-green-400/10 text-green-400' : item.status === 'partial' ? 'bg-yellow-400/10 text-yellow-400' : 'bg-red-400/10 text-red-400'}`}>
+                  {item.status === 'covered' ? 'Covered' : item.status === 'partial' ? 'Partial' : 'Gap'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> Covered</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" /> Partial</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Gap</span>
+        </div>
+      </SectionCard>
 
       <SectionCard title="Legal Limits" description="Keep the legal boundary short on the page and evidence-backed everywhere else." icon={ShieldAlert}>
         <div className="grid gap-4 md:grid-cols-2">

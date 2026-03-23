@@ -49,6 +49,9 @@ const PII_PATTERNS = {
 
   // Passport numbers — basic, must be near a label
   passport: /(?:passport\s*(?:no\.?|number|#)\s*[:=]?\s*)([A-Z][0-9]{7,8})/gi,
+
+  // UPI Virtual Payment Address (India): requires known PSP suffix to avoid email false positives
+  upiId: /\b[a-zA-Z0-9._-]+@(?:paytm|okaxis|oksbi|ybl|okhdfcbank|okicici|upi|apl|fbl|hdfcbank|axisbank|kotak|indus|sbi|icici|rbl|federal|sc|hsbc|pnb|iob|canara|union|boi|bob)\b/gi,
 };
 
 // ---------------------------------------------------------------------------
@@ -221,8 +224,8 @@ export class IncidentDetectionService {
       const matches = content.match(re);
       if (matches) {
         detections.push(`${type}: ${matches.length} instance(s)`);
-        // SSN, credit card, Aadhaar, PAN are high-risk; email/phone are medium
-        if (['ssn', 'creditCard', 'aadhar', 'pan', 'passport'].includes(type)) {
+        // SSN, credit card, Aadhaar, PAN, UPI are high-risk; email/phone are medium
+        if (['ssn', 'creditCard', 'aadhar', 'pan', 'passport', 'upiId'].includes(type)) {
           highRiskCount += matches.length;
         }
       }

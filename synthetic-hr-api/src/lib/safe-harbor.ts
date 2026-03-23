@@ -63,6 +63,13 @@ type ContractRecord = {
 };
 
 const PLAN_SLA_DEFAULTS = {
+  free: {
+    label: 'Free',
+    uptimeTarget: '99.0%',
+    supportResponseTarget: 'Community',
+    incidentAlertTarget: 'Customer route required',
+    auditRetentionDays: 30,
+  },
   starter: {
     label: 'Starter',
     uptimeTarget: '99.5%',
@@ -87,10 +94,12 @@ const PLAN_SLA_DEFAULTS = {
 } as const;
 
 function resolvePlan(plan?: string | null) {
-  const normalized = String(plan || 'starter').toLowerCase();
+  const normalized = String(plan || 'free').toLowerCase();
   if (normalized.includes('enterprise')) return { key: 'enterprise', ...PLAN_SLA_DEFAULTS.enterprise };
-  if (normalized.includes('pro')) return { key: 'pro', ...PLAN_SLA_DEFAULTS.pro };
-  return { key: 'starter', ...PLAN_SLA_DEFAULTS.starter };
+  if (normalized.includes('pro') || normalized.includes('retainer')) return { key: 'pro', ...PLAN_SLA_DEFAULTS.pro };
+  if (normalized.includes('starter') || normalized.includes('audit')) return { key: 'starter', ...PLAN_SLA_DEFAULTS.starter };
+  if (normalized.includes('free')) return { key: 'free', ...PLAN_SLA_DEFAULTS.free };
+  return { key: 'free', ...PLAN_SLA_DEFAULTS.free };
 }
 
 function sanitizeConfig(config: any): SafeHarborConfig {

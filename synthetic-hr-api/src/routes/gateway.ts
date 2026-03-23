@@ -769,6 +769,71 @@ const enforceApiKeyRateLimit = async (req: Request, res: Response): Promise<bool
   return true;
 };
 
+// Monthly request quotas per plan. -1 = unlimited.
+const PLAN_MONTHLY_QUOTAS: Record<string, number> = {
+  free: 10_000,
+  audit: 50_000,
+  retainer: 200_000,
+  enterprise: -1,
+};
+
+const getCurrentMonth = () => new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<boolean> => {
+  if (!req.apiKey) return true; // already caught by validateApiKey
+
+  const orgId = req.apiKey.organization_id;
+  const month = getCurrentMonth();
+
+  try {
+    const orgRows = await supabaseRest('organizations', `id=eq.${orgId}&select=plan`, { method: 'GET' });
+    const org = Array.isArray(orgRows) ? orgRows[0] : null;
+    const plan = String(org?.plan || 'free').toLowerCase();
+    const quota = PLAN_MONTHLY_QUOTAS[plan] ?? PLAN_MONTHLY_QUOTAS.free;
+
+    if (quota === -1) return true;
+
+    const usageRows = await supabaseRest('gateway_usage', `org_id=eq.${orgId}&month=eq.${month}`, { method: 'GET' });
+    const usage = Array.isArray(usageRows) ? usageRows[0] : null;
+    const currentCount: number = usage?.request_count ?? 0;
+
+    if (currentCount >= quota) {
+      res.status(429).json({
+        error: {
+          message: `Monthly gateway quota of ${quota.toLocaleString()} requests exceeded for your plan (${plan}). Upgrade to continue.`,
+          type: 'rate_limit_error',
+          code: 'monthly_quota_exceeded',
+          plan,
+          quota,
+          used: currentCount,
+        },
+      });
+      return false;
+    }
+
+    // Increment usage fire-and-forget — don't block the request
+    if (usage) {
+      supabaseRest('gateway_usage', `org_id=eq.${orgId}&month=eq.${month}`, {
+        method: 'PATCH',
+        body: { request_count: currentCount + 1 },
+      }).catch(() => {});
+    } else {
+      supabaseRest('gateway_usage', '', {
+        method: 'POST',
+        body: { org_id: orgId, month, request_count: 1, quota },
+      }).catch(() => {});
+    }
+  } catch (err: any) {
+    // Non-blocking: if quota check fails, allow the request through
+    logger.warn('Gateway monthly quota check failed (allowing request)', {
+      orgId,
+      error: String(err?.message || err),
+    });
+  }
+
+  return true;
+};
+
 const buildIdempotencyFingerprint = (req: Request): string => {
   const sanitizedBody = { ...(req.body || {}) } as Record<string, any>;
 
@@ -1457,6 +1522,10 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     return;
   }
 
+  if (!(await enforceOrgMonthlyQuota(req, res))) {
+    return;
+  }
+
   const agentId = await checkAgentBudget(req, res);
   if (agentId === false) return; // budget exceeded or agent not found
 
@@ -1701,6 +1770,10 @@ router.post('/completions', async (req: Request, res: Response) => {
     return;
   }
 
+  if (!(await enforceOrgMonthlyQuota(req, res))) {
+    return;
+  }
+
   const idem = await prepareIdempotency(req, res, { supportsStreaming: false });
   if (idem.handled) return;
 
@@ -1859,6 +1932,10 @@ router.post('/embeddings', async (req: Request, res: Response) => {
     return;
   }
 
+  if (!(await enforceOrgMonthlyQuota(req, res))) {
+    return;
+  }
+
   const idem = await prepareIdempotency(req, res, { supportsStreaming: false });
   if (idem.handled) return;
 
@@ -1976,6 +2053,10 @@ router.post('/embeddings', async (req: Request, res: Response) => {
 
 router.post('/responses', async (req: Request, res: Response) => {
   if (!(await enforceApiKeyRateLimit(req, res))) {
+    return;
+  }
+
+  if (!(await enforceOrgMonthlyQuota(req, res))) {
     return;
   }
 
@@ -2157,6 +2238,10 @@ router.post('/responses', async (req: Request, res: Response) => {
 
 router.post('/audio/transcriptions', transcriptionUploadMiddleware, async (req: Request, res: Response) => {
   if (!(await enforceApiKeyRateLimit(req, res))) {
+    return;
+  }
+
+  if (!(await enforceOrgMonthlyQuota(req, res))) {
     return;
   }
 

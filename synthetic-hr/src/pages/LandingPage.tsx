@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Brain, Zap, ArrowRight, Play, FileText, DollarSign, BarChart3,
+  Brain, ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
-  Gauge, Workflow, Target, Rocket, ChevronDown, Building2, Award,
+  Gauge, Target, ChevronDown, Building2, Award,
   TrendingDown, Menu, X
 } from 'lucide-react';
 
@@ -81,6 +81,8 @@ const PLAN_CARDS: PlanCard[] = [
 const pillarColorMap: Record<string, { bg: string; border: string; text: string }> = {
   cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-300' },
   emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-300' },
+  // alias used by pillar 6
+
   red: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-300' },
   amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-300' },
   blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-300' },
@@ -408,7 +410,6 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
 export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hoveredPillar, setHoveredPillar] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<PricingProfile['id']>('growth');
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
   const [activeAgents, setActiveAgents] = useState(22);
@@ -431,67 +432,99 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   const pillars = [
     {
       id: 1,
-      icon: Users,
-      color: 'from-blue-500 to-blue-600',
-      bgColor: 'blue',
-      title: 'Recruitment',
-      subtitle: 'Agent Persona Architecture',
-      problem: 'Generic, hallucinating, off-brand bots.',
+      icon: BarChart3,
+      color: 'from-cyan-500 to-blue-600',
+      bgColor: 'cyan',
+      title: 'See Everything',
+      subtitle: 'Real-time LLM Gateway',
+      problem: 'No visibility into what your agents are actually doing.',
       features: [
-        'System Persona Document',
-        'Brand Tone SOP',
-        'Jailbreak Resistance Hardening',
-        'Deployment Readiness Score'
+        'OpenAI-compatible proxy for any agent',
+        'Every request & response logged',
+        'Multi-provider: OpenAI, Anthropic, 340+ models',
+        'Per-agent usage dashboards'
       ],
-      impact: '↑3x Brand Consistency'
+      impact: '100% Visibility'
     },
     {
       id: 2,
-      icon: DollarSign,
-      color: 'from-green-500 to-green-600',
-      bgColor: 'green',
-      title: 'Payroll',
-      subtitle: 'AI Cost Governance',
-      problem: 'AI token leakage & inefficient prompts.',
+      icon: Shield,
+      color: 'from-red-500 to-red-600',
+      bgColor: 'red',
+      title: 'Catch Everything',
+      subtitle: 'Real-time Incident Detection',
+      problem: 'PII leaks, hallucinations, and policy violations reaching users.',
       features: [
-        'Token Cost Intelligence Report',
-        'Cost Per Conversation Analysis',
-        'Model Optimization Strategy',
-        '30–50% Cost Reduction Target'
+        'Aadhaar, PAN, UPI ID detection',
+        'Hallucination & prompt injection alerts',
+        'Toxic output & refund abuse detection',
+        'Severity scoring: low → critical'
       ],
-      impact: '↓50% Cost'
+      impact: '⚡ Real-time Protection'
     },
     {
       id: 3,
-      icon: BarChart3,
+      icon: ZapOff,
+      color: 'from-amber-500 to-orange-600',
+      bgColor: 'amber',
+      title: 'Control Everything',
+      subtitle: 'Action Policies & Kill Switch',
+      problem: 'Rogue agents with no approval gates or circuit breakers.',
+      features: [
+        'Action policies with conditional routing',
+        'Human-in-the-loop approval workflows',
+        'Instant kill switch — 3-level escalation',
+        'Budget caps & rate limiting per agent'
+      ],
+      impact: '⚡ Instant Control'
+    },
+    {
+      id: 4,
+      icon: FileText,
       color: 'from-purple-500 to-purple-600',
       bgColor: 'purple',
-      title: 'Performance',
-      subtitle: 'Behavioral & Risk Audits',
-      problem: 'Toxic outputs, hallucinations, wrong advice.',
+      title: 'Prove Everything',
+      subtitle: 'Black Box & Audit Trails',
+      problem: 'No defensible evidence when regulators or customers ask.',
       features: [
-        'Weekly AI Employee Review Cards',
-        'Incident Logs with Black Box',
-        'Accuracy & Tone Scoring',
-        'AI Workforce Risk Score™'
+        'Downloadable Black Box evidence payloads',
+        'Immutable audit logs for every action',
+        'Safe Harbor SLA & contract management',
+        'DPDPA & NIST AI RMF compliance mapping'
       ],
       impact: '100% Auditable'
     },
     {
-      id: 4,
-      icon: ZapOff,
-      color: 'from-red-500 to-red-600',
-      bgColor: 'red',
-      title: 'Termination',
-      subtitle: 'Smart Kill Switch Protocol',
-      problem: 'Rogue agents causing damage.',
+      id: 5,
+      icon: Target,
+      color: 'from-violet-500 to-violet-600',
+      bgColor: 'violet',
+      title: 'Test Everything',
+      subtitle: 'Shadow Mode Adversarial Testing',
+      problem: 'Agents that look safe in dev but fail in production.',
       features: [
-        'Level 1: Warning',
-        'Level 2: Human Escalation',
-        'Level 3: Full API Shutdown',
-        'The Red Phone (Slack/PagerDuty)'
+        'Prompt injection attack simulations',
+        'PII exfiltration resistance tests',
+        'Policy override & jailbreak probes',
+        'Pre-production behavioral scoring'
       ],
-      impact: '⚡ Instant Control'
+      impact: 'Test Before Harm'
+    },
+    {
+      id: 6,
+      icon: DollarSign,
+      color: 'from-emerald-500 to-green-600',
+      bgColor: 'emerald',
+      title: 'Save Everything',
+      subtitle: 'Multi-provider Cost Optimization',
+      problem: 'Token leakage and no visibility into AI spend by agent.',
+      features: [
+        'Cost tracking across OpenAI, Anthropic, OpenRouter',
+        'Prompt caching for repeat queries',
+        'Budget alerts & auto-throttling',
+        'Model comparison: cost vs performance'
+      ],
+      impact: '↓47% Avg Cost'
     }
   ];
 
@@ -579,7 +612,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               </div>
               <div>
                 <span className="text-xl font-bold text-white">RASI</span>
-                <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
+                <span className="text-xs text-blue-300 block -mt-1">AI Agent Governance</span>
               </div>
             </div>
 
@@ -600,7 +633,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 onClick={onSignUp}
                 className="btn-primary text-sm px-5 py-2.5"
               >
-                Start Free Trial
+                Start Free
               </button>
             </div>
 
@@ -638,7 +671,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                   onClick={() => { setMobileMenuOpen(false); onSignUp(); }}
                   className="btn-primary text-sm w-full justify-center"
                 >
-                  Start Free Trial
+                  Start Free
                 </button>
               </div>
             </div>
@@ -658,19 +691,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md">
             <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">Enterprise AI Governance Platform</span>
+            <span className="text-sm text-slate-200">AI Agent Governance Platform — Built for India</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
-            The HR Department
+            Your AI agents are live.
             <br />
-            <span className="gradient-text">for your AI Workforce</span>
+            <span className="gradient-text">Who's watching them?</span>
           </h1>
 
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Most companies treat AI agents like tools. We treat them like employees.
+            Rasi is the governance control plane that <span className="text-slate-100 font-semibold">monitors, secures, and ensures compliance</span> of every AI agent in your organization —
             <br className="hidden md:block" />
-            <span className="text-slate-100 font-semibold">Manage, monitor, govern, and optimize</span> your digital workforce with enterprise-grade controls.
+            no matter who built them.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
@@ -678,7 +711,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               onClick={onSignUp}
               className="btn-primary group w-full sm:w-auto"
             >
-              Start Free Trial
+              Start Free — No Credit Card
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
             {onDemo ? (
@@ -695,10 +728,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           {/* Floating stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { value: '200+', label: 'AI Models' },
-              { value: '99.9%', label: 'Uptime' },
-              { value: '-47%', label: 'Avg Cost Cut' },
-              { value: '24/7', label: 'Monitoring' }
+              { value: '340+', label: 'AI Models Supported' },
+              { value: 'Any Agent', label: 'OpenAI · Anthropic · Custom' },
+              { value: '-47%', label: 'Avg Cost Reduction' },
+              { value: 'DPDPA', label: 'India Compliance Ready' }
             ].map((stat, i) => (
               <div
                 key={i}
@@ -762,7 +795,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               onClick={onSignUp}
               className="flex items-center gap-2 px-7 py-3.5 rounded-xl border border-white/15 bg-white/[0.05] text-white font-semibold hover:bg-white/[0.09] transition-all backdrop-blur-md"
             >
-              Start Free Trial
+              Start Free — No Credit Card
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
@@ -776,9 +809,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">The Solution</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">AI Workforce Governance in 4 Steps</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">One Gateway. Any Agent. Complete Governance.</h2>
             <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
-              From recruitment to retirement, we help you manage AI like you manage people.
+              Route your AI traffic through Rasi once — get instant visibility, security, and compliance across every agent you run.
             </p>
           </div>
 
@@ -787,26 +820,26 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               {
                 step: 1,
                 icon: FileText,
-                title: 'Recruit',
-                desc: 'Define AI agent personas with clear guidelines and brand alignment'
+                title: 'Connect',
+                desc: 'Point any AI agent at the Rasi gateway — OpenAI, Anthropic, custom-built, or third-party. No lock-in.'
               },
               {
                 step: 2,
-                icon: DollarSign,
-                title: 'Pay',
-                desc: 'Monitor token costs and optimize spending in real-time'
+                icon: BarChart3,
+                title: 'Monitor',
+                desc: 'Every request, response, token, and cost tracked in real-time. PII, hallucinations, and policy violations caught instantly.'
               },
               {
                 step: 3,
-                icon: BarChart3,
-                title: 'Review',
-                desc: 'Track behavior, quality, and risk with weekly performance cards'
+                icon: ZapOff,
+                title: 'Enforce',
+                desc: 'Action policies, approval workflows, kill switches, and budget caps. Define what agents can do — and what needs a human.'
               },
               {
                 step: 4,
-                icon: Zap,
-                title: 'Control',
-                desc: 'Kill switch protocol for instant agent shutdown when needed'
+                icon: Shield,
+                title: 'Prove',
+                desc: 'Black Box forensics, audit trails, and compliance evidence. When regulators ask, you\'ll have a defensible answer.'
               }
             ].map((item, i) => (
               <div
@@ -835,18 +868,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section id="pillars" className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 md:mb-16 lg:mb-20">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Complete Management</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">4 Pillars of AI Governance</h2>
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">What Makes Rasi Different</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">6 Things No Other Platform Does Together</h2>
+            <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">Works with any AI agent — OpenAI, Anthropic, LangChain, custom-built, or third-party. No vendor lock-in.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
-            {pillars.map((pillar, i) => {
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+            {pillars.map((pillar) => {
               const colors = pillarColorMap[pillar.bgColor] ?? { bg: 'bg-white/5', border: 'border-white/10', text: 'text-slate-300' };
               return (
                 <div
                   key={pillar.id}
-                  onMouseEnter={() => setHoveredPillar(pillar.id)}
-                  onMouseLeave={() => setHoveredPillar(null)}
                   className="group relative p-4 sm:p-6 lg:p-8 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
                 >
                   {/* Background gradient — static class via color map */}
@@ -922,18 +954,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Why Choose RASI</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Everything You Need to Scale AI Safely</h2>
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Built for India</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">The Only AI Governance Platform That's India-Native</h2>
+            <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">INR pricing. DPDPA compliance. Aadhaar & PAN detection. India-specific integrations. No USD conversion surprises.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {[
-              { icon: Lock, title: 'Enterprise Security', desc: 'Security-focused operating posture, audit visibility, and controlled access patterns' },
-              { icon: Gauge, title: 'Real-Time Monitoring', desc: 'Operational visibility across fleet health, incidents, and runtime cost movement' },
-              { icon: Workflow, title: 'Seamless Integration', desc: 'Designed for governed integrations across major model providers and operational systems' },
-              { icon: Target, title: 'Precision Control', desc: 'Token limits, rate limits, usage quotas' },
-              { icon: TrendingUp, title: 'Cost Reduction', desc: 'Governance-led optimization highlights waste, drift, and review priorities early' },
-              { icon: Award, title: 'Compliance Ready', desc: 'Audit trails, reports, governance frameworks' },
+              { icon: Lock, title: 'Agent-Agnostic', desc: 'Governs ANY agent — OpenAI, Anthropic, LangChain, Haptik, Yellow.ai, or custom-built. Rasi doesn\'t replace your agents, it governs them.' },
+              { icon: Gauge, title: 'LLM Gateway Proxy', desc: 'OpenAI-compatible endpoint. One line of code to route any agent through Rasi. Incident detection + cost tracking starts immediately.' },
+              { icon: Shield, title: 'India-Specific PII', desc: 'Detects Aadhaar numbers, PAN cards, UPI IDs, and Indian bank accounts in real-time — not just generic SSN/credit card patterns.' },
+              { icon: Target, title: 'DPDPA Compliance', desc: 'Mapping to India\'s Digital Personal Data Protection Act 2023. Built-in breach notification, data principal rights, and audit evidence.' },
+              { icon: TrendingUp, title: 'INR Pricing', desc: 'From ₹0 (free tier) to ₹15K–₹60K/month. No per-seat pricing. No USD conversion. Designed for Indian mid-market teams.' },
+              { icon: Award, title: 'VPC-Ready Runtime', desc: 'Run governance workers inside your own VPC. Secure outbound-only polling — no inbound ports, no data leaving your network.' },
             ].map((item, i) => (
               <div
                 key={i}
@@ -1137,17 +1170,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-            Ready to Govern Your AI Workforce?
+            Your AI agents are already running. Is anyone watching?
           </h2>
           <p className="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
-            Join 50+ enterprises already using RASI to reduce costs, increase control, and scale AI safely.
+            Route your first agent through Rasi in 5 minutes. Free tier, no credit card required. Works with any AI agent — OpenAI, Anthropic, LangChain, or custom-built.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={onSignUp}
               className="group px-6 sm:px-8 md:px-10 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center gap-2"
             >
-              Start Free Trial
+              Start Free — No Credit Card
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
             {onDemo ? (
@@ -1173,7 +1206,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 </div>
                 <span className="text-lg font-bold text-white">RASI</span>
               </div>
-              <p className="text-sm text-slate-400">Enterprise governance for AI agents.</p>
+              <p className="text-sm text-slate-400">The governance layer for your AI workforce.</p>
             </div>
             <div>
               <h4 className="font-semibold text-white mb-4">Product</h4>
@@ -1195,7 +1228,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 </li>
                 <li>
                   <button onClick={onSignUp} className="hover:text-cyan-400 transition-colors">
-                    Start Free Trial
+                    Start Free
                   </button>
                 </li>
                 {onDemo ? (
