@@ -26,6 +26,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'approvals.ts'),
   // Playbooks: service-role used only for public API endpoint (B5, API-key auth) and public share endpoint (B6, no user JWT).
   path.join(ROUTES_DIR, 'playbooks.ts'),
+  // Compliance: PDF generation and bulk data export require cross-table org reads; no per-request user JWT in the PDF render path.
+  path.join(ROUTES_DIR, 'compliance.ts'),
 ]);
 
 function walk(dir: string): string[] {
