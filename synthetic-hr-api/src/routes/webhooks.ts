@@ -26,6 +26,13 @@ const eventIds = [
   'error.occurred',
   'rate_limit.exceeded',
   'model.deprecated',
+  'incident.created',
+  'incident.resolved',
+  'approval.requested',
+  'approval.completed',
+  'agent.suspended',
+  'quota.warning',
+  'policy.violated',
 ] as const;
 
 const webhookCreateSchema = z.object({
@@ -147,6 +154,105 @@ const sampleEventPayload = (event: EventId) => {
           model: 'gpt-4',
           replacement: 'gpt-4.1',
           effective_date: '2026-05-31',
+        },
+      };
+    case 'incident.created':
+      return {
+        id: 'evt_incident_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          incident_id: 'inc_abc123',
+          agent_id: 'agent_sales_support',
+          severity: 'high',
+          incident_type: 'pii_extraction',
+          title: 'PII EXTRACTION Detected',
+          description: 'Aadhaar number pattern found in agent response',
+        },
+      };
+    case 'incident.resolved':
+      return {
+        id: 'evt_incident_resolve_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          incident_id: 'inc_abc123',
+          resolved_by: 'user_xyz',
+          resolution_notes: 'False positive — test data in staging environment',
+        },
+      };
+    case 'approval.requested':
+      return {
+        id: 'evt_approval_req_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          approval_id: 'apr_abc123',
+          agent_id: 'agent_sales_support',
+          service: 'razorpay',
+          action: 'initiate_refund',
+          requested_by: 'user_xyz',
+          required_role: 'admin',
+          assigned_to: 'user_admin',
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+        },
+      };
+    case 'approval.completed':
+      return {
+        id: 'evt_approval_done_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          approval_id: 'apr_abc123',
+          decision: 'approved',
+          reviewer_id: 'user_admin',
+          service: 'razorpay',
+          action: 'initiate_refund',
+        },
+      };
+    case 'agent.suspended':
+      return {
+        id: 'evt_suspend_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          agent_id: 'agent_sales_support',
+          agent_name: 'Sales Support Bot',
+          reason: 'Kill switch activated — emergency stop',
+          suspended_by: 'user_xyz',
+        },
+      };
+    case 'quota.warning':
+      return {
+        id: 'evt_quota_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          plan: 'retainer',
+          quota: 200000,
+          used: 162000,
+          percent_used: 81,
+          threshold_percent: 80,
+        },
+      };
+    case 'policy.violated':
+      return {
+        id: 'evt_policy_001',
+        type: event,
+        created_at: timestamp,
+        organization_id: 'org_demo',
+        data: {
+          agent_id: 'agent_sales_support',
+          policy_id: 'pol_abc123',
+          policy_name: 'No Refunds Over ₹50,000',
+          action_blocked: 'initiate_refund',
+          reason: 'Refund amount ₹75,000 exceeds policy limit',
         },
       };
   }

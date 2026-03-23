@@ -7,6 +7,7 @@ import { validateRequestBody, incidentSchemas } from '../schemas/validation';
 import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { firePlaybookTriggers } from '../lib/trigger-evaluator';
+import { notifySlackIncident } from '../lib/slack-notify';
 import { incidentDetection } from '../services/incident-detection';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 
@@ -123,9 +124,9 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
       metadata: { incident_type, severity, title },
     });
 
-    fireAndForgetWebhookEvent(orgId, 'error.occurred', {
+    fireAndForgetWebhookEvent(orgId, 'incident.created', {
       id: `evt_incident_${data?.[0]?.id || crypto.randomUUID()}`,
-      type: 'error.occurred',
+      type: 'incident.created',
       created_at: new Date().toISOString(),
       organization_id: orgId,
       data: {
@@ -137,6 +138,16 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
         title,
         description,
       },
+    });
+
+    // Slack notification (fire and forget)
+    void notifySlackIncident(orgId, {
+      incidentId: data?.[0]?.id,
+      title,
+      severity: severity || 'medium',
+      incidentType: incident_type,
+      agentId: agent_id,
+      description,
     });
 
     // Evaluate playbook triggers for incident.created event.
@@ -196,6 +207,18 @@ router.put('/incidents/:id/resolve', requirePermission('incidents.resolve'), asy
       orgId,
       resolution_notes
     );
+
+    fireAndForgetWebhookEvent(orgId, 'incident.resolved', {
+      id: `evt_incident_resolve_${id}`,
+      type: 'incident.resolved',
+      created_at: new Date().toISOString(),
+      organization_id: orgId,
+      data: {
+        incident_id: id,
+        resolved_by: req.user?.id || 'unknown',
+        resolution_notes: resolution_notes || null,
+      },
+    });
 
     logger.info('Incident resolved successfully', { incident_id: id });
 
@@ -307,6 +330,23 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
     const highest = incidentDetection.getHighestSeverity(results);
 
     if (highest && (highest.severity === 'critical' || highest.severity === 'high')) {
+      // Auto-suppress: skip if >5 false positives for this type in last 30 days
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      try {
+        const fpQuery = new URLSearchParams({
+          select: 'id',
+          organization_id: eq(orgId),
+          incident_type: eq(String(highest.type)),
+          status: eq('false_positive'),
+          created_at: `gte.${thirtyDaysAgo}`,
+        });
+        const fpRows = await supabaseRestAsUser(getUserJwt(req), 'incidents', fpQuery) as any[];
+        if (Array.isArray(fpRows) && fpRows.length > 5) {
+          logger.info('Auto-suppressed incident (>5 FP in 30d)', { type: highest.type, orgId });
+          return res.json({ success: true, results, highest, needsIncident: false, suppressed: true });
+        }
+      } catch { /* non-fatal */ }
+
       const incidentRows = await supabaseRestAsUser(
         getUserJwt(req),
         'incidents',
@@ -322,15 +362,16 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
             description: highest.details,
             trigger_content: content,
             status: 'open',
+            confidence: highest.confidence,
           },
         }
       );
       const incident = incidentRows?.[0];
       logger.warn('Incident detected and created', { incident_type: highest.type, severity: highest.severity });
 
-      fireAndForgetWebhookEvent(orgId, 'error.occurred', {
+      fireAndForgetWebhookEvent(orgId, 'incident.created', {
         id: `evt_detect_${incident?.id || crypto.randomUUID()}`,
-        type: 'error.occurred',
+        type: 'incident.created',
         created_at: new Date().toISOString(),
         organization_id: orgId,
         data: {

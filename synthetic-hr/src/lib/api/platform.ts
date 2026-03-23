@@ -596,6 +596,21 @@ export type RoutingRule = {
   required_user_id?: string | null;
 };
 
+export type InterceptorRule = {
+  id?: string;
+  enabled?: boolean;
+  match_type?: 'always' | 'pii_detected' | 'keyword' | 'regex';
+  match_value?: string;
+  transform?: 'redact_pii' | 'replace' | 'append_system' | 'prepend_system';
+  find?: string;
+  replacement?: string;
+  text?: string;
+  // Route-model condition fields
+  condition?: 'always' | 'risk_score_above' | 'monthly_cost_above';
+  threshold?: number;
+  target_model?: string;
+};
+
 export type ActionPolicyRow = {
   id: string;
   organization_id: string;
@@ -606,6 +621,7 @@ export type ActionPolicyRow = {
   required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
   webhook_allowlist: string[];
   routing_rules: RoutingRule[];
+  interceptor_rules?: InterceptorRule[];
   notes?: string | null;
   updated_by: string | null;
   updated_at: string;
@@ -629,6 +645,7 @@ export const actionPoliciesApi = {
     required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin';
     webhook_allowlist?: string[];
     routing_rules?: RoutingRule[];
+    interceptor_rules?: InterceptorRule[];
     notes?: string;
   }): Promise<ApiResponse<ActionPolicyRow>> {
     return authenticatedFetch('/action-policies', {

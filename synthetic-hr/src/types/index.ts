@@ -203,6 +203,8 @@ export interface Incident {
   priority?: string;
   source?: string;
   next_action?: string;
+  // Detection confidence (0.0–1.0), stored since migration_029
+  confidence?: number;
 }
 
 // ==================== COST TYPES ====================

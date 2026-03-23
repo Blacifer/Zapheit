@@ -295,3 +295,44 @@ export const safeHarborApi = {
     });
   },
 };
+
+export interface AuditLogEntry {
+  id: string;
+  organization_id: string;
+  user_id: string | null;
+  resource_type: string;
+  resource_id: string | null;
+  action: string;
+  details: Record<string, any>;
+  ip_address: string | null;
+  user_agent: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  users?: { id: string; email: string; full_name: string | null } | null;
+}
+
+export const auditLogsApi = {
+  async list(params?: {
+    action?: string;
+    resource_type?: string;
+    user_id?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<AuditLogEntry[]> & { total?: number; page?: number; limit?: number }> {
+    const query = new URLSearchParams();
+    if (params?.action) query.set('action', params.action);
+    if (params?.resource_type) query.set('resource_type', params.resource_type);
+    if (params?.user_id) query.set('user_id', params.user_id);
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    if (params?.search) query.set('search', params.search);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return authenticatedFetch(`/compliance/audit-logs${qs ? `?${qs}` : ''}`, { method: 'GET' });
+  },
+};

@@ -57,6 +57,12 @@ export async function executeConnectorAction(
       case 'salesforce': return await salesforceAction(action, params, credentials);
       case 'hubspot': return await hubspotAction(action, params, credentials);
       case 'razorpay': return await razorpayAction(action, params, credentials);
+      case 'google-workspace': return await googleWorkspaceAction(action, params, credentials);
+      case 'microsoft-365': return await microsoft365Action(action, params, credentials);
+      case 'zoho': return await zohoAction(action, params, credentials);
+      case 'deel': return await deelAction(action, params, credentials);
+      case 'gusto': return await gustoAction(action, params, credentials);
+      case 'linkedin-recruiter': return await linkedinRecruiterAction(action, params, credentials);
       default:
         return { success: false, error: `Connector "${connectorId}" actions are not yet supported`, statusCode: 501 };
     }
@@ -392,5 +398,355 @@ async function razorpayAction(
     }
     default:
       return { success: false, error: `Unknown Razorpay action: ${action}`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Google Workspace (Gmail + Drive + Calendar + Docs)
+// Credentials: { access_token }
+// ---------------------------------------------------------------------------
+async function googleWorkspaceAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.access_token;
+  if (!token) return { success: false, error: 'Google Workspace credentials missing: access_token required' };
+  const h = bearerHeaders(token);
+
+  switch (action) {
+    case 'list_files': {
+      const qs = new URLSearchParams({ pageSize: String(params.limit || 10) });
+      if (params.query) qs.set('q', params.query);
+      const r = await jsonFetch(`https://www.googleapis.com/drive/v3/files?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.files };
+    }
+    case 'create_document': {
+      const r = await jsonFetch('https://docs.googleapis.com/v1/documents', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ title: params.title || 'Untitled Document' }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'send_email': {
+      if (!params.to || !params.subject || !params.body) {
+        return { success: false, error: 'send_email requires: to, subject, body' };
+      }
+      const raw = Buffer.from(
+        `To: ${params.to}\r\nSubject: ${params.subject}\r\nContent-Type: text/plain\r\n\r\n${params.body}`
+      ).toString('base64url');
+      const r = await jsonFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ raw }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { message_id: r.data.id, thread_id: r.data.threadId } };
+    }
+    case 'list_calendar_events': {
+      const qs = new URLSearchParams({ maxResults: String(params.limit || 10) });
+      if (params.time_min) qs.set('timeMin', params.time_min);
+      if (params.time_max) qs.set('timeMax', params.time_max);
+      const r = await jsonFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.items };
+    }
+    default:
+      return { success: false, error: `Google Workspace action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Microsoft 365 (Mail + Calendar + Teams via Microsoft Graph)
+// Credentials: { access_token }
+// ---------------------------------------------------------------------------
+async function microsoft365Action(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.access_token;
+  if (!token) return { success: false, error: 'Microsoft 365 credentials missing: access_token required' };
+  const h = bearerHeaders(token);
+  const base = 'https://graph.microsoft.com/v1.0';
+
+  switch (action) {
+    case 'send_email': {
+      if (!params.to || !params.subject || !params.body) {
+        return { success: false, error: 'send_email requires: to, subject, body' };
+      }
+      const r = await jsonFetch(`${base}/me/sendMail`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          message: {
+            subject: params.subject,
+            body: { contentType: params.content_type || 'Text', content: params.body },
+            toRecipients: [{ emailAddress: { address: params.to } }],
+          },
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { sent: true } };
+    }
+    case 'list_emails': {
+      const qs = new URLSearchParams({ $top: String(params.limit || 10) });
+      const r = await jsonFetch(`${base}/me/messages?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.value };
+    }
+    case 'create_calendar_event': {
+      if (!params.subject || !params.start || !params.end) {
+        return { success: false, error: 'create_calendar_event requires: subject, start, end' };
+      }
+      const r = await jsonFetch(`${base}/me/events`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          subject: params.subject,
+          start: { dateTime: params.start, timeZone: params.timezone || 'Asia/Kolkata' },
+          end: { dateTime: params.end, timeZone: params.timezone || 'Asia/Kolkata' },
+          body: { contentType: 'Text', content: params.description || '' },
+          attendees: params.attendees
+            ? (params.attendees as string[]).map((e) => ({ emailAddress: { address: e }, type: 'required' }))
+            : [],
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'list_teams_channels': {
+      if (!params.team_id) return { success: false, error: 'list_teams_channels requires: team_id' };
+      const r = await jsonFetch(`${base}/teams/${params.team_id}/channels`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.value };
+    }
+    default:
+      return { success: false, error: `Microsoft 365 action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zoho CRM
+// Credentials: { access_token, api_domain? }
+// ---------------------------------------------------------------------------
+async function zohoAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.access_token;
+  if (!token) return { success: false, error: 'Zoho credentials missing: access_token required' };
+  const domain = creds.api_domain || 'www.zohoapis.com';
+  const base = `https://${domain}/crm/v2`;
+  const h = bearerHeaders(token);
+
+  switch (action) {
+    case 'get_contact': {
+      if (!params.contact_id && !params.email) {
+        return { success: false, error: 'get_contact requires: contact_id or email' };
+      }
+      if (params.contact_id) {
+        const r = await jsonFetch(`${base}/Contacts/${params.contact_id}`, { headers: h });
+        if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+        return { success: true, data: r.data.data?.[0] };
+      }
+      const qs = new URLSearchParams({ criteria: `(Email:equals:${params.email})` });
+      const r = await jsonFetch(`${base}/Contacts/search?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data?.[0] };
+    }
+    case 'create_lead': {
+      if (!params.last_name) return { success: false, error: 'create_lead requires: last_name' };
+      const r = await jsonFetch(`${base}/Leads`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ data: [{ Last_Name: params.last_name, First_Name: params.first_name, Email: params.email, Company: params.company, Phone: params.phone, Lead_Source: params.lead_source }] }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data?.[0] };
+    }
+    case 'update_deal': {
+      if (!params.deal_id) return { success: false, error: 'update_deal requires: deal_id' };
+      const update: Record<string, any> = {};
+      if (params.stage) update.Stage = params.stage;
+      if (params.amount !== undefined) update.Amount = Number(params.amount);
+      if (params.close_date) update.Closing_Date = params.close_date;
+      const r = await jsonFetch(`${base}/Deals/${params.deal_id}`, {
+        method: 'PUT', headers: h,
+        body: JSON.stringify({ data: [update] }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data?.[0] };
+    }
+    case 'search_records': {
+      const module = params.module || 'Contacts';
+      const qs = new URLSearchParams({ word: params.query || '' });
+      const r = await jsonFetch(`${base}/${module}/search?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data || [] };
+    }
+    default:
+      return { success: false, error: `Zoho action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deel (Contractor / Payroll)
+// Credentials: { api_key } or { access_token }
+// ---------------------------------------------------------------------------
+async function deelAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.api_key || creds.access_token;
+  if (!token) return { success: false, error: 'Deel credentials missing: api_key or access_token required' };
+  const base = 'https://api.letsdeel.com/rest/v2';
+  const h = bearerHeaders(token);
+
+  switch (action) {
+    case 'list_workers': {
+      const qs = new URLSearchParams({ limit: String(params.limit || 20) });
+      if (params.status) qs.set('status', params.status);
+      const r = await jsonFetch(`${base}/contracts?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data };
+    }
+    case 'get_contract': {
+      if (!params.contract_id) return { success: false, error: 'get_contract requires: contract_id' };
+      const r = await jsonFetch(`${base}/contracts/${params.contract_id}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data };
+    }
+    case 'list_payments': {
+      const qs = new URLSearchParams({ limit: String(params.limit || 20) });
+      if (params.contract_id) qs.set('contract_id', params.contract_id);
+      const r = await jsonFetch(`${base}/payments?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data };
+    }
+    case 'create_payment': {
+      if (!params.contract_id || !params.amount) {
+        return { success: false, error: 'create_payment requires: contract_id, amount' };
+      }
+      const r = await jsonFetch(`${base}/payments`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          contract_id: params.contract_id,
+          amount: { value: Number(params.amount), currency: params.currency || 'USD' },
+          reason: params.reason || 'Payment via Rasi',
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.data };
+    }
+    default:
+      return { success: false, error: `Deel action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gusto (Payroll / HR)
+// Credentials: { access_token, company_id }
+// ---------------------------------------------------------------------------
+async function gustoAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.access_token;
+  const companyId = creds.company_id || params.company_id;
+  if (!token) return { success: false, error: 'Gusto credentials missing: access_token required' };
+  if (!companyId) return { success: false, error: 'Gusto credentials missing: company_id required' };
+  const base = `https://api.gusto.com/v1/companies/${companyId}`;
+  const h = bearerHeaders(token);
+
+  switch (action) {
+    case 'list_employees': {
+      const r = await jsonFetch(`${base}/employees`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'get_employee': {
+      if (!params.employee_id) return { success: false, error: 'get_employee requires: employee_id' };
+      const r = await jsonFetch(`https://api.gusto.com/v1/employees/${params.employee_id}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'get_payroll': {
+      if (!params.payroll_id) return { success: false, error: 'get_payroll requires: payroll_id' };
+      const r = await jsonFetch(`${base}/payrolls/${params.payroll_id}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'run_payroll': {
+      if (!params.payroll_id) return { success: false, error: 'run_payroll requires: payroll_id' };
+      const r = await jsonFetch(`${base}/payrolls/${params.payroll_id}/submit`, {
+        method: 'PUT', headers: h, body: JSON.stringify({}),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    default:
+      return { success: false, error: `Gusto action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LinkedIn Recruiter
+// Credentials: { access_token, organization_id? }
+// ---------------------------------------------------------------------------
+async function linkedinRecruiterAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const token = creds.access_token;
+  if (!token) return { success: false, error: 'LinkedIn Recruiter credentials missing: access_token required' };
+  const h = { ...bearerHeaders(token), 'X-Restli-Protocol-Version': '2.0.0', 'LinkedIn-Version': '202401' };
+
+  switch (action) {
+    case 'search_candidates': {
+      const qs = new URLSearchParams({ q: 'people', keywords: params.keywords || '' });
+      if (params.location) qs.set('facetGeoRegion', params.location);
+      const r = await jsonFetch(`https://api.linkedin.com/v2/search?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.elements || [] };
+    }
+    case 'get_profile': {
+      if (!params.profile_id) return { success: false, error: 'get_profile requires: profile_id' };
+      const memberId = String(params.profile_id).startsWith('urn:') ? params.profile_id : `urn:li:person:${params.profile_id}`;
+      const r = await jsonFetch(`https://api.linkedin.com/v2/people/(id:${encodeURIComponent(memberId)})`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'send_inmail': {
+      if (!params.profile_id || !params.subject || !params.body) {
+        return { success: false, error: 'send_inmail requires: profile_id, subject, body' };
+      }
+      const orgId = creds.organization_id || params.organization_id;
+      if (!orgId) return { success: false, error: 'send_inmail requires: organization_id in credentials' };
+      const r = await jsonFetch('https://api.linkedin.com/v2/messages', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          recipients: { values: [{ 'com.linkedin.common.MemberUrn': `urn:li:person:${params.profile_id}` }] },
+          subject: params.subject,
+          body: params.body,
+          messageType: 'INMAIL',
+          originToken: `rasi-${Date.now()}`,
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { sent: true, message_id: r.data.id } };
+    }
+    case 'list_job_postings': {
+      const orgId = creds.organization_id || params.organization_id;
+      if (!orgId) return { success: false, error: 'list_job_postings requires: organization_id in credentials' };
+      const qs = new URLSearchParams({ q: 'recruiting', count: String(params.limit || 10) });
+      const r = await jsonFetch(`https://api.linkedin.com/v2/jobPostings?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.elements || [] };
+    }
+    default:
+      return { success: false, error: `LinkedIn Recruiter action "${action}" not supported`, statusCode: 400 };
   }
 }

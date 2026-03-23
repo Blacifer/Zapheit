@@ -6,7 +6,7 @@ import {
   Lock, Smartphone, Monitor, Globe, Zap, FileText,
   TrendingUp, Scale, Webhook, Sparkles, Database, DollarSign,
   Mail, Edit3, Check, Upload, ImagePlus, Send, ExternalLink,
-  Phone, Slack
+  Phone, Slack, Download
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { toast } from '../../lib/toast';
@@ -111,6 +111,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
   const [orgName, setOrgName] = useState(user?.organizationName || '');
   const [dataRetention, setDataRetention] = useState(90);
   const [savingOrg, setSavingOrg] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   // Team state — only pre-populate with demo data in demo mode
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(
@@ -200,6 +201,13 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [showMfaSetup, setShowMfaSetup] = useState(false);
+  const [mfaQrUri, setMfaQrUri] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaEnrollId, setMfaEnrollId] = useState<string | null>(null);
 
   // Real join date — fetched from Supabase session
   const [memberSince, setMemberSince] = useState<string | null>(null);
@@ -223,13 +231,25 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     if (savedProfileImage) setProfileImage(savedProfileImage);
   }, []);
 
-  // Load persisted settings
+  // Load persisted settings + real MFA state from Supabase
   useEffect(() => {
     const savedRetention = localStorage.getItem('synthetic_hr_retention');
     if (savedRetention) setDataRetention(parseInt(savedRetention, 10));
-    const saved2FA = localStorage.getItem('synthetic_hr_2fa');
-    if (saved2FA === 'true') setTwoFactorEnabled(true);
-  }, []);
+
+    if (!isDemoMode) {
+      // Check real Supabase MFA enrollment status
+      supabase.auth.mfa.listFactors().then(({ data }) => {
+        const totp = data?.totp?.find((f: any) => f.factor_type === 'totp' && f.status === 'verified');
+        if (totp) {
+          setTwoFactorEnabled(true);
+          setMfaFactorId(totp.id);
+        }
+      }).catch(() => {});
+    } else {
+      const saved2FA = localStorage.getItem('synthetic_hr_2fa');
+      if (saved2FA === 'true') setTwoFactorEnabled(true);
+    }
+  }, [isDemoMode]);
 
   // ==================== HANDLERS ====================
   const handleSaveProfile = async () => {
@@ -264,6 +284,27 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     setProfileImage(null);
     localStorage.removeItem('synthetic_hr_profile_image');
     toast.success('Profile image removed.');
+  };
+
+  const handleExportAllData = async () => {
+    setExportingData(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { API_BASE_URL } = await import('../../lib/api/_helpers');
+      const res = await fetch(`${API_BASE_URL}/compliance/data-export.zip`, {
+        headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+      });
+      if (!res.ok) { toast.error('Export failed. Please try again.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rasi-data-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Full data export downloaded.');
+    } catch { toast.error('Export failed.'); }
+    setExportingData(false);
   };
 
   const handleSaveOrg = async () => {
@@ -340,6 +381,55 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     toast.error('Account deletion requested — this would be confirmed by email in production.');
     setDeleteConfirm('');
     setShowDangerZone(false);
+  };
+
+  // ---- MFA handlers ----
+  const handleToggle2FA = async () => {
+    if (isDemoMode) {
+      const next = !twoFactorEnabled;
+      setTwoFactorEnabled(next);
+      localStorage.setItem('synthetic_hr_2fa', next.toString());
+      toast.success(next ? '2FA enabled (demo)' : '2FA disabled (demo)');
+      return;
+    }
+
+    if (twoFactorEnabled) {
+      // Unenroll
+      if (!mfaFactorId) return;
+      setMfaLoading(true);
+      const { error } = await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+      setMfaLoading(false);
+      if (error) { toast.error(`Failed to disable 2FA: ${error.message}`); return; }
+      setTwoFactorEnabled(false);
+      setMfaFactorId(null);
+      toast.success('Two-factor authentication disabled.');
+    } else {
+      // Start enrollment — show QR code modal
+      setMfaLoading(true);
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+      setMfaLoading(false);
+      if (error || !data) { toast.error(`Failed to start 2FA setup: ${error?.message || 'Unknown error'}`); return; }
+      setMfaEnrollId(data.id);
+      setMfaQrUri(data.totp.qr_code);
+      setMfaSecret(data.totp.secret);
+      setMfaCode('');
+      setShowMfaSetup(true);
+    }
+  };
+
+  const handleVerifyMfa = async () => {
+    if (!mfaEnrollId || !mfaCode) return;
+    setMfaLoading(true);
+    const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: mfaEnrollId });
+    if (!challenge) { setMfaLoading(false); toast.error('Failed to create MFA challenge'); return; }
+    const { error } = await supabase.auth.mfa.verify({ factorId: mfaEnrollId, challengeId: challenge.id, code: mfaCode });
+    setMfaLoading(false);
+    if (error) { toast.error(`Verification failed: ${error.message}`); return; }
+    setTwoFactorEnabled(true);
+    setMfaFactorId(mfaEnrollId);
+    setShowMfaSetup(false);
+    setMfaCode('');
+    toast.success('Two-factor authentication enabled successfully.');
   };
 
   // ==================== SUB-VIEWS ====================
@@ -494,6 +584,32 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
           <button onClick={handleSaveOrg} disabled={savingOrg} className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold rounded-xl flex items-center gap-2 hover:from-cyan-400 hover:to-blue-400 transition-all disabled:opacity-50 shadow-lg shadow-cyan-500/20">
             {savingOrg ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {savingOrg ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-white">Data Portability</h3>
+          <p className="text-sm text-slate-400 mt-1">Your data is yours — export or delete it at any time. Exports include agents, conversations, incidents, policies, audit logs, cost records, and webhooks.</p>
+        </div>
+        <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700/30 rounded-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+              <Download className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Export all my data</p>
+              <p className="text-xs text-slate-500">Downloads a ZIP archive with all your organization's data as JSON files.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleExportAllData}
+            disabled={exportingData}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg flex items-center gap-2 transition-all disabled:opacity-50 flex-shrink-0 ml-4"
+          >
+            {exportingData ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exportingData ? 'Exporting…' : 'Export ZIP'}
           </button>
         </div>
       </div>
@@ -757,6 +873,12 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
               <CheckCircle2 className="w-3.5 h-3.5" /> Slack webhook configured
             </p>
           )}
+          <p className="text-xs text-slate-500 border-t border-slate-800 pt-3">
+            <Slack className="w-3 h-3 inline mr-1 text-[#4A154B]" />
+            <strong className="text-slate-400">Incident &amp; approval alerts via Slack bot:</strong> Connect your Slack workspace in{' '}
+            <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => (window as any).__rasNavigate?.('marketplace')}>Marketplace → Slack</button>
+            {' '}to enable rich Block Kit notifications. Set the <code className="text-slate-400">alert_channel_id</code> credential to specify the alerts channel.
+          </p>
         </div>
 
         {/* PagerDuty */}
@@ -1022,24 +1144,74 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
             <div className="p-2.5 bg-emerald-500/10 rounded-xl"><Smartphone className="w-5 h-5 text-emerald-400" /></div>
             <div>
               <h3 className="text-base font-semibold text-white">Two-Factor Authentication</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Add an extra layer of security to your account</p>
+              <p className="text-xs text-slate-500 mt-0.5">Protect your account with an authenticator app (TOTP)</p>
             </div>
           </div>
           <button
-            onClick={() => {
-              setTwoFactorEnabled(!twoFactorEnabled);
-              localStorage.setItem('synthetic_hr_2fa', (!twoFactorEnabled).toString());
-              toast.success(twoFactorEnabled ? '2FA disabled' : '2FA enabled (TOTP app required in production)');
-            }}
-            className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+            onClick={handleToggle2FA}
+            disabled={mfaLoading}
+            className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-60 ${twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${twoFactorEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
           </button>
         </div>
+
         {twoFactorEnabled && (
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <p className="text-sm text-slate-300">2FA is enabled. You'll be asked for a verification code on new sign-ins.</p>
+            <p className="text-sm text-slate-300">2FA is active. You'll be asked for a verification code on each new sign-in.</p>
+          </div>
+        )}
+
+        {/* QR code enrollment modal */}
+        {showMfaSetup && (
+          <div className="mt-4 bg-slate-900/60 border border-slate-700/60 rounded-xl p-5 space-y-4">
+            <p className="text-sm font-semibold text-white">Scan with your authenticator app</p>
+            <p className="text-xs text-slate-400">Use Google Authenticator, Authy, or any TOTP app. Scan the QR code below, then enter the 6-digit code to confirm.</p>
+
+            {/* QR code image rendered from data URI */}
+            <div className="flex justify-center">
+              <img src={mfaQrUri} alt="2FA QR Code" className="w-40 h-40 rounded-lg bg-white p-2" />
+            </div>
+
+            <div className="bg-slate-800/60 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-400 font-mono break-all">{mfaSecret}</span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(mfaSecret); toast.success('Secret copied'); }}
+                className="text-[10px] px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 flex-shrink-0"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400">Verification code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-slate-800 border border-slate-700/60 rounded-lg text-sm text-slate-200 px-3 py-2 font-mono tracking-widest focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleVerifyMfa}
+                disabled={mfaLoading || mfaCode.length < 6}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-white disabled:opacity-50 transition-colors"
+              >
+                {mfaLoading ? 'Verifying…' : 'Enable 2FA'}
+              </button>
+              <button
+                onClick={() => { setShowMfaSetup(false); setMfaCode(''); }}
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 border border-slate-700/60 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

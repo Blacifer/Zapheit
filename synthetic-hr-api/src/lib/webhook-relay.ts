@@ -11,7 +11,14 @@ export type WebhookEventId =
   | 'error.occurred'
   | 'rate_limit.exceeded'
   | 'model.deprecated'
-  | 'playbook.completed';
+  | 'playbook.completed'
+  | 'incident.created'
+  | 'incident.resolved'
+  | 'approval.requested'
+  | 'approval.completed'
+  | 'agent.suspended'
+  | 'quota.warning'
+  | 'policy.violated';
 
 type StoredWebhook = {
   id: string;

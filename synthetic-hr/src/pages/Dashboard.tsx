@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
   TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -54,6 +54,8 @@ const FinanceHubPage = lazy(() => import('./dashboard/FinanceHubPage'));
 const ComplianceHubPage = lazy(() => import('./dashboard/ComplianceHubPage'));
 const IdentityHubPage = lazy(() => import('./dashboard/IdentityHubPage'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
+const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
+const RuntimeWorkersPage = lazy(() => import('./dashboard/RuntimeWorkersPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -985,6 +987,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
               { id: 'costs', icon: DollarSign, label: 'Costs' },
               { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
+              { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
             ].map((item) => (
               <button
                 key={item.id}
@@ -1027,6 +1030,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               { id: 'playbooks', icon: FileText, label: 'Playbooks' },
               { id: 'jobs', icon: ClipboardList, label: 'Run History' },
               { id: 'blackbox', icon: Database, label: 'Black Box' },
+              { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
             ].map((item) => (
               <button
                 key={item.id}
@@ -1406,6 +1410,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
                   <Route path="playbooks" element={<PlaybooksPage agents={enrichedAgents} onNavigate={(page) => navigateTo(page)} />} />
                   <Route path="blackbox" element={<BlackBoxPage incidents={incidents} onNavigate={navigateTo} />} />
+                  <Route path="runtime-workers" element={<RuntimeWorkersPage />} />
+                  <Route path="audit-log" element={<AuditLogPage />} />
                   <Route path="coverage" element={<CoverageStatusPage />} />
                   <Route path="jobs" element={<JobsInboxPage agents={agents} />} />
                   <Route path="work-items" element={<WorkItemsPage />} />

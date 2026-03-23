@@ -1671,6 +1671,72 @@ router.post('/slack/messages/:id/reply', requirePermission('connectors.manage'),
   return res.json({ success: true, data: { slack_ts: slackJson.ts } });
 });
 
+// POST /api/integrations/slack/actions
+// Receives interactive component callbacks (button clicks) from Slack.
+// Handles rasi_approve / rasi_deny actions by calling the approvals endpoint.
+router.post('/slack/actions', async (req, res) => {
+  // Slack sends interactive payloads as URL-encoded body with key "payload"
+  const rawPayload = typeof req.body?.payload === 'string' ? req.body.payload : null;
+  if (!rawPayload) return res.status(400).json({ ok: false, error: 'Missing payload' });
+
+  let payload: any;
+  try { payload = JSON.parse(rawPayload); } catch { return res.status(400).json({ ok: false, error: 'Invalid payload JSON' }); }
+
+  const action = payload?.actions?.[0];
+  if (!action) return res.status(200).send(''); // Ack unknown event immediately
+
+  const { action_id, value: approvalId } = action;
+  if (!approvalId || (action_id !== 'rasi_approve' && action_id !== 'rasi_deny')) {
+    return res.status(200).send('');
+  }
+
+  // Ack Slack immediately (must respond within 3s)
+  res.status(200).json({ text: `Processing ${action_id === 'rasi_approve' ? 'approval' : 'denial'}…` });
+
+  // Look up approval to get org_id
+  try {
+    const approvalRows = await safeQuery<{ id: string; organization_id: string }>(
+      restAsService,
+      'approval_requests',
+      new URLSearchParams({ id: eq(approvalId), select: 'id,organization_id', limit: '1' }),
+    );
+    if (!approvalRows.length) return;
+
+    const orgId = approvalRows[0].organization_id;
+    const slackUserId = payload?.user?.id;
+    const slackUserName = payload?.user?.name || slackUserId;
+
+    // Perform approve/deny using service role
+    const endpoint = action_id === 'rasi_approve' ? 'approve' : 'deny';
+    const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+    await fetch(`${apiUrl}/api/approvals/${approvalId}/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rasi-service-action': 'slack-interactive',
+        'x-rasi-org-id': orgId,
+      },
+      body: JSON.stringify({ reviewer_notes: `${action_id === 'rasi_approve' ? 'Approved' : 'Denied'} via Slack by @${slackUserName}` }),
+    }).catch((err) => logger.warn('Slack action relay error', { error: err?.message }));
+
+    // Update the original Slack message via response_url
+    if (payload.response_url) {
+      await fetch(payload.response_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          replace_original: true,
+          text: action_id === 'rasi_approve'
+            ? `:white_check_mark: *Approved* by @${slackUserName}`
+            : `:x: *Denied* by @${slackUserName}`,
+        }),
+      }).catch(() => null);
+    }
+  } catch (err: any) {
+    logger.warn('Slack action handler error', { error: err?.message });
+  }
+});
+
 // POST /api/integrations/slack/messages/:id/status
 // Update the status of a Slack message (reviewed / dismissed / new).
 router.post('/slack/messages/:id/status', requirePermission('connectors.read'), async (req, res) => {

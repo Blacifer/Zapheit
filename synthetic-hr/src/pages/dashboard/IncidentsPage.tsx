@@ -675,6 +675,11 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${SEVERITY_STYLES[incident.severity]}`}>{incident.severity}</span>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${STATUS_STYLES[incident.status]}`}>{normalizeLabel(incident.status)}</span>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${SOURCE_STYLES[meta.source]}`}>{meta.source === 'manual_test' ? 'Simulated' : normalizeLabel(meta.source)}</span>
+                            {incident.confidence != null && (
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em] ${incident.confidence >= 0.8 ? 'border-rose-500/20 bg-rose-500/10 text-rose-300' : incident.confidence >= 0.5 ? 'border-amber-500/20 bg-amber-500/10 text-amber-300' : 'border-slate-600 bg-slate-800/80 text-slate-400'}`}>
+                                {Math.round(incident.confidence * 100)}% confidence
+                              </span>
+                            )}
                           </div>
                           <p className="mt-2 line-clamp-2 text-sm text-slate-300">{incident.description}</p>
                           <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
@@ -772,6 +777,20 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                     <p className="text-slate-500">Created</p>
                     <p className="mt-1 text-white">{new Date(selectedIncident.created_at).toLocaleString('en-IN')}</p>
                   </div>
+                  {selectedIncident.confidence != null && (
+                    <div>
+                      <p className="text-slate-500">Detection Confidence</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-2 flex-1 rounded-full bg-slate-800">
+                          <div
+                            className={`h-2 rounded-full ${selectedIncident.confidence >= 0.8 ? 'bg-rose-500' : selectedIncident.confidence >= 0.5 ? 'bg-amber-500' : 'bg-slate-500'}`}
+                            style={{ width: `${Math.round(selectedIncident.confidence * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold text-white">{Math.round(selectedIncident.confidence * 100)}%</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

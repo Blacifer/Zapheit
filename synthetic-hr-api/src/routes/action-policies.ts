@@ -4,6 +4,7 @@ import { requirePermission } from '../middleware/rbac';
 import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
+import { invalidateInterceptorCache } from '../lib/gateway-interceptors';
 
 const router = Router();
 
@@ -38,6 +39,23 @@ const routingRuleSchema = z.object({
   required_user_id: z.string().uuid().nullable().optional(),
 });
 
+// Interceptor rules for __gateway__ service policies (patch_request, patch_response, route_model)
+const interceptorRuleSchema = z.object({
+  id: z.string().optional(),
+  enabled: z.boolean().optional(),
+  // For patch_request / patch_response:
+  match_type: z.enum(['always', 'pii_detected', 'keyword', 'regex']).optional(),
+  match_value: z.string().max(500).optional(),
+  transform: z.enum(['redact_pii', 'replace', 'append_system', 'prepend_system']).optional(),
+  find: z.string().max(500).optional(),
+  replacement: z.string().max(500).optional(),
+  text: z.string().max(2000).optional(),
+  // For route_model conditions:
+  condition: z.enum(['always', 'risk_score_above', 'monthly_cost_above']).optional(),
+  threshold: z.number().min(0).optional(),
+  target_model: z.string().max(200).optional(),
+}).passthrough();
+
 const upsertSchema = z.object({
   service: z.string().min(1).max(50),
   action: z.string().min(1).max(200),
@@ -46,6 +64,7 @@ const upsertSchema = z.object({
   required_role: z.enum(['viewer', 'manager', 'admin', 'super_admin']).optional(),
   webhook_allowlist: z.array(z.string()).optional(),
   routing_rules: z.array(routingRuleSchema).max(20).optional(),
+  interceptor_rules: z.array(interceptorRuleSchema).max(50).optional(),
   notes: z.string().max(5000).optional(),
 });
 
@@ -97,6 +116,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
       ...(parsed.data.webhook_allowlist ? { webhook_allowlist: parsed.data.webhook_allowlist } : {}),
       ...(typeof parsed.data.notes === 'string' ? { notes: parsed.data.notes } : {}),
       ...(parsed.data.routing_rules !== undefined ? { routing_rules: parsed.data.routing_rules } : {}),
+      ...(parsed.data.interceptor_rules !== undefined ? { interceptor_rules: parsed.data.interceptor_rules } : {}),
       updated_by: userId,
       updated_at: now,
     };
@@ -123,6 +143,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
         metadata: { service: updated.service, action: updated.action, enabled: updated.enabled, required_role: updated.required_role },
       });
 
+      if (parsed.data.service === '__gateway__') invalidateInterceptorCache(orgId);
       return res.json({ success: true, data: updated });
     }
 
@@ -138,6 +159,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
         webhook_allowlist: parsed.data.webhook_allowlist || [],
         notes: typeof parsed.data.notes === 'string' ? parsed.data.notes : null,
         routing_rules: parsed.data.routing_rules || [],
+        interceptor_rules: parsed.data.interceptor_rules || [],
         updated_by: userId,
         updated_at: now,
       },
@@ -157,6 +179,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
       metadata: { service: createdRow.service, action: createdRow.action, enabled: createdRow.enabled, required_role: createdRow.required_role },
     });
 
+    if (parsed.data.service === '__gateway__') invalidateInterceptorCache(orgId);
     return res.status(201).json({ success: true, data: createdRow });
   } catch (err: any) {
     return safeError(res, err);

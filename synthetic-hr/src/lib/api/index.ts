@@ -5,7 +5,8 @@ export { costApi, metricsApi } from './costs';
 export { connectorsApi, integrationsApi, slackApi } from './integrations';
 export { unifiedConnectorsApi } from './connectors';
 export type { UnifiedConnectorEntry, ConnectorAction, ConnectorActionResult } from './connectors';
-export { policiesApi, complianceApi, safeHarborApi } from './governance';
+export { policiesApi, complianceApi, safeHarborApi, auditLogsApi } from './governance';
+export type { AuditLogEntry } from './governance';
 export {
   webhooksApi,
   dashboardApi,
@@ -49,6 +50,7 @@ export type {
   PlaybookComment,
   ActionPolicyRow,
   RoutingRule,
+  InterceptorRule,
 } from './platform';
 export type { MarketplaceApp, AppBundle } from './marketplace';
 
@@ -61,7 +63,7 @@ import { incidentApi, escalationsApi, alertsApi } from './incidents';
 import { costApi, metricsApi } from './costs';
 import { connectorsApi, integrationsApi, slackApi } from './integrations';
 import { unifiedConnectorsApi } from './connectors';
-import { policiesApi, complianceApi, safeHarborApi } from './governance';
+import { policiesApi, complianceApi, safeHarborApi, auditLogsApi } from './governance';
 import {
   webhooksApi,
   dashboardApi,
@@ -109,6 +111,7 @@ export const api = {
   caching: cachingApi,
   pricing: pricingApi,
   safeHarbor: safeHarborApi,
+  auditLogs: auditLogsApi,
   health: healthApi,
   admin: adminApi,
   gateway: gatewayApi,

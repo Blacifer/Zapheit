@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
+import { notifySlackApproval } from '../lib/slack-notify';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 
 const router = Router();
@@ -221,7 +222,7 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
       notifyApprovalAssignedAsync({ organizationId: orgId, assignedToUserId: assignedTo, service, action, referenceId: row.id });
     }
 
-    fireAndForgetWebhookEvent(orgId, 'approval.requested' as any, {
+    fireAndForgetWebhookEvent(orgId, 'approval.requested', {
       id: `evt_approval_${row.id}`,
       type: 'approval.requested',
       created_at: now,
@@ -236,6 +237,14 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
         assigned_to: assignedTo,
         expires_at: expiresAt,
       },
+    });
+
+    void notifySlackApproval(orgId, {
+      approvalId: row.id,
+      action: `${service}.${action}`,
+      agentName: agent_id || undefined,
+      requestedBy: requested_by || undefined,
+      details: req.body?.details || undefined,
     });
 
     return res.status(201).json({ success: true, data: row });
@@ -312,9 +321,9 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       metadata: { service: row.service, action: row.action, note: parsed.data?.note },
     });
 
-    fireAndForgetWebhookEvent(orgId, 'approval.resolved' as any, {
+    fireAndForgetWebhookEvent(orgId, 'approval.completed', {
       id: `evt_approval_resolve_${id}`,
-      type: 'approval.resolved',
+      type: 'approval.completed',
       created_at: now,
       organization_id: orgId,
       data: {
@@ -390,9 +399,9 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       metadata: { service: row.service, action: row.action, note: parsed.data?.note },
     });
 
-    fireAndForgetWebhookEvent(orgId, 'approval.resolved' as any, {
+    fireAndForgetWebhookEvent(orgId, 'approval.completed', {
       id: `evt_approval_resolve_${id}`,
-      type: 'approval.resolved',
+      type: 'approval.completed',
       created_at: now,
       organization_id: orgId,
       data: {

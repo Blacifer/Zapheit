@@ -8,6 +8,7 @@ import { requirePermission } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
 import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
+import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 
 const router = express.Router();
 
@@ -580,8 +581,26 @@ router.post('/agents/:id/pause', requirePermission('agents.update'), async (req:
     const orgId = getOrgId(req);
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
 
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : 'Paused from fleet workspace';
     const agent = await patchAgentRecord(req, orgId, id, { status: 'paused' });
-    await auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.paused', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Paused from fleet workspace', performed_by_email: req.user?.email || null } });
+    await auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.paused', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { reason, performed_by_email: req.user?.email || null } });
+
+    // Fire agent.suspended webhook when triggered via kill switch
+    if (reason.toLowerCase().includes('kill switch')) {
+      fireAndForgetWebhookEvent(orgId, 'agent.suspended', {
+        id: `evt_suspend_${id}`,
+        type: 'agent.suspended',
+        created_at: new Date().toISOString(),
+        organization_id: orgId,
+        data: {
+          agent_id: id,
+          agent_name: agent.name || id,
+          reason,
+          suspended_by: req.user?.id || 'unknown',
+        },
+      });
+    }
+
     const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
     res.json({ success: true, data, message: 'Agent paused' });
   } catch (error: any) {

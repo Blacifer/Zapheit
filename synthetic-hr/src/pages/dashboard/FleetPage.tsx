@@ -4,7 +4,7 @@ import {
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
   ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3,
-  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info
+  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info, Ban
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
@@ -47,6 +47,9 @@ export default function FleetPage({
   onOpenOperationsPage,
 }: FleetPageProps) {
   const [showAddModal, setShowAddModal] = useState(false);
+  type PolicyRec = { service: string; action: string; require_approval: boolean; required_role: 'manager' | 'admin'; reason: string; notes: string };
+  const [policyRecs, setPolicyRecs] = useState<PolicyRec[] | null>(null);
+  const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [killSwitchAgent, setKillSwitchAgent] = useState<string | null>(null);
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -368,6 +371,35 @@ export default function FleetPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployAgentId]);
 
+  const computePolicyRecs = (agent: Omit<AIAgent, 'id' | 'created_at'>) => {
+    const desc = (agent.description || '').toLowerCase();
+    const name = (agent.name || '').toLowerCase();
+    const model = (agent.model_name || '').toLowerCase();
+    const type = (agent.agent_type || '').toLowerCase();
+    const text = `${desc} ${name} ${type}`;
+    const recs: Array<{ service: string; action: string; require_approval: boolean; required_role: 'manager' | 'admin'; reason: string; notes: string }> = [];
+
+    if (/payment|refund|razorpay|stripe|cashfree/.test(text))
+      recs.push({ service: 'razorpay', action: 'create_refund', require_approval: true, required_role: 'manager', reason: 'This agent handles payments — refunds should be human-approved.', notes: 'Prevents agents from issuing unauthorized refunds autonomously.' });
+
+    if (/payroll|salary|compensation|gusto|deel|contractor/.test(text))
+      recs.push({ service: 'gusto', action: 'run_payroll', require_approval: true, required_role: 'admin', reason: 'Payroll/compensation actions are irreversible — require admin approval.', notes: 'High-value, irreversible action — always require a human in the loop.' });
+
+    if (/hr|employee|onboard|offboard|terminat|hire|offer/.test(text))
+      recs.push({ service: 'internal', action: 'hr.employee.terminate', require_approval: true, required_role: 'admin', reason: 'HR agents performing offboarding must have admin oversight.', notes: 'Irreversible — requires human oversight at all times.' });
+
+    if (/support|ticket|zendesk|freshdesk/.test(text))
+      recs.push({ service: 'zendesk', action: 'create_ticket', require_approval: true, required_role: 'manager', reason: 'This agent creates support tickets — PII fields should be reviewed.', notes: 'Prevents leaking PII fields into unreviewed support tickets.' });
+
+    if (/data|export|report|download|csv/.test(text))
+      recs.push({ service: 'internal', action: 'data.records.export', require_approval: true, required_role: 'manager', reason: 'Bulk data export should require manager sign-off.', notes: 'SOC2 CC6.3 — Data egress control.' });
+
+    if (/gpt-4|claude-3-opus|gemini-1\.5-pro/.test(model) && !recs.some(r => r.service === 'internal' && r.action === 'data.records.export'))
+      recs.push({ service: 'internal', action: 'data.records.export', require_approval: false, required_role: 'manager', reason: `${agent.model_name} is an expensive model — add cost guardrails.`, notes: 'SOC2 CC6.3 — Data egress control.' });
+
+    return recs.slice(0, 3);
+  };
+
   const addAgent = async (agent: Omit<AIAgent, 'id' | 'created_at'>) => {
     try {
       // Explicitly create via API first to get real backend UUID
@@ -393,6 +425,9 @@ export default function FleetPage({
           setAgents([...agents, newAgent]);
           toast.success(`Agent ${agent.name} added to fleet.`);
           setShowAddModal(false);
+          // Compute and show policy recommendations
+          const recs = computePolicyRecs(agent);
+          if (recs.length > 0) setPolicyRecs(recs);
           return;
         }
       }
@@ -1113,6 +1148,26 @@ export default function FleetPage({
                           </button>
                         );
                       })()}
+
+                      {/* Kill Switch — emergency stop for active agents */}
+                      {agent.status === 'active' && (
+                        <button
+                          onClick={() => handleConfirmAction(
+                            'Activate Kill Switch',
+                            `This will immediately stop ${agent.name} from processing any new requests. The agent can be reactivated at any time.`,
+                            'danger',
+                            async () => {
+                              await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Kill switch activated — emergency stop'), `Kill switch activated for ${agent.name}.`);
+                            }
+                          )}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-400 border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 transition-all"
+                          title="Kill Switch — immediately stop this agent"
+                          disabled={actionBusy === `pause:${agent.id}`}
+                        >
+                          {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                          Kill Switch
+                        </button>
+                      )}
 
                       {/* Pause / Activate */}
                       {agent.status !== 'terminated' && (
@@ -2695,6 +2750,61 @@ export default function FleetPage({
 
       {showAddModal && (
         <AddAgentModal onClose={() => setShowAddModal(false)} onAdd={addAgent} />
+      )}
+
+      {/* Policy Recommendations Modal */}
+      {policyRecs && policyRecs.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 shadow-2xl">
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-bold text-white">Recommended Policies</h3>
+              </div>
+              <button onClick={() => setPolicyRecs(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-400 mb-5">Based on this agent's description, Rasi suggests these governance policies. Apply in one click.</p>
+            <div className="space-y-3">
+              {policyRecs.map((rec: PolicyRec, i: number) => (
+                <div key={i} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{rec.service} → {rec.action}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{rec.reason}</p>
+                      <div className="mt-2 flex gap-1.5 flex-wrap text-[10px]">
+                        {rec.require_approval && <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300">Requires Approval</span>}
+                        <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-slate-400">{rec.required_role}</span>
+                      </div>
+                    </div>
+                    <button
+                      disabled={applyingRec === `${rec.service}:${rec.action}`}
+                      onClick={async () => {
+                        setApplyingRec(`${rec.service}:${rec.action}`);
+                        try {
+                          const res = await api.actionPolicies.upsert({ service: rec.service, action: rec.action, enabled: true, require_approval: rec.require_approval, required_role: rec.required_role, notes: rec.notes });
+                          if (res.success) toast.success('Policy applied.');
+                          else toast.error(res.error || 'Failed to apply policy.');
+                        } catch { toast.error('Failed to apply policy.'); }
+                        setApplyingRec(null);
+                        setPolicyRecs((prev: PolicyRec[] | null) => prev ? prev.filter((_: PolicyRec, j: number) => j !== i) : null);
+                      }}
+                      className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 disabled:opacity-50 transition"
+                    >
+                      {applyingRec === `${rec.service}:${rec.action}` ? 'Applying…' : 'Apply'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setPolicyRecs(null)} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition">
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmation Modal */}

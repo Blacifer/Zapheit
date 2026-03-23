@@ -7,6 +7,8 @@ import { validateApiKey } from '../middleware/api-key-validation';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
+import { notifySlackIncident } from '../lib/slack-notify';
+import { applyRequestInterceptors, applyResponseInterceptors, resolveModelRouting } from '../lib/gateway-interceptors';
 import { recordPromptCacheObservation } from '../lib/prompt-caching';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
@@ -117,6 +119,19 @@ const maybeCreateIncidentFromCompletion = async (params: {
     const trigger = lastUserMessage(params.messages);
     const title = `${String(highest.type || 'incident').replace(/_/g, ' ').toUpperCase()} Detected`;
 
+    // Auto-suppress: skip if >5 false positives for this type in last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const fpRows = await supabaseRest(
+        'incidents',
+        `select=id&organization_id=eq.${params.orgId}&incident_type=eq.${highest.type}&status=eq.false_positive&created_at=gte.${thirtyDaysAgo}`
+      ) as any[];
+      if (Array.isArray(fpRows) && fpRows.length > 5) {
+        logger.info('Gateway auto-suppressed incident (>5 FP in 30d)', { type: highest.type, orgId: params.orgId });
+        return;
+      }
+    } catch { /* non-fatal — proceed with incident creation */ }
+
     const rows = await supabaseRest(
       'incidents',
       '',
@@ -132,6 +147,7 @@ const maybeCreateIncidentFromCompletion = async (params: {
           trigger_content: trigger || undefined,
           ai_response: params.completion.content,
           status: 'open',
+          confidence: highest.confidence,
         },
       }
     );
@@ -147,9 +163,9 @@ const maybeCreateIncidentFromCompletion = async (params: {
       model: params.modelId,
     });
 
-    fireAndForgetWebhookEvent(params.orgId, 'error.occurred', {
+    fireAndForgetWebhookEvent(params.orgId, 'incident.created', {
       id: `evt_gateway_detect_${incident?.id || crypto.randomUUID()}`,
-      type: 'error.occurred',
+      type: 'incident.created',
       created_at: new Date().toISOString(),
       organization_id: params.orgId,
       data: {
@@ -160,6 +176,16 @@ const maybeCreateIncidentFromCompletion = async (params: {
         title,
         description: highest.details,
       },
+    });
+
+    void notifySlackIncident(params.orgId, {
+      incidentId: incident?.id,
+      title,
+      severity: highest.severity,
+      incidentType: highest.type || 'unknown',
+      agentId: params.agentId,
+      description: highest.details,
+      confidence: highest.confidence,
     });
   } catch (error: any) {
     logger.error('Gateway incident detection failed', {
@@ -811,11 +837,25 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
       return false;
     }
 
+    // Fire quota warning webhook at 80% threshold (once per crossing)
+    const newCount = currentCount + 1;
+    const percentUsed = Math.floor((newCount / quota) * 100);
+    const wasBelow80 = Math.floor((currentCount / quota) * 100) < 80;
+    if (percentUsed >= 80 && wasBelow80) {
+      fireAndForgetWebhookEvent(orgId, 'quota.warning', {
+        id: `evt_quota_${orgId}_${month}`,
+        type: 'quota.warning',
+        created_at: new Date().toISOString(),
+        organization_id: orgId,
+        data: { plan, quota, used: newCount, percent_used: percentUsed, threshold_percent: 80 },
+      });
+    }
+
     // Increment usage fire-and-forget — don't block the request
     if (usage) {
       supabaseRest('gateway_usage', `org_id=eq.${orgId}&month=eq.${month}`, {
         method: 'PATCH',
-        body: { request_count: currentCount + 1 },
+        body: { request_count: newCount },
       }).catch(() => {});
     } else {
       supabaseRest('gateway_usage', '', {
@@ -1543,7 +1583,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       return res.status(400).json({ error: { message: 'messages must be a non-empty array', type: 'invalid_request_error' } });
     }
 
-    const modelConfig = normalizeModel(model);
+    let modelConfig = normalizeModel(model);
     if (!modelConfig) {
       return res.status(400).json({
         error: {
@@ -1563,13 +1603,27 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       });
     }
 
-    const normalizedMessages: { role: string; content: any }[] = messages.map((m: any) => ({
+    let normalizedMessages: { role: string; content: any }[] = messages.map((m: any) => ({
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
 
     // Load agent tools (no-op if agentId is null or agent has no connectors)
     const orgId = req.apiKey?.organization_id || '';
+
+    // ── 4A/4B: Apply gateway interceptors ──────────────────────────────────
+    // Model routing: may override the requested model based on risk/cost signals
+    if (orgId) {
+      const routedModelId = await resolveModelRouting(orgId, modelConfig.id, normalizedMessages);
+      if (routedModelId) {
+        const routedConfig = normalizeModel(routedModelId);
+        if (routedConfig) modelConfig = routedConfig;
+      }
+      // Request interception: redact PII, replace patterns, inject system instructions
+      normalizedMessages = await applyRequestInterceptors(orgId, normalizedMessages);
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     const toolContext = (agentId && orgId && modelConfig.provider !== 'openrouter')
       ? await loadAgentTools(agentId, orgId)
       : { tools: [], credentialsByConnector: {} };
@@ -1657,6 +1711,12 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         finalContent = finalAi.content;
       }
     }
+
+    // ── 4A: Response interception — redact/replace in LLM output ───────────
+    if (orgId) {
+      finalContent = await applyResponseInterceptors(orgId, finalContent);
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     completion = {
       content: finalContent,
