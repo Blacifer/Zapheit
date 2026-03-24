@@ -269,8 +269,8 @@ const normalizeModel = (model: string): GatewayModel | null => {
     return { id: model, provider: 'openai', upstreamModel: upstream, ownedBy: 'openai' };
   }
 
-  if (model.startsWith('anthropic/')) {
-    const upstream = model.slice('anthropic/'.length);
+  if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
+    const upstream = model.startsWith('anthropic/') ? model.slice('anthropic/'.length) : model;
     // Backwards-compat model aliases (older UI/agent configs used dot notation).
     const normalizedUpstream = upstream
       .replace('claude-3.5-sonnet', 'claude-3-5-sonnet')
@@ -291,7 +291,21 @@ const normalizeModel = (model: string): GatewayModel | null => {
     return { id: model, provider: 'openrouter', upstreamModel: model, ownedBy: model.split('/')[0] || 'openrouter' };
   }
 
-  return null;
+  // Bare OpenAI model names without a provider prefix (e.g. "gpt-4o", "o3-mini").
+  if (
+    model.startsWith('gpt-') ||
+    model.startsWith('o1') ||
+    model.startsWith('o3') ||
+    model.startsWith('o4') ||
+    model.startsWith('text-embedding-') ||
+    model.startsWith('dall-e-')
+  ) {
+    return { id: `openai/${model}`, provider: 'openai', upstreamModel: model, ownedBy: 'openai' };
+  }
+
+  // Catch-all: route any remaining bare model name via OpenRouter, which supports 340+ models
+  // (Gemini, Llama, Mistral, Cohere, Command, Qwen, DeepSeek, etc.).
+  return { id: model, provider: 'openrouter', upstreamModel: model, ownedBy: 'openrouter' };
 };
 
 const mergeModels = (base: GatewayModel[], extra: GatewayModel[]): GatewayModel[] => {
