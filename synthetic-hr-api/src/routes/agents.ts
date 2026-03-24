@@ -231,7 +231,7 @@ const getAgentWorkspaceData = async (req: Request, orgId: string, id: string) =>
       q.set('organization_id', eq(orgId));
       q.set('agent_id', eq(id));
       q.set('order', 'created_at.desc');
-      q.set('limit', '6');
+      q.set('limit', '25');
       const rows = (await supabaseRestAsUser(getUserJwt(req), 'conversations', q)) as any[];
       conversations = (rows || []).map(normalizeWorkspaceConversation);
     } catch (err: any) {
@@ -356,21 +356,16 @@ router.get('/agents', requirePermission('agents.read'), async (req: Request, res
     try {
       const agentIds = (rawData || []).map((a) => a?.id).filter((id) => typeof id === 'string' && id.length > 0);
       if (agentIds.length > 0) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const costQ = new URLSearchParams();
-        costQ.set('organization_id', eq(orgId));
-        costQ.set('date', gte(thirtyDaysAgo.toISOString().split('T')[0]));
-        costQ.set('agent_id', in_(agentIds));
-        costQ.set('select', 'agent_id,request_count');
-        costQ.set('limit', '10000');
-        const rows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', costQ)) as any[];
+        const convQ = new URLSearchParams();
+        convQ.set('organization_id', eq(orgId));
+        convQ.set('agent_id', in_(agentIds));
+        convQ.set('select', 'agent_id');
+        convQ.set('limit', '10000');
+        const rows = (await supabaseRestAsUser(getUserJwt(req), 'conversations', convQ)) as any[];
         for (const row of rows || []) {
           const agentId = row?.agent_id;
           if (typeof agentId !== 'string' || !agentId) continue;
-          const requests = Number(row?.request_count || 0);
-          if (!Number.isFinite(requests) || requests <= 0) continue;
-          conversationCounts.set(agentId, (conversationCounts.get(agentId) || 0) + requests);
+          conversationCounts.set(agentId, (conversationCounts.get(agentId) || 0) + 1);
         }
       }
     } catch (err: any) {
@@ -400,17 +395,13 @@ router.get('/agents/:id', requirePermission('agents.read'), async (req: Request,
     const agent = rawData[0];
     let conversations = 0;
     try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const costQ = new URLSearchParams();
-      costQ.set('organization_id', eq(orgId));
-      costQ.set('date', gte(thirtyDaysAgo.toISOString().split('T')[0]));
-      costQ.set('agent_id', eq(id));
-      costQ.set('select', 'request_count');
-      costQ.set('limit', '10000');
-      const rows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', costQ)) as any[];
-      conversations = (rows || []).reduce((sum, row) => sum + Number(row?.request_count || 0), 0);
-      if (!Number.isFinite(conversations) || conversations < 0) conversations = 0;
+      const convQ = new URLSearchParams();
+      convQ.set('organization_id', eq(orgId));
+      convQ.set('agent_id', eq(id));
+      convQ.set('select', 'id');
+      convQ.set('limit', '10000');
+      const rows = (await supabaseRestAsUser(getUserJwt(req), 'conversations', convQ)) as any[];
+      conversations = (rows || []).length;
     } catch (err: any) {
       logger.warn('Failed to compute agent conversation count', { error: err?.message || err, org_id: orgId, agent_id: id });
     }
