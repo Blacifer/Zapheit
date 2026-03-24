@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
-import { supabaseRestAsUser, supabaseRestAsService, eq, gte } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt, clampDays, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 
@@ -306,13 +306,20 @@ router.get('/usage', requirePermission('dashboard.read'), async (req: Request, r
 
     const month = new Date().toISOString().slice(0, 7);
 
-    const orgRows = await supabaseRestAsService('organizations', `id=eq.${orgId}&select=plan,name`);
+    const jwt = getUserJwt(req);
+    const orgParams = new URLSearchParams();
+    orgParams.set('id', eq(orgId));
+    orgParams.set('select', 'plan,name');
+    const orgRows = await supabaseRestAsUser(jwt, 'organizations', orgParams);
     const org = Array.isArray(orgRows) ? orgRows[0] : null;
     const planKey = String(org?.plan || 'free').toLowerCase();
     const quota = PLAN_QUOTAS[planKey] ?? PLAN_QUOTAS.free;
     const planName = PLAN_DISPLAY[planKey] ?? planKey;
 
-    const usageRows = await supabaseRestAsService('gateway_usage', `org_id=eq.${orgId}&month=eq.${month}`);
+    const usageParams = new URLSearchParams();
+    usageParams.set('org_id', eq(orgId));
+    usageParams.set('month', `eq.${month}`);
+    const usageRows = await supabaseRestAsUser(jwt, 'gateway_usage', usageParams);
     const usage = Array.isArray(usageRows) ? usageRows[0] : null;
     const used: number = usage?.request_count ?? 0;
 

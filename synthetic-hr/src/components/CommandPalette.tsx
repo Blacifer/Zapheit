@@ -78,7 +78,7 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
   return (
     <Command.Dialog
       open={open}
-      onOpenChange={(v) => { setOpen(v); if (!v) setSearch(''); }}
+      onOpenChange={(v: boolean) => { setOpen(v); if (!v) setSearch(''); }}
       label="Command palette"
       overlayClassName="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm"
       contentClassName="fixed z-[9999] top-[14vh] left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-xl rounded-2xl border border-slate-700/80 bg-slate-900/98 shadow-[0_25px_80px_rgba(0,0,0,0.7)] overflow-hidden"
