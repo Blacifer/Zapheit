@@ -298,7 +298,7 @@ const hasData = agents.length > 0;
     .reduce((sum, entry) => sum + entry.requests, 0);
 
   // Telemetry returns USD; fallbacks are already INR — convert before mixing
-  const USD_TO_INR = 94;
+  const USD_TO_INR = 95;
   const last24hIncidents = telemetry?.movement.incidentsCurrent24h ?? fallbackLast24hIncidents.length;
   const previous24hIncidents = telemetry?.movement.incidentsPrevious24h ?? fallbackPrevious24hIncidents.length;
   const last24hSpend = telemetry != null ? telemetry.movement.spendCurrentDay * USD_TO_INR : fallbackLast24hSpend;

@@ -217,7 +217,7 @@ export const useIncidentMutations = () => {
 // Cost analytics
 // ---------------------------------------------------------------------------
 // Fixed USD → INR conversion rate
-const USD_TO_INR = 94;
+const USD_TO_INR = 95;
 
 export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', options?: { enabled?: boolean }) => {
   const { data, isLoading, error, refetch } = useQuery({
