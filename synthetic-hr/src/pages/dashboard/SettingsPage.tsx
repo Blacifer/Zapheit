@@ -1246,7 +1246,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
         {twoFactorEnabled && (
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <p className="text-sm text-slate-300">2FA is active. You'll be asked for a verification code on each new sign-in.</p>
+            <p className="text-sm text-slate-300">2FA is active. You'll be asked for a verification code every time you sign in.</p>
           </div>
         )}
 

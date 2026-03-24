@@ -164,12 +164,19 @@ router.get('/dashboard/telemetry', requirePermission('dashboard.read'), async (r
     let currentDayRequests = 0;
     let previousDayRequests = 0;
 
+    // "last 24h" spans a UTC midnight boundary for users in non-UTC timezones,
+    // so include both today and yesterday to avoid showing ₹0 for costs recorded
+    // at e.g. 22:30 UTC that were incurred "today" in the user's local timezone.
+    const todayIso = seriesDays[seriesDays.length - 1];
+    const yesterdayIso = seriesDays.length >= 2 ? seriesDays[seriesDays.length - 2] : '';
+    const twoDaysAgoIso = seriesDays.length >= 3 ? seriesDays[seriesDays.length - 3] : '';
+
     for (const row of costRows) {
-      if (row.date === seriesDays[seriesDays.length - 1]) {
+      if (row.date === todayIso || row.date === yesterdayIso) {
         currentDaySpend += row.cost_usd || 0;
         currentDayRequests += row.request_count || 0;
       }
-      if (row.date === previousDayIso) {
+      if (row.date === twoDaysAgoIso) {
         previousDaySpend += row.cost_usd || 0;
         previousDayRequests += row.request_count || 0;
       }
