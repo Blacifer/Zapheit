@@ -50,16 +50,33 @@ interface EnrollmentModalProps {
   token: string;
   expires: string;
   name: string;
+  runtimeId: string;
   onClose: () => void;
 }
 
-function EnrollmentModal({ token, expires, name, onClose }: EnrollmentModalProps) {
+const CONTROL_PLANE_URL = 'https://rasi-synthetic-hr-production.up.railway.app';
+
+function EnrollmentModal({ token, expires, name, runtimeId, onClose }: EnrollmentModalProps) {
   const [copied, setCopied] = useState(false);
+  const [cmdCopied, setCmdCopied] = useState(false);
 
   const copy = async () => {
     await navigator.clipboard.writeText(token);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const quickstart = `export SYNTHETICHR_CONTROL_PLANE_URL="${CONTROL_PLANE_URL}"
+export SYNTHETICHR_RUNTIME_ID="${runtimeId}"
+export SYNTHETICHR_ENROLLMENT_TOKEN="${token}"
+export SYNTHETICHR_API_KEY="sk_..."   # Settings → API Keys
+
+docker compose -f deploy/compose/runtime.yml up`;
+
+  const copyQuickstart = async () => {
+    await navigator.clipboard.writeText(quickstart);
+    setCmdCopied(true);
+    setTimeout(() => setCmdCopied(false), 2000);
   };
 
   return (
@@ -98,13 +115,15 @@ function EnrollmentModal({ token, expires, name, onClose }: EnrollmentModalProps
           Expires {new Date(expires).toLocaleString()}
         </div>
 
-        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5"><Terminal className="w-3.5 h-3.5" /> Start the worker</p>
-          <code className="text-xs text-slate-400 font-mono block">
-            RASI_ENROLLMENT_TOKEN={token.slice(0, 8)}… \<br />
-            {'  '}RASI_API_URL=https://api.rasi.ai \<br />
-            {'  '}docker run rasi/runtime-worker:latest
-          </code>
+        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"><Terminal className="w-3.5 h-3.5" /> Quickstart</p>
+            <button onClick={copyQuickstart} className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors">
+              {cmdCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+          </div>
+          <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-all leading-5">{quickstart}</pre>
+          <p className="text-[11px] text-slate-500">Replace <span className="text-amber-400 font-mono">sk_...</span> with an API key from Settings → API Keys.</p>
         </div>
 
         <div className="flex justify-end">
@@ -124,7 +143,7 @@ function EnrollmentModal({ token, expires, name, onClose }: EnrollmentModalProps
 
 interface RegisterModalProps {
   onClose: () => void;
-  onCreated: (token: string, expires: string, name: string) => void;
+  onCreated: (token: string, expires: string, name: string, runtimeId: string) => void;
 }
 
 function RegisterModal({ onClose, onCreated }: RegisterModalProps) {
@@ -139,7 +158,7 @@ function RegisterModal({ onClose, onCreated }: RegisterModalProps) {
     setSaving(false);
     if (!res.success || !res.data) { toast.error(res.error || 'Failed to register worker'); return; }
     const d = res.data as any;
-    onCreated(d.enrollment_token, d.enrollment_expires_at, name.trim());
+    onCreated(d.enrollment_token, d.enrollment_expires_at, name.trim(), d.data?.id || '');
   };
 
   return (
@@ -333,7 +352,7 @@ export default function RuntimeWorkersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [enrollment, setEnrollment] = useState<{ token: string; expires: string; name: string } | null>(null);
+  const [enrollment, setEnrollment] = useState<{ token: string; expires: string; name: string; runtimeId: string } | null>(null);
   const [deregistering, setDeregistering] = useState<string | null>(null);
   const [rotating, setRotating] = useState<string | null>(null);
 
@@ -373,13 +392,13 @@ export default function RuntimeWorkersPage() {
     setRotating(null);
     if (!res.success || !res.data) { toast.error(res.error || 'Rotation failed'); return; }
     const d = res.data as any;
-    setEnrollment({ token: d.enrollment_token, expires: d.enrollment_expires_at, name: w?.name || id });
+    setEnrollment({ token: d.enrollment_token, expires: d.enrollment_expires_at, name: w?.name || id, runtimeId: id });
     toast.success('Enrollment token rotated.');
   };
 
-  const onCreated = (token: string, expires: string, name: string) => {
+  const onCreated = (token: string, expires: string, name: string, runtimeId: string) => {
     setShowRegister(false);
-    setEnrollment({ token, expires, name });
+    setEnrollment({ token, expires, name, runtimeId });
     load(true);
   };
 
@@ -496,6 +515,7 @@ export default function RuntimeWorkersPage() {
           token={enrollment.token}
           expires={enrollment.expires}
           name={enrollment.name}
+          runtimeId={enrollment.runtimeId}
           onClose={() => setEnrollment(null)}
         />
       )}
