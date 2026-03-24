@@ -388,7 +388,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
             {(() => {
               const leaks = incidents.filter(i =>
                 i.status !== 'resolved' &&
-                (i.incident_type === 'prompt_injection' || i.incident_type === 'policy_override')
+                (i.incident_type === 'data_extraction_attempt' || i.incident_type === 'refund_abuse')
               );
               if (leaks.length === 0) {
                 return (

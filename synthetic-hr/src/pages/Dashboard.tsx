@@ -412,9 +412,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         '5': { integrationIds: [], primaryPack: 'support' },
       });
       const demoIncidentsList: Incident[] = [
-        { id: '1', agent_id: '4', agent_name: 'Refund Handler', incident_type: 'policy_override', severity: 'critical', status: 'open', title: 'Unauthorized Refund Approved', description: 'Bot approved a refund request without proper verification', created_at: new Date().toISOString() },
+        { id: '1', agent_id: '4', agent_name: 'Refund Handler', incident_type: 'refund_abuse', severity: 'critical', status: 'open', title: 'Unauthorized Refund Approved', description: 'Bot approved a refund request without proper verification', created_at: new Date().toISOString() },
         { id: '2', agent_id: '2', agent_name: 'Sales Assistant', incident_type: 'hallucination', severity: 'low', status: 'resolved', title: 'Incorrect Pricing Information', description: 'Bot provided wrong pricing for enterprise plan', resolved_at: new Date().toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() },
-        { id: '3', agent_id: '1', agent_name: 'Support Bot', incident_type: 'pii_extraction', severity: 'high', status: 'open', title: 'Potential PII Exposure', description: 'Bot may have shared customer email in response', created_at: new Date(Date.now() - 172800000).toISOString() },
+        { id: '3', agent_id: '1', agent_name: 'Support Bot', incident_type: 'pii_leak', severity: 'high', status: 'open', title: 'Potential PII Exposure', description: 'Bot may have shared customer email in response', created_at: new Date(Date.now() - 172800000).toISOString() },
       ];
       const demoCostList: CostData[] = [
         { id: '1', tokens: 1542000, cost: 462.60, date: new Date().toISOString(), requests: 5000 },
