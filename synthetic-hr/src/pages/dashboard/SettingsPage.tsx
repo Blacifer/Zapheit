@@ -13,6 +13,7 @@ import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
 import { api } from '../../lib/api-client';
 import { getFrontendConfig } from '../../lib/config';
+import { STORAGE_KEYS } from '../../utils/storage';
 
 // ==================== TYPES ====================
 type SettingsTab = 'profile' | 'organization' | 'team' | 'notifications' | 'security' | 'tools';
@@ -1343,6 +1344,65 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Testing Tools */}
+      <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6">
+        <h3 className="text-base font-semibold text-amber-400 mb-1">Testing Tools</h3>
+        <p className="text-sm text-slate-400 mb-4">Reset one-time UX states so memorable moments and banners re-fire. No data is deleted — localStorage only.</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700/50 rounded-xl">
+            <div>
+              <p className="text-sm font-semibold text-white">Reset all moment flags</p>
+              <p className="text-xs text-slate-500 mt-0.5">Re-enables: Morning Briefing, Agent Alive overlay, We Caught Something alert, What Changed banner, setup bar</p>
+            </div>
+            <button
+              onClick={() => {
+                const org = orgName || 'workspace';
+                localStorage.removeItem(`${STORAGE_KEYS.MORNING_BRIEFING_DATE}:${org}`);
+                localStorage.removeItem(`${STORAGE_KEYS.AGENT_ALIVE_SEEN}:${org}`);
+                localStorage.removeItem(`${STORAGE_KEYS.CAUGHT_SOMETHING_SEEN}:${org}`);
+                localStorage.removeItem(`synthetic_hr_setup_bar_dismissed:${org}`);
+                // Set last_visit to 48h ago so "what changed" banner fires
+                localStorage.setItem(`synthetic_hr_last_visit:${org}`, String(Date.now() - 49 * 60 * 60 * 1000));
+                toast.success('Moment flags reset — refresh any page to see them fire');
+              }}
+              className="shrink-0 px-4 py-2 text-sm font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-xl transition-colors"
+            >
+              Reset moments
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-700/50 rounded-xl">
+            <div>
+              <p className="text-sm font-semibold text-white">Simulate behavioral drift</p>
+              <p className="text-xs text-slate-500 mt-0.5">Sets stored risk baseline to 0 for all agents — drift banners will appear on Fleet page on next load</p>
+            </div>
+            <button
+              onClick={() => {
+                let count = 0;
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key?.startsWith('rasi_drift_baseline_')) {
+                    const stored = localStorage.getItem(key);
+                    if (stored) {
+                      const baseline = JSON.parse(stored) as { risk_score: number; model_name: string };
+                      localStorage.setItem(key, JSON.stringify({ ...baseline, risk_score: 0 }));
+                      count++;
+                    }
+                  }
+                }
+                if (count === 0) {
+                  toast.info('No baselines found — visit Fleet page first, then come back and run this');
+                } else {
+                  toast.success(`Drift simulated on ${count} agent${count === 1 ? '' : 's'} — visit Fleet page to see banners`);
+                }
+              }}
+              className="shrink-0 px-4 py-2 text-sm font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-xl transition-colors"
+            >
+              Simulate drift
+            </button>
+          </div>
         </div>
       </div>
 
