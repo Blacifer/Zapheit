@@ -623,12 +623,34 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                 {Array.from({ length: 5 }).map((_, i) => <SkeletonIncidentRow key={i} />)}
               </div>
             ) : incidents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
-                No incidents have been recorded yet. Live incidents and manual detector tests will appear here.
+              <div className="rounded-2xl border border-dashed border-slate-700/60 p-12 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
+                  <ShieldAlert className="h-8 w-8 text-slate-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-white">No incidents detected yet</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
+                  Incidents are created automatically when agents handle live traffic through the gateway. Once an agent is connected and receiving requests, any PII leaks, policy violations, or anomalies will appear here.
+                </p>
+                {onNavigate && (
+                  <button
+                    onClick={() => onNavigate('connect-agent')}
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+                  >
+                    Connect your first agent →
+                  </button>
+                )}
               </div>
             ) : filteredIncidents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
-                No incidents match the current filters.
+              <div className="rounded-2xl border border-dashed border-slate-700/60 p-10 text-center">
+                <Search className="mx-auto mb-3 h-8 w-8 text-slate-600" />
+                <p className="font-medium text-white">No incidents match your filters</p>
+                <p className="mt-1 text-sm text-slate-400">Try adjusting severity, status, or source.</p>
+                <button
+                  onClick={() => { setSearch(''); setFilterStatus('all'); setFilterSeverity('all'); setFilterAgent('all'); setFilterType('all'); setFilterSource('all'); setActiveView('all'); }}
+                  className="mt-4 text-xs text-cyan-400 transition hover:text-cyan-300"
+                >
+                  Clear all filters
+                </button>
               </div>
             ) : (
               <div className="space-y-3">

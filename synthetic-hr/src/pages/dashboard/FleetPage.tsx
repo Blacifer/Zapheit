@@ -1022,16 +1022,27 @@ export default function FleetPage({
           {Array.from({ length: 5 }).map((_, i) => <SkeletonAgentCard key={i} />)}
         </div>
       ) : agents.length === 0 ? (
-        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-12 text-center">
-          <Users className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-12 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
+            <Bot className="h-8 w-8 text-slate-500" />
+          </div>
           <h2 className="text-xl font-semibold text-white">No governed agents yet</h2>
-          <p className="mt-2 text-slate-400">Add your first agent to start monitoring risk, spend, and incident activity from one control surface.</p>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
+            Define your first agent — give it a name, model, and purpose — then connect it to the gateway to start capturing live telemetry, spend, and incidents.
+          </p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+          >
+            <Plus className="h-4 w-4" /> Define your first agent
+          </button>
         </div>
       ) : filteredAgents.length === 0 ? (
-        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-10 text-center">
-          <Filter className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No agents match your filters.</p>
-          <button onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterType('all'); }} className="mt-3 text-xs text-cyan-400 hover:text-cyan-300">Clear filters</button>
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-10 text-center">
+          <Filter className="mx-auto mb-3 h-9 w-9 text-slate-600" />
+          <p className="font-medium text-white">No agents match your filters</p>
+          <p className="mt-1 text-sm text-slate-400">Try a different search term or status filter.</p>
+          <button onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterType('all'); }} className="mt-4 text-xs text-cyan-400 transition hover:text-cyan-300">Clear filters</button>
         </div>
       ) : (
         <div className="grid gap-4">
