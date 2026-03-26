@@ -502,7 +502,7 @@ router.get('/audit-logs', async (req: Request, res: Response) => {
 
     let query = supabaseAdmin
       .from('audit_logs')
-      .select('*, users(id, email, full_name)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -521,9 +521,39 @@ router.get('/audit-logs', async (req: Request, res: Response) => {
       return res.status(500).json({ success: false, error: error.message });
     }
 
+    const userIds = Array.from(new Set((data || []).map((entry: any) => entry.user_id).filter(Boolean)));
+    let usersById: Record<string, { id: string; email: string; full_name: string | null }> = {};
+
+    if (userIds.length > 0) {
+      const { data: users, error: usersError } = await supabaseAdmin
+        .from('users')
+        .select('id, email, full_name')
+        .in('id', userIds);
+
+      if (usersError) {
+        logger.warn('audit-logs users query error', { error: usersError.message, userCount: userIds.length });
+      } else {
+        usersById = Object.fromEntries(
+          (users || []).map((user: any) => [
+            user.id,
+            {
+              id: user.id,
+              email: user.email,
+              full_name: user.full_name ?? null,
+            },
+          ]),
+        );
+      }
+    }
+
+    const enrichedData = (data || []).map((entry: any) => ({
+      ...entry,
+      users: entry.user_id ? usersById[entry.user_id] || null : null,
+    }));
+
     res.json({
       success: true,
-      data,
+      data: enrichedData,
       total: count ?? 0,
       page: Math.max(parseInt(page, 10) || 1, 1),
       limit,

@@ -213,7 +213,11 @@ export default function DashboardOverview({
   const loadTeamActivity = useCallback(async () => {
     try {
       const res = await api.auditLogs.list({ limit: 8 });
-      if (res.success && Array.isArray(res.data)) setTeamActivity(res.data);
+      if (res.success && Array.isArray(res.data)) {
+        setTeamActivity(res.data);
+      } else {
+        setTeamActivity([]);
+      }
     } catch { /* silently ignore */ }
   }, []);
 
