@@ -541,6 +541,13 @@ export interface AgentJob {
   created_at: string;
   started_at?: string | null;
   finished_at?: string | null;
+  required_role?: string | null;
+  assigned_to?: string | null;
+  required_approvals?: number;
+  approvals_recorded?: number;
+  approvals_remaining?: number;
+  awaiting_additional_approval?: boolean;
+  approval?: AgentJobApproval | null;
 }
 
 export type AgentJobApprovalStatus = 'pending' | 'approved' | 'rejected' | string;
@@ -552,6 +559,12 @@ export interface AgentJobApproval {
   approved_by: string | null;
   status: AgentJobApprovalStatus;
   policy_snapshot: any;
+  required_approvals?: number;
+  approval_history?: Array<{
+    reviewer_id: string;
+    decision: 'approved' | 'rejected';
+    decided_at: string;
+  }>;
   created_at: string;
   decided_at: string | null;
 }

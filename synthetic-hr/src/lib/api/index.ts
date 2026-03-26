@@ -49,6 +49,7 @@ export type {
   CustomPlaybook,
   PlaybookComment,
   ActionPolicyRow,
+  ActionPolicyConstraints,
   RoutingRule,
   InterceptorRule,
 } from './platform';

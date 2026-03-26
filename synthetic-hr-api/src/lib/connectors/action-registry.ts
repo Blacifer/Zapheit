@@ -392,6 +392,259 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
     ],
   },
 
+  // ─── Paytm ────────────────────────────────────────────────────────────────
+  paytm: {
+    connectorId: 'paytm',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'paytm__get_payment_status',
+          description: 'Retrieve the current status of a Paytm payment or transaction.',
+          parameters: {
+            type: 'object',
+            properties: {
+              payment_id: { type: 'string', description: 'Paytm payment or order identifier' },
+            },
+            required: ['payment_id'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'paytm__list_transactions',
+          description: 'List recent Paytm transactions for monitoring or reconciliation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: { type: 'string', description: 'Number of transactions to return (default 10)' },
+              status: { type: 'string', description: 'Optional status filter such as SUCCESS or FAILED' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'paytm__create_refund',
+          description: 'Create a governed refund request in Paytm for a specific payment.',
+          parameters: {
+            type: 'object',
+            properties: {
+              payment_id: { type: 'string', description: 'Original Paytm payment identifier' },
+              amount: { type: 'string', description: 'Refund amount in minor units' },
+              reason: { type: 'string', description: 'Refund reason for audit and customer communication' },
+            },
+            required: ['payment_id'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'paytm__initiate_payout',
+          description: 'Initiate a payout through Paytm after policy and approval checks.',
+          parameters: {
+            type: 'object',
+            properties: {
+              beneficiary_id: { type: 'string', description: 'Beneficiary identifier in Paytm' },
+              amount: { type: 'string', description: 'Payout amount in minor units' },
+              reference_id: { type: 'string', description: 'Internal payout reference or invoice ID' },
+              note: { type: 'string', description: 'Optional payout note' },
+            },
+            required: ['beneficiary_id', 'amount'],
+          },
+        },
+      },
+    ],
+  },
+
+  // ─── Tally ────────────────────────────────────────────────────────────────
+  tally: {
+    connectorId: 'tally',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'tally__list_ledgers',
+          description: 'Read ledger records from Tally for finance review and reconciliation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              company_name: { type: 'string', description: 'Optional Tally company name override' },
+              limit: { type: 'string', description: 'Max ledger rows to return when supported' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'tally__list_vouchers',
+          description: 'Read voucher or journal data from Tally for reconciliation workflows.',
+          parameters: {
+            type: 'object',
+            properties: {
+              company_name: { type: 'string', description: 'Optional Tally company name override' },
+              from_date: { type: 'string', description: 'Optional start date in YYYYMMDD' },
+              to_date: { type: 'string', description: 'Optional end date in YYYYMMDD' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'tally__post_voucher',
+          description: 'Post a voucher or journal entry into Tally after governed approval.',
+          parameters: {
+            type: 'object',
+            properties: {
+              voucher_xml: { type: 'string', description: 'Complete voucher XML payload ready for Tally import' },
+            },
+            required: ['voucher_xml'],
+          },
+        },
+      },
+    ],
+  },
+
+  // ─── Naukri ───────────────────────────────────────────────────────────────
+  naukri: {
+    connectorId: 'naukri',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'naukri__search_candidates',
+          description: 'Search Naukri candidate profiles using a role, skill, or free-text query.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Search query or skill keywords' },
+              job_id: { type: 'string', description: 'Optional job opening identifier' },
+              limit: { type: 'string', description: 'Max candidates to return (default 10)' },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'naukri__get_candidate',
+          description: 'Fetch a specific candidate profile from Naukri.',
+          parameters: {
+            type: 'object',
+            properties: {
+              candidate_id: { type: 'string', description: 'Naukri candidate identifier' },
+            },
+            required: ['candidate_id'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'naukri__create_job',
+          description: 'Publish a new job opening to Naukri through a governed action.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Job title' },
+              description: { type: 'string', description: 'Job description or summary' },
+              location: { type: 'string', description: 'Job location' },
+              employment_type: { type: 'string', description: 'Optional employment type' },
+            },
+            required: ['title', 'description'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'naukri__parse_resume',
+          description: 'Parse a resume document through Naukri for structured candidate extraction.',
+          parameters: {
+            type: 'object',
+            properties: {
+              resume_text: { type: 'string', description: 'Raw resume text when file upload is not available' },
+              candidate_id: { type: 'string', description: 'Optional existing candidate identifier' },
+            },
+            required: [],
+          },
+        },
+      },
+    ],
+  },
+
+  // ─── ClearTax ─────────────────────────────────────────────────────────────
+  cleartax: {
+    connectorId: 'cleartax',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'cleartax__get_compliance_status',
+          description: 'Retrieve current ClearTax compliance posture for the connected entity.',
+          parameters: {
+            type: 'object',
+            properties: {
+              gstin: { type: 'string', description: 'Optional GSTIN override for the lookup' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'cleartax__list_notices',
+          description: 'Read tax notices or alerts from ClearTax for compliance investigation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: { type: 'string', description: 'Maximum number of notices to return' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'cleartax__calculate_tds',
+          description: 'Calculate TDS using ClearTax with structured input payloads.',
+          parameters: {
+            type: 'object',
+            properties: {
+              payload: { type: 'string', description: 'JSON string payload for the TDS calculation request' },
+            },
+            required: ['payload'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'cleartax__file_gst_return',
+          description: 'Submit a GST return through ClearTax after approval and evidence capture.',
+          parameters: {
+            type: 'object',
+            properties: {
+              payload: { type: 'string', description: 'JSON string payload describing the GST return submission' },
+            },
+            required: ['payload'],
+          },
+        },
+      },
+    ],
+  },
+
   // ─── Framework stubs — executor not yet built; tools visible in UI ────────
   // The action-executor.ts default case returns 501 for these connectors.
 

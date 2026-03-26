@@ -39,6 +39,21 @@ const routingRuleSchema = z.object({
   required_user_id: z.string().uuid().nullable().optional(),
 });
 
+const policyConstraintsSchema = z.object({
+  amount_field: z.string().max(200).optional().nullable(),
+  amount_threshold: z.number().nonnegative().optional().nullable(),
+  threshold_required_role: z.enum(['viewer', 'manager', 'admin', 'super_admin']).optional().nullable(),
+  entity_field: z.string().max(200).optional().nullable(),
+  allowed_entities: z.array(z.string().max(200)).max(100).optional().nullable(),
+  business_hours: z.object({
+    start: z.string().regex(/^\d{1,2}:\d{2}$/),
+    end: z.string().regex(/^\d{1,2}:\d{2}$/),
+    utc_offset: z.string().regex(/^[+-]\d{2}:\d{2}$/).optional().nullable(),
+  }).optional().nullable(),
+  emergency_disabled: z.boolean().optional().nullable(),
+  dual_approval: z.boolean().optional().nullable(),
+}).passthrough();
+
 // Interceptor rules for __gateway__ service policies (patch_request, patch_response, route_model)
 const interceptorRuleSchema = z.object({
   id: z.string().optional(),
@@ -65,6 +80,7 @@ const upsertSchema = z.object({
   webhook_allowlist: z.array(z.string()).optional(),
   routing_rules: z.array(routingRuleSchema).max(20).optional(),
   interceptor_rules: z.array(interceptorRuleSchema).max(50).optional(),
+  policy_constraints: policyConstraintsSchema.optional(),
   notes: z.string().max(5000).optional(),
 });
 
@@ -117,6 +133,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
       ...(typeof parsed.data.notes === 'string' ? { notes: parsed.data.notes } : {}),
       ...(parsed.data.routing_rules !== undefined ? { routing_rules: parsed.data.routing_rules } : {}),
       ...(parsed.data.interceptor_rules !== undefined ? { interceptor_rules: parsed.data.interceptor_rules } : {}),
+      ...(parsed.data.policy_constraints !== undefined ? { policy_constraints: parsed.data.policy_constraints } : {}),
       updated_by: userId,
       updated_at: now,
     };
@@ -160,6 +177,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
         notes: typeof parsed.data.notes === 'string' ? parsed.data.notes : null,
         routing_rules: parsed.data.routing_rules || [],
         interceptor_rules: parsed.data.interceptor_rules || [],
+        policy_constraints: parsed.data.policy_constraints || {},
         updated_by: userId,
         updated_at: now,
       },
@@ -220,4 +238,3 @@ router.delete('/:id', requirePermission('policies.manage'), async (req: Request,
 });
 
 export default router;
-

@@ -304,6 +304,13 @@ export type AgentJob = {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  required_role?: string | null;
+  assigned_to?: string | null;
+  required_approvals?: number;
+  approvals_recorded?: number;
+  approvals_remaining?: number;
+  awaiting_additional_approval?: boolean;
+  approval?: AgentJobApproval | null;
 };
 
 export type AgentJobApproval = {
@@ -313,6 +320,12 @@ export type AgentJobApproval = {
   approved_by: string | null;
   status: 'pending' | 'approved' | 'rejected' | string;
   policy_snapshot: any;
+  required_approvals?: number;
+  approval_history?: Array<{
+    reviewer_id: string;
+    decision: 'approved' | 'rejected';
+    decided_at: string;
+  }>;
   created_at: string;
   decided_at: string | null;
 };
@@ -383,7 +396,7 @@ export const jobsApi = {
     });
   },
 
-  async decide(jobId: string, decision: 'approved' | 'rejected'): Promise<ApiResponse<{ job: AgentJob; approval: AgentJobApproval }>> {
+  async decide(jobId: string, decision: 'approved' | 'rejected'): Promise<ApiResponse<{ job: AgentJob; approval: AgentJobApproval; awaiting_additional_approval?: boolean; approvals_remaining?: number }>> {
     return authenticatedFetch(`/jobs/${jobId}/decision`, {
       method: 'POST',
       body: JSON.stringify({ decision }),
@@ -611,6 +624,23 @@ export type InterceptorRule = {
   target_model?: string;
 };
 
+export type PolicyBusinessHours = {
+  start: string;
+  end: string;
+  utc_offset?: string | null;
+};
+
+export type ActionPolicyConstraints = {
+  amount_field?: string | null;
+  amount_threshold?: number | null;
+  threshold_required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin' | null;
+  entity_field?: string | null;
+  allowed_entities?: string[] | null;
+  business_hours?: PolicyBusinessHours | null;
+  emergency_disabled?: boolean | null;
+  dual_approval?: boolean | null;
+};
+
 export type ActionPolicyRow = {
   id: string;
   organization_id: string;
@@ -622,6 +652,7 @@ export type ActionPolicyRow = {
   webhook_allowlist: string[];
   routing_rules: RoutingRule[];
   interceptor_rules?: InterceptorRule[];
+  policy_constraints?: ActionPolicyConstraints | null;
   notes?: string | null;
   updated_by: string | null;
   updated_at: string;
@@ -646,6 +677,7 @@ export const actionPoliciesApi = {
     webhook_allowlist?: string[];
     routing_rules?: RoutingRule[];
     interceptor_rules?: InterceptorRule[];
+    policy_constraints?: ActionPolicyConstraints;
     notes?: string;
   }): Promise<ApiResponse<ActionPolicyRow>> {
     return authenticatedFetch('/action-policies', {

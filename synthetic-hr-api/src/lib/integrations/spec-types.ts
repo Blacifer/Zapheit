@@ -25,6 +25,16 @@ export type IntegrationAuthType = 'oauth2' | 'api_key' | 'client_credentials';
 export type IntegrationFieldType = 'text' | 'password';
 
 export type IntegrationActionRisk = 'low' | 'medium' | 'high' | 'money';
+export type IntegrationActionOperation =
+  | 'read'
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'execute'
+  | 'reconcile'
+  | 'approve';
+export type IntegrationTrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operational';
+export type IntegrationMaturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 
 export type IntegrationRequiredField = {
   name: string;
@@ -63,6 +73,13 @@ export type IntegrationWriteCapability = {
   risk: IntegrationActionRisk;
   // Optional hint for UI grouping when provider category alone is not enough (e.g. built-in/internal actions).
   pack?: IntegrationPackId;
+  operation?: IntegrationActionOperation;
+  objectType?: string;
+  reversible?: boolean;
+  approvalDefault?: boolean;
+  trustTier?: IntegrationTrustTier;
+  evidenceMode?: 'request-result' | 'before-after';
+  constraints?: string[];
 };
 
 export type IntegrationCapabilities = {
@@ -91,6 +108,8 @@ export type IntegrationSpec = {
     capabilities: string[];
     dataTypes: string[];
   };
+  maturity?: IntegrationMaturity;
+  trustTier?: IntegrationTrustTier;
   notes?: string;
 };
 

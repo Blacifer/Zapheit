@@ -8,6 +8,14 @@ import { SupabaseRestError, eq, in_, supabaseRestAsService, supabaseRestAsUser }
 import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { IMPLEMENTED_INTEGRATIONS, getIntegrationSpec } from '../lib/integrations/spec-registry';
 import { getAdapter } from '../lib/integrations/adapters';
+import type {
+  IntegrationActionOperation,
+  IntegrationActionRisk,
+  IntegrationMaturity,
+  IntegrationPackId,
+  IntegrationTrustTier,
+  IntegrationWriteCapability,
+} from '../lib/integrations/spec-types';
 
 const router = Router();
 
@@ -78,8 +86,43 @@ type StoredActionPolicyRow = {
   require_approval: boolean;
   required_role: string;
   notes: string | null;
+  policy_constraints?: Record<string, any> | null;
   updated_by: string | null;
   updated_at: string;
+};
+
+type Wave1PolicySeed = {
+  service: string;
+  action: string;
+  enabled: boolean;
+  require_approval: boolean;
+  required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  notes: string;
+  policy_constraints?: Record<string, any>;
+};
+
+type Wave1GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
+
+type StoredConnectorExecutionRow = {
+  id: string;
+  organization_id: string;
+  agent_id: string | null;
+  integration_id: string | null;
+  connector_id: string;
+  action: string;
+  params: Record<string, any> | null;
+  result: Record<string, any> | null;
+  success: boolean;
+  error_message: string | null;
+  duration_ms: number | null;
+  approval_required: boolean;
+  approval_id: string | null;
+  requested_by?: string | null;
+  policy_snapshot?: Record<string, any> | null;
+  before_state?: Record<string, any> | null;
+  after_state?: Record<string, any> | null;
+  remediation?: Record<string, any> | null;
+  created_at: string;
 };
 
 type StoredAgentRow = {
@@ -89,7 +132,65 @@ type StoredAgentRow = {
 };
 
 type AgentPublishStatus = 'not_live' | 'ready' | 'live';
-type AgentPackId = 'recruitment' | 'support' | 'sales' | 'it' | 'finance' | 'compliance';
+type AgentPackId = IntegrationPackId;
+
+function operationForCapability(capability: Pick<IntegrationWriteCapability, 'id' | 'label' | 'operation'>): IntegrationActionOperation {
+  if (capability.operation) return capability.operation;
+  const text = `${capability.id} ${capability.label}`.toLowerCase();
+  if (text.includes('reconcile') || text.includes('settlement')) return 'reconcile';
+  if (text.includes('approve') || text.includes('decide')) return 'approve';
+  if (text.includes('create') || text.includes('send') || text.includes('file') || text.includes('post') || text.includes('initiate')) return 'create';
+  if (text.includes('update') || text.includes('status') || text.includes('assign') || text.includes('revoke') || text.includes('suspend')) return 'update';
+  if (text.includes('delete') || text.includes('remove')) return 'delete';
+  if (text.includes('search') || text.includes('get') || text.includes('check')) return 'read';
+  return 'execute';
+}
+
+function objectTypeForCapability(capability: Pick<IntegrationWriteCapability, 'id' | 'label' | 'objectType'>): string {
+  if (capability.objectType) return capability.objectType;
+  const text = `${capability.id} ${capability.label}`.toLowerCase();
+  if (text.includes('refund')) return 'refund';
+  if (text.includes('payout')) return 'payout';
+  if (text.includes('ticket')) return 'ticket';
+  if (text.includes('lead')) return 'lead';
+  if (text.includes('user')) return 'user';
+  if (text.includes('access')) return 'access';
+  if (text.includes('candidate')) return 'candidate';
+  if (text.includes('filing') || text.includes('gst') || text.includes('tds')) return 'filing';
+  return 'record';
+}
+
+function trustTierForRisk(risk: IntegrationActionRisk): IntegrationTrustTier {
+  if (risk === 'high' || risk === 'money') return 'high-trust-operational';
+  if (risk === 'medium') return 'controlled-write';
+  return 'observe-only';
+}
+
+function defaultConstraintsForCapability(capability: Pick<IntegrationWriteCapability, 'risk' | 'constraints'>, category: string): string[] {
+  if (capability.constraints?.length) return capability.constraints;
+  const constraints: string[] = [];
+  if (capability.risk === 'money') constraints.push('Requires monetary threshold policy');
+  if (capability.risk === 'high') constraints.push('Recommended dual approval for privileged actions');
+  const normalizedCategory = String(category || '').toUpperCase();
+  if (normalizedCategory === 'FINANCE' || normalizedCategory === 'PAYMENTS') constraints.push('Log sanitized before/after transaction evidence');
+  if (normalizedCategory === 'IAM' || normalizedCategory === 'IDENTITY') constraints.push('Restrict to approved identities or groups');
+  if (normalizedCategory === 'COMPLIANCE') constraints.push('Capture approval rationale and evidence export metadata');
+  return constraints;
+}
+
+function maturityForIntegration(args: {
+  lifecycleStatus: string;
+  specTrustTier: IntegrationTrustTier;
+  writes: IntegrationWriteCapability[];
+  policyEnabledCount: number;
+}): IntegrationMaturity {
+  const { lifecycleStatus, specTrustTier, writes, policyEnabledCount } = args;
+  if (lifecycleStatus === 'not_configured') return 'connected';
+  if (writes.length === 0) return 'read-ready';
+  if (specTrustTier === 'high-trust-operational' && policyEnabledCount > 0) return 'governed';
+  if (lifecycleStatus === 'connected' || lifecycleStatus === 'configured') return 'action-ready';
+  return 'connected';
+}
 
 function sanitizeIntegrationIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -126,6 +227,202 @@ function writeAgentPublish(agent: StoredAgentRow, updates: {
   metadata.publish = updates;
   return metadata;
 }
+
+const WAVE1_POLICY_DEFAULTS: Wave1PolicySeed[] = [
+  {
+    service: 'razorpay',
+    action: 'finance.payment.list',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: allow finance operators to inspect Razorpay payments without extra approval.',
+  },
+  {
+    service: 'razorpay',
+    action: 'finance.settlement.check',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: settlement review is enabled for reconciliation workflows.',
+  },
+  {
+    service: 'razorpay',
+    action: 'finance.refund.create',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Wave 1 default: Razorpay refunds require approval and threshold-based escalation.',
+    policy_constraints: {
+      amount_field: 'amount',
+      amount_threshold: 500000,
+      threshold_required_role: 'admin',
+      business_hours: { start: '09:00', end: '20:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'paytm',
+    action: 'finance.payment.status',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: Paytm payment status checks are enabled for finance monitoring.',
+  },
+  {
+    service: 'paytm',
+    action: 'finance.refund.create',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Wave 1 default: Paytm refunds require approval and finance thresholds.',
+    policy_constraints: {
+      amount_field: 'amount',
+      amount_threshold: 500000,
+      threshold_required_role: 'admin',
+      business_hours: { start: '09:00', end: '20:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'paytm',
+    action: 'finance.payout.initiate',
+    enabled: true,
+    require_approval: true,
+    required_role: 'admin',
+    notes: 'Wave 1 default: Paytm payouts require dual approval and strict finance oversight.',
+    policy_constraints: {
+      amount_field: 'amount',
+      amount_threshold: 1000000,
+      threshold_required_role: 'super_admin',
+      business_hours: { start: '09:00', end: '18:00', utc_offset: '+05:30' },
+      dual_approval: true,
+    },
+  },
+  {
+    service: 'tally',
+    action: 'finance.ledger.read',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: ledger reads are enabled for finance investigation and reconciliation.',
+  },
+  {
+    service: 'tally',
+    action: 'finance.voucher.reconcile',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: voucher reconciliation is enabled with audit evidence.',
+    policy_constraints: {
+      business_hours: { start: '08:00', end: '20:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'tally',
+    action: 'finance.voucher.post',
+    enabled: true,
+    require_approval: true,
+    required_role: 'admin',
+    notes: 'Wave 1 default: posting vouchers requires dual approval and threshold controls.',
+    policy_constraints: {
+      amount_field: 'amount',
+      amount_threshold: 250000,
+      threshold_required_role: 'super_admin',
+      dual_approval: true,
+      business_hours: { start: '09:00', end: '18:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'slack',
+    action: 'comms.channel.history',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: allow governed channel history reads for investigations.',
+  },
+  {
+    service: 'slack',
+    action: 'comms.message.send',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: controlled Slack outbound communication is enabled for operators.',
+    policy_constraints: {
+      business_hours: { start: '08:00', end: '22:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'slack',
+    action: 'comms.channel.create',
+    enabled: true,
+    require_approval: true,
+    required_role: 'admin',
+    notes: 'Wave 1 default: new Slack channels require admin review.',
+  },
+  {
+    service: 'naukri',
+    action: 'recruitment.candidate.search',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: candidate search is enabled for recruiters.',
+  },
+  {
+    service: 'naukri',
+    action: 'recruitment.resume.parse',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: resume parsing is enabled with evidence capture.',
+  },
+  {
+    service: 'naukri',
+    action: 'recruitment.job.publish',
+    enabled: true,
+    require_approval: true,
+    required_role: 'admin',
+    notes: 'Wave 1 default: publishing jobs requires recruiter/admin approval.',
+    policy_constraints: {
+      business_hours: { start: '09:00', end: '19:00', utc_offset: '+05:30' },
+    },
+  },
+  {
+    service: 'cleartax',
+    action: 'compliance.status.check',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: compliance posture checks are enabled for operators.',
+  },
+  {
+    service: 'cleartax',
+    action: 'compliance.notice.read',
+    enabled: true,
+    require_approval: false,
+    required_role: 'admin',
+    notes: 'Wave 1 default: tax notice review is enabled and auditable.',
+  },
+  {
+    service: 'cleartax',
+    action: 'compliance.tds.calculate',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Wave 1 default: TDS calculation is enabled with request/result evidence.',
+  },
+  {
+    service: 'cleartax',
+    action: 'compliance.gst.file',
+    enabled: true,
+    require_approval: true,
+    required_role: 'admin',
+    notes: 'Wave 1 default: GST filing requires dual approval and compliance evidence.',
+    policy_constraints: {
+      dual_approval: true,
+      business_hours: { start: '09:00', end: '18:00', utc_offset: '+05:30' },
+    },
+  },
+];
+
+const WAVE1_SERVICES = new Set(Array.from(new Set(WAVE1_POLICY_DEFAULTS.map((seed) => seed.service))));
 
 async function pruneDisconnectedIntegrationFromAgents(rest: RestFn, orgId: string, serviceType: string) {
   const agentsQuery = new URLSearchParams();
@@ -337,11 +634,37 @@ async function upsertActionPolicy(
       require_approval: updates.require_approval ?? true,
       required_role: updates.required_role ?? 'manager',
       notes: updates.notes ?? null,
+      policy_constraints: updates.policy_constraints ?? {},
       updated_by: (updates as any).updated_by ?? null,
       updated_at: now,
     },
   }) as any[];
   return created?.[0] || null;
+}
+
+async function applyWave1Policies(
+  rest: RestFn,
+  orgId: string,
+  userId: string | null,
+  services?: string[],
+) {
+  const serviceFilter = services?.length ? new Set(services) : null;
+  const selectedSeeds = WAVE1_POLICY_DEFAULTS.filter((seed) => !serviceFilter || serviceFilter.has(seed.service));
+  const updatedPolicies: any[] = [];
+
+  for (const seed of selectedSeeds) {
+    const row = await upsertActionPolicy(rest, orgId, seed.service, seed.action, {
+      enabled: seed.enabled,
+      require_approval: seed.require_approval,
+      required_role: seed.required_role,
+      notes: seed.notes,
+      policy_constraints: seed.policy_constraints || {},
+      updated_by: userId,
+    });
+    if (row) updatedPolicies.push(row);
+  }
+
+  return updatedPolicies;
 }
 
 function getApiBaseUrl(req: any): string {
@@ -610,6 +933,17 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
     return row.status;
   };
 
+  const policyQuery = new URLSearchParams();
+  policyQuery.set('organization_id', eq(orgId));
+  policyQuery.set('select', 'service,action,enabled');
+  const actionPolicies = await safeQuery<Pick<StoredActionPolicyRow, 'service' | 'action' | 'enabled'>>(
+    rest,
+    'action_policies',
+    policyQuery,
+  );
+  const enabledActionPolicyMap = new Map(actionPolicies.map((policy) => [`${policy.service}:${policy.action}`, Boolean(policy.enabled)]));
+  const configuredPolicyKeys = new Set(actionPolicies.map((policy) => `${policy.service}:${policy.action}`));
+
   const data = IMPLEMENTED_INTEGRATIONS.map((spec) => {
     const row = byType.get(spec.id);
     const lifecycleStatus = spec.id === 'internal' ? 'connected' : lifecycleFromRow(row);
@@ -629,6 +963,24 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
 
     const requiredFields = spec.apiKeyConfig?.requiredFields || spec.connectionFields || [];
     const credentialHint = requiredFields.length > 0 ? requiredFields.map((f) => f.label).join(', ') : '—';
+    const writes = spec.capabilities?.writes || [];
+    const enabledActionCount = writes.filter((write) => enabledActionPolicyMap.get(`${spec.id}:${write.id}`)).length;
+    const wave1Seeds = WAVE1_POLICY_DEFAULTS.filter((seed) => seed.service === spec.id);
+    const appliedSeedCount = wave1Seeds.filter((seed) => configuredPolicyKeys.has(`${seed.service}:${seed.action}`)).length;
+    const wave1GuardrailsStatus: Wave1GuardrailStatus =
+      wave1Seeds.length === 0
+        ? 'not_applicable'
+        : appliedSeedCount === 0
+          ? 'missing'
+          : appliedSeedCount === wave1Seeds.length
+            ? 'applied'
+            : 'partial';
+    const trustTier: IntegrationTrustTier = spec.trustTier
+      || (writes.some((write) => write.risk === 'high' || write.risk === 'money')
+        ? 'high-trust-operational'
+        : writes.length > 0
+          ? 'controlled-write'
+          : 'observe-only');
 
     const readiness: { expectedRedirectUrl: string | null; items: IntegrationReadinessItem[] } = {
       expectedRedirectUrl,
@@ -695,6 +1047,12 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
     const nowMs = Date.now();
     const tokenExpired = Number.isFinite(tokenExpiresAtMs) ? tokenExpiresAtMs <= nowMs : false;
     const tokenExpiresSoon = Number.isFinite(tokenExpiresAtMs) ? (tokenExpiresAtMs - nowMs) <= 1000 * 60 * 60 * 24 * 7 : false;
+    const maturity = maturityForIntegration({
+      lifecycleStatus,
+      specTrustTier: trustTier,
+      writes,
+      policyEnabledCount: enabledActionCount,
+    });
 
     return {
       id: spec.id,
@@ -707,6 +1065,21 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       priority: spec.priority,
       requiredFields: spec.apiKeyConfig?.requiredFields || spec.connectionFields || [],
       capabilities: spec.capabilities || { reads: [], writes: [] },
+      trustTier,
+      maturity,
+      categoryPack: packIdFromCategory(spec.category),
+      wave:
+        ['razorpay', 'paytm', 'tally', 'slack', 'naukri', 'cleartax'].includes(spec.id) ? 1
+        : ['payu', 'zoho_recruit', 'google_workspace', 'microsoft_365', 'freshdesk', 'hubspot', 'zoho_crm'].includes(spec.id) ? 2
+        : null,
+      governanceSummary: {
+        readCount: spec.capabilities?.reads?.length || 0,
+        actionCount: writes.length,
+        enabledActionCount,
+      },
+      wave1GuardrailsStatus,
+      wave1GuardrailsApplied: appliedSeedCount,
+      wave1GuardrailsTotal: wave1Seeds.length,
       oauth: oauthMeta,
       readiness,
       tokenExpiresAt,
@@ -736,8 +1109,8 @@ router.get('/actions', requirePermission('connectors.read'), async (req, res) =>
   const rest = restAsUser(req);
   const query = new URLSearchParams();
   query.set('organization_id', eq(orgId));
-  query.set('select', 'service,action,enabled,require_approval,required_role,updated_at');
-  const policies = await safeQuery<Pick<StoredActionPolicyRow, 'service' | 'action' | 'enabled' | 'require_approval' | 'required_role' | 'updated_at'>>(
+  query.set('select', 'service,action,enabled,require_approval,required_role,policy_constraints,updated_at');
+  const policies = await safeQuery<Pick<StoredActionPolicyRow, 'service' | 'action' | 'enabled' | 'require_approval' | 'required_role' | 'policy_constraints' | 'updated_at'>>(
     rest,
     'action_policies',
     query
@@ -749,6 +1122,10 @@ router.get('/actions', requirePermission('connectors.read'), async (req, res) =>
     return writes.map((w) => {
       const key = `${spec.id}:${w.id}`;
       const policy = policyMap.get(key);
+      const operation = operationForCapability(w);
+      const objectType = objectTypeForCapability(w);
+      const trustTier = w.trustTier || trustTierForRisk(w.risk);
+      const approvalDefault = w.approvalDefault ?? (w.risk !== 'low');
       return {
         service: spec.id,
         providerName: spec.name,
@@ -756,16 +1133,48 @@ router.get('/actions', requirePermission('connectors.read'), async (req, res) =>
         action: w.id,
         label: w.label,
         risk: w.risk,
+        operation,
+        objectType,
+        reversible: w.reversible ?? false,
+        trustTier,
+        approvalDefault,
+        evidenceMode: w.evidenceMode || (w.risk === 'money' || w.risk === 'high' ? 'before-after' : 'request-result'),
+        constraints: policy?.policy_constraints && Object.keys(policy.policy_constraints).length > 0
+          ? policy.policy_constraints
+          : defaultConstraintsForCapability(w, spec.category),
         pack: w.pack || null,
         enabled: policy ? Boolean(policy.enabled) : false,
-        requireApproval: policy ? Boolean(policy.require_approval) : true,
+        requireApproval: policy ? Boolean(policy.require_approval) : approvalDefault,
         requiredRole: policy?.required_role || 'manager',
         updatedAt: policy?.updated_at || null,
+        policySummary: policy
+          ? `${policy.enabled ? 'Enabled' : 'Blocked'} · ${policy.require_approval ? 'Approval required' : 'Direct execution'}`
+          : 'No org policy configured yet',
       };
     });
   });
 
   return res.json({ success: true, data: actions });
+});
+
+router.get('/executions', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const service = typeof req.query.service === 'string' ? req.query.service.trim() : '';
+  const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : 25;
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 25;
+
+  const query = new URLSearchParams();
+  query.set('organization_id', eq(orgId));
+  query.set('order', 'created_at.desc');
+  query.set('limit', String(limit));
+  query.set('select', 'id,organization_id,agent_id,integration_id,connector_id,action,params,result,success,error_message,duration_ms,approval_required,approval_id,requested_by,policy_snapshot,before_state,after_state,remediation,created_at');
+  if (service) query.set('connector_id', eq(service));
+
+  const rows = await safeQuery<StoredConnectorExecutionRow>(rest, 'connector_action_executions', query);
+  return res.json({ success: true, data: rows || [] });
 });
 
 // Upsert action enablement for spec actions (writes only).
@@ -808,6 +1217,38 @@ router.post('/actions', requirePermission('connectors.manage'), async (req, res)
   }
 
   return res.json({ success: true, data: { updated: parsed.data.items.length } });
+});
+
+router.post('/actions/seed-wave1', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const schema = z.object({
+    services: z.array(z.string().min(1)).max(20).optional(),
+  });
+  const parsed = schema.safeParse(req.body || {});
+  if (!parsed.success) return res.status(400).json({ success: false, error: 'Invalid payload' });
+
+  const serviceFilter = parsed.data.services?.length
+    ? new Set(parsed.data.services.map((service) => String(service).trim()).filter(Boolean))
+    : null;
+
+  const selectedSeeds = WAVE1_POLICY_DEFAULTS.filter((seed) => !serviceFilter || serviceFilter.has(seed.service));
+  if (selectedSeeds.length === 0) {
+    return res.status(400).json({ success: false, error: 'No Wave 1 policies matched the requested services' });
+  }
+
+  const updatedPolicies = await applyWave1Policies(rest, orgId, req.user?.id || null, serviceFilter ? Array.from(serviceFilter) : undefined);
+
+  return res.json({
+    success: true,
+    data: {
+      updated: updatedPolicies.length,
+      services: Array.from(new Set(updatedPolicies.map((row) => row.service))),
+      policies: updatedPolicies,
+    },
+  });
 });
 
 // OAuth init: returns provider authorization URL (JWT-authenticated; frontend then redirects).
@@ -1269,6 +1710,9 @@ router.get('/oauth/callback/:service', async (req, res) => {
     }
 
     await writeConnectionLog(rest, integration.id, 'connect', 'success', 'OAuth integration connected', { service, authType: 'oauth2' });
+    if (WAVE1_SERVICES.has(service)) {
+      await applyWave1Policies(rest, orgId, parsedState.userId || null, [service]);
+    }
 
     const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/integrations';
     const params = new URLSearchParams({ status: 'connected', service });
@@ -1390,8 +1834,11 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
     actor_user_id: req.user?.id || null,
     actor_email: req.user?.email || null,
   });
+  const guardrailsApplied = WAVE1_SERVICES.has(spec.id)
+    ? (await applyWave1Policies(rest, orgId, req.user?.id || null, [spec.id])).length
+    : 0;
 
-  return res.json({ success: true, message: 'Integration connected', data: { id: integration.id, service: spec.id, validated: true } });
+  return res.json({ success: true, message: 'Integration connected', data: { id: integration.id, service: spec.id, validated: true, guardrailsApplied } });
 });
 
 // Configure (store credentials without validation)
@@ -1452,8 +1899,11 @@ router.post('/:service/configure', requirePermission('connectors.manage'), async
     actor_user_id: req.user?.id || null,
     actor_email: req.user?.email || null,
   });
+  const guardrailsApplied = WAVE1_SERVICES.has(spec.id)
+    ? (await applyWave1Policies(rest, orgId, req.user?.id || null, [spec.id])).length
+    : 0;
 
-  return res.json({ success: true, message: 'Integration configured', data: { id: integration.id, service: spec.id } });
+  return res.json({ success: true, message: 'Integration configured', data: { id: integration.id, service: spec.id, guardrailsApplied } });
 });
 
 // Disconnect

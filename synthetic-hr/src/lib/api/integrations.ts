@@ -220,10 +220,24 @@ export const integrationsApi = {
     return authenticatedFetch('/integrations/actions', { method: 'GET' });
   },
 
+  async getExecutionHistory(service?: string, limit = 25): Promise<ApiResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (service) params.set('service', service);
+    params.set('limit', String(limit));
+    return authenticatedFetch(`/integrations/executions?${params.toString()}`, { method: 'GET' });
+  },
+
   async upsertActions(items: Array<{ service: string; action: string; enabled: boolean }>): Promise<ApiResponse<any>> {
     return authenticatedFetch('/integrations/actions', {
       method: 'POST',
       body: JSON.stringify({ items }),
+    });
+  },
+
+  async seedWave1Policies(services?: string[]): Promise<ApiResponse<any>> {
+    return authenticatedFetch('/integrations/actions/seed-wave1', {
+      method: 'POST',
+      body: JSON.stringify({ ...(services?.length ? { services } : {}) }),
     });
   },
 

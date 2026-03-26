@@ -160,6 +160,16 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function approvalProgress(job: AgentJob) {
+  const required = Math.max(1, Number(job.required_approvals || job.approval?.required_approvals || 1));
+  const recorded = Math.max(0, Number(job.approvals_recorded || job.approval?.approval_history?.filter((entry) => entry.decision === 'approved').length || 0));
+  return {
+    required,
+    recorded,
+    remaining: Math.max(0, required - recorded),
+  };
+}
+
 // ─── Comments panel ───────────────────────────────────────────────────────────
 
 function CommentsPanel({ jobId }: { jobId: string }) {
@@ -242,6 +252,7 @@ function JobDetail({
   const status = String(job.status || '');
   const isPending = status === 'pending_approval';
   const isConnector = job.type === 'connector_action';
+  const approvalState = approvalProgress(job);
 
   const download = (format: 'txt' | 'html' = 'html') => {
     const slug = `run-${job.id.slice(0, 8)}`;
@@ -382,6 +393,34 @@ function JobDetail({
             </div>
           )}
           {isPending && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="text-amber-200 font-medium">
+                  Approval progress: {approvalState.recorded} of {approvalState.required}
+                </span>
+                {approvalState.remaining > 0 && (
+                  <span className="text-slate-400">
+                    {approvalState.remaining} approval{approvalState.remaining === 1 ? '' : 's'} remaining
+                  </span>
+                )}
+              </div>
+              {job.awaiting_additional_approval && (
+                <p className="text-[11px] text-amber-300 mt-1">
+                  One reviewer has already approved this action. A separate approver is still required before execution.
+                </p>
+              )}
+              {Array.isArray(job.approval?.approval_history) && job.approval!.approval_history!.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {job.approval!.approval_history!.map((entry, idx) => (
+                    <div key={`${entry.reviewer_id}-${entry.decided_at}-${idx}`} className="text-[11px] text-slate-400">
+                      {entry.decision === 'approved' ? 'Approved' : 'Rejected'} by <span className="font-mono text-slate-300">{entry.reviewer_id}</span> at {formatDate(entry.decided_at)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {isPending && (
             <p className="text-xs text-amber-300">
               This action has side effects. Review carefully before approving.
             </p>
@@ -498,6 +537,11 @@ function JobListItem({
             {(job as any).batch_id ? ' · Batch' : ''}
             {(job as any).parent_job_id ? ' · Chained' : ''}
           </div>
+          {status === 'pending_approval' && (job.approvals_recorded || job.required_approvals) ? (
+            <div className="text-[11px] text-amber-300 mt-0.5">
+              {job.approvals_recorded || 0} of {job.required_approvals || 1} approvals
+            </div>
+          ) : null}
           <div className="text-[11px] text-slate-500 mt-0.5">{formatDate(job.created_at)}</div>
         </div>
       </div>
@@ -629,7 +673,11 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
     try {
       const res = await api.jobs.decide(jobId, decision) as any;
       if (!res.success) throw new Error(res.error || 'Decision failed');
-      toast.success(decision === 'approved' ? 'Approved' : 'Rejected');
+      if (decision === 'approved' && res.data?.awaiting_additional_approval) {
+        toast.success(`Recorded approval. ${res.data?.approvals_remaining ?? 0} still required.`);
+      } else {
+        toast.success(decision === 'approved' ? 'Approved' : 'Rejected');
+      }
       await loadHistory();
     } catch (err: any) {
       toast.error(err?.message || 'Decision failed');

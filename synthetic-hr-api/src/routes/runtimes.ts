@@ -8,6 +8,7 @@ import { generateOpaqueToken, hashToken, requireRuntimeAuth, signRuntimeJwt, typ
 import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { notifyJobCompletedAsync } from '../lib/notification-service';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
+import { evaluatePolicyConstraints } from '../lib/action-policy-constraints';
 
 const router = Router();
 
@@ -1257,6 +1258,15 @@ router.post('/actions/execute-external', requireRuntimeAuth(), async (req: Reque
         const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Action disabled by policy' });
         return res.status(403).json({ success: false, error: 'Action disabled by policy', action_run: run });
       }
+      const constraintEvaluation = evaluatePolicyConstraints(payload || {}, policy?.policy_constraints || {});
+      if (constraintEvaluation.blocked) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: { policy_reasons: constraintEvaluation.blockReasons }, error: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints' });
+        return res.status(403).json({ success: false, error: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints', action_run: run });
+      }
+      if (constraintEvaluation.approvalRequired && !job_id) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: { approval_reasons: constraintEvaluation.approvalReasons }, error: 'Action requires an approved job before runtime execution' });
+        return res.status(409).json({ success: false, error: 'Action requires an approved job before runtime execution', action_run: run });
+      }
     }
 
     // Look up credentials
@@ -1274,6 +1284,43 @@ router.post('/actions/execute-external', requireRuntimeAuth(), async (req: Reque
       output: result.output,
       error: result.error || null,
     });
+
+    try {
+      let approvalId: string | null = null;
+      let policySnapshot: Record<string, any> = {};
+      if (job_id) {
+        const approvalQ = new URLSearchParams();
+        approvalQ.set('job_id', eq(job_id));
+        approvalQ.set('select', 'id,policy_snapshot');
+        approvalQ.set('limit', '1');
+        const approvalRows = (await supabaseRestAsService('agent_job_approvals', approvalQ)) as Array<{ id: string; policy_snapshot: Record<string, any> }>;
+        approvalId = approvalRows?.[0]?.id || null;
+        policySnapshot = approvalRows?.[0]?.policy_snapshot || {};
+      }
+
+      await supabaseRestAsService('connector_action_executions', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          agent_id: agent_id || null,
+          integration_id: null,
+          connector_id: service,
+          action,
+          params: payload,
+          result: result.output || {},
+          success: result.ok,
+          error_message: result.error || null,
+          approval_required: Boolean(approvalId),
+          approval_id: approvalId,
+          requested_by: null,
+          policy_snapshot: policySnapshot,
+          before_state: {},
+          after_state: result.ok ? (result.output || {}) : {},
+          remediation: result.ok ? {} : { suggested: 'Review connector credentials, provider state, and approval policy' },
+          created_at: now,
+        },
+      });
+    } catch { /* non-critical */ }
 
     if (!result.ok) {
       return res.status(422).json({ success: false, error: result.error, action_run: run });

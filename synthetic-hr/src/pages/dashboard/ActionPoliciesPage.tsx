@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight } from 'lucide-react';
-import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule } from '../../lib/api-client';
+import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule, type ActionPolicyConstraints } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 
 type Editor = {
@@ -11,6 +11,16 @@ type Editor = {
   required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
   webhook_allowlist_text: string;
   routing_rules: RoutingRule[];
+  amount_field: string;
+  amount_threshold: string;
+  threshold_required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  entity_field: string;
+  allowed_entities_text: string;
+  business_hours_start: string;
+  business_hours_end: string;
+  business_hours_utc_offset: string;
+  emergency_disabled: boolean;
+  dual_approval: boolean;
   notes: string;
 };
 
@@ -80,6 +90,55 @@ function textToAllowlist(value: string): string[] {
     .map((v) => v.trim())
     .filter((v) => v.length > 0)
     .slice(0, 50);
+}
+
+function constraintsToEditor(constraints: ActionPolicyConstraints | null | undefined) {
+  return {
+    amount_field: constraints?.amount_field || '',
+    amount_threshold: constraints?.amount_threshold != null ? String(constraints.amount_threshold) : '',
+    threshold_required_role: constraints?.threshold_required_role || 'admin',
+    entity_field: constraints?.entity_field || '',
+    allowed_entities_text: Array.isArray(constraints?.allowed_entities) ? constraints!.allowed_entities!.join(', ') : '',
+    business_hours_start: constraints?.business_hours?.start || '',
+    business_hours_end: constraints?.business_hours?.end || '',
+    business_hours_utc_offset: constraints?.business_hours?.utc_offset || '+05:30',
+    emergency_disabled: Boolean(constraints?.emergency_disabled),
+    dual_approval: Boolean(constraints?.dual_approval),
+  };
+}
+
+function editorToConstraints(editor: Editor): ActionPolicyConstraints {
+  const amountThreshold = editor.amount_threshold.trim().length > 0 ? Number(editor.amount_threshold) : null;
+  const allowedEntities = textToAllowlist(editor.allowed_entities_text);
+  const hasBusinessHours = editor.business_hours_start.trim() && editor.business_hours_end.trim();
+
+  return {
+    amount_field: editor.amount_field.trim() || null,
+    amount_threshold: Number.isFinite(amountThreshold) ? amountThreshold : null,
+    threshold_required_role: editor.threshold_required_role || null,
+    entity_field: editor.entity_field.trim() || null,
+    allowed_entities: allowedEntities.length > 0 ? allowedEntities : null,
+    business_hours: hasBusinessHours
+      ? {
+          start: editor.business_hours_start.trim(),
+          end: editor.business_hours_end.trim(),
+          utc_offset: editor.business_hours_utc_offset.trim() || '+00:00',
+        }
+      : null,
+    emergency_disabled: editor.emergency_disabled || null,
+    dual_approval: editor.dual_approval || null,
+  };
+}
+
+function summarizeConstraints(constraints: ActionPolicyConstraints | null | undefined): string[] {
+  if (!constraints || typeof constraints !== 'object') return [];
+  const labels: string[] = [];
+  if (constraints.dual_approval) labels.push('Dual approval');
+  if (constraints.emergency_disabled) labels.push('Emergency stop');
+  if (constraints.amount_field && constraints.amount_threshold != null) labels.push(`Threshold on ${constraints.amount_field}`);
+  if (constraints.entity_field && Array.isArray(constraints.allowed_entities) && constraints.allowed_entities.length > 0) labels.push('Entity-scoped');
+  if (constraints.business_hours?.start && constraints.business_hours?.end) labels.push('Business hours');
+  return labels;
 }
 
 // ── Gateway Interceptors component ──────────────────────────────────────────
@@ -416,6 +475,16 @@ export default function ActionPoliciesPage() {
     required_role: 'manager',
     webhook_allowlist_text: '',
     routing_rules: [],
+    amount_field: '',
+    amount_threshold: '',
+    threshold_required_role: 'admin',
+    entity_field: '',
+    allowed_entities_text: '',
+    business_hours_start: '',
+    business_hours_end: '',
+    business_hours_utc_offset: '+05:30',
+    emergency_disabled: false,
+    dual_approval: false,
     notes: '',
   });
 
@@ -450,6 +519,7 @@ export default function ActionPoliciesPage() {
       required_role: selected.required_role || 'manager',
       webhook_allowlist_text: allowlistToText(selected.webhook_allowlist),
       routing_rules: Array.isArray(selected.routing_rules) ? selected.routing_rules : [],
+      ...constraintsToEditor(selected.policy_constraints),
       notes: selected.notes || '',
     });
   }, [selected]);
@@ -465,6 +535,7 @@ export default function ActionPoliciesPage() {
         required_role: editor.required_role,
         webhook_allowlist: editor.service === 'webhook' ? textToAllowlist(editor.webhook_allowlist_text) : [],
         routing_rules: editor.routing_rules.filter((r) => r.required_role),
+        policy_constraints: editorToConstraints(editor),
         notes: editor.notes.trim() || undefined,
       };
       const res = await api.actionPolicies.upsert(payload);
@@ -516,6 +587,16 @@ export default function ActionPoliciesPage() {
       required_role: t.required_role,
       webhook_allowlist_text: '',
       routing_rules: [],
+      amount_field: '',
+      amount_threshold: '',
+      threshold_required_role: 'admin',
+      entity_field: '',
+      allowed_entities_text: '',
+      business_hours_start: '',
+      business_hours_end: '',
+      business_hours_utc_offset: '+05:30',
+      emergency_disabled: false,
+      dual_approval: false,
       notes: t.notes,
     });
     setShowTemplates(false);
@@ -559,6 +640,16 @@ export default function ActionPoliciesPage() {
                   required_role: 'manager',
                   webhook_allowlist_text: '',
                   routing_rules: [],
+                  amount_field: '',
+                  amount_threshold: '',
+                  threshold_required_role: 'admin',
+                  entity_field: '',
+                  allowed_entities_text: '',
+                  business_hours_start: '',
+                  business_hours_end: '',
+                  business_hours_utc_offset: '+05:30',
+                  emergency_disabled: false,
+                  dual_approval: false,
                   notes: '',
                 });
               }}
@@ -584,6 +675,11 @@ export default function ActionPoliciesPage() {
                   <div className="text-xs text-slate-400 mt-1">
                     {r.enabled ? 'Enabled' : 'Disabled'} · role ≥ {r.required_role} · {r.require_approval ? 'Approval required' : 'Auto-approve'}
                   </div>
+                  {summarizeConstraints(r.policy_constraints).length > 0 ? (
+                    <div className="text-[11px] text-cyan-300 mt-1">
+                      {summarizeConstraints(r.policy_constraints).join(' · ')}
+                    </div>
+                  ) : null}
                 </button>
               );
             })}
@@ -789,6 +885,122 @@ export default function ActionPoliciesPage() {
                 ) : null}
               </div>
             ) : null}
+
+            <div className="md:col-span-2 rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-4">
+              <div>
+                <label className="text-xs text-slate-400">Governance constraints</label>
+                <p className="text-xs text-slate-500 mt-1">Optional guardrails for thresholds, business hours, entity scope, emergency shutdown, and dual approval.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400">Amount field</label>
+                  <input
+                    value={editor.amount_field}
+                    onChange={(e) => setEditor((p) => ({ ...p, amount_field: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="amount or payment.amount"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">Approval threshold</label>
+                  <input
+                    type="number"
+                    value={editor.amount_threshold}
+                    onChange={(e) => setEditor((p) => ({ ...p, amount_threshold: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="5000"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">Threshold role</label>
+                  <select
+                    value={editor.threshold_required_role}
+                    onChange={(e) => setEditor((p) => ({ ...p, threshold_required_role: e.target.value as Editor['threshold_required_role'] }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                  >
+                    <option value="viewer">viewer</option>
+                    <option value="manager">manager</option>
+                    <option value="admin">admin</option>
+                    <option value="super_admin">super_admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">Entity field</label>
+                  <input
+                    value={editor.entity_field}
+                    onChange={(e) => setEditor((p) => ({ ...p, entity_field: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="merchant_id or user.id"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-slate-400">Allowed entities</label>
+                  <input
+                    value={editor.allowed_entities_text}
+                    onChange={(e) => setEditor((p) => ({ ...p, allowed_entities_text: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="merchant_live_india, merchant_test_ops"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Comma-separated values matched against the entity field above.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400">Business hours start</label>
+                  <input
+                    value={editor.business_hours_start}
+                    onChange={(e) => setEditor((p) => ({ ...p, business_hours_start: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="09:00"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">Business hours end</label>
+                  <input
+                    value={editor.business_hours_end}
+                    onChange={(e) => setEditor((p) => ({ ...p, business_hours_end: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="18:00"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">UTC offset</label>
+                  <input
+                    value={editor.business_hours_utc_offset}
+                    onChange={(e) => setEditor((p) => ({ ...p, business_hours_utc_offset: e.target.value }))}
+                    className="mt-1 w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm"
+                    placeholder="+05:30"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={editor.dual_approval}
+                    onChange={(e) => setEditor((p) => ({ ...p, dual_approval: e.target.checked }))}
+                  />
+                  <div>
+                    <div className="text-sm text-slate-200">Require dual approval</div>
+                    <div className="text-xs text-slate-500">Two distinct approvers must clear this action.</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={editor.emergency_disabled}
+                    onChange={(e) => setEditor((p) => ({ ...p, emergency_disabled: e.target.checked }))}
+                  />
+                  <div>
+                    <div className="text-sm text-slate-200">Emergency disable</div>
+                    <div className="text-xs text-slate-500">Blocks this action immediately at execution time.</div>
+                  </div>
+                </label>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end">
@@ -885,4 +1097,3 @@ export default function ActionPoliciesPage() {
     </div>
   );
 }
-

@@ -66,6 +66,17 @@ type UnifiedConnector = {
   setupTimeMinutes?: number;
   developer?: string;
   featured?: boolean;
+  trustTier?: 'observe-only' | 'controlled-write' | 'high-trust-operational';
+  maturity?: 'connected' | 'read-ready' | 'action-ready' | 'governed';
+  governanceSummary?: {
+    readCount: number;
+    actionCount: number;
+    enabledActionCount: number;
+  };
+  wave?: number | null;
+  wave1GuardrailsStatus?: 'not_applicable' | 'missing' | 'partial' | 'applied';
+  wave1GuardrailsApplied?: number;
+  wave1GuardrailsTotal?: number;
   appData?: MarketplaceApp;
   integrationData?: any;
 };
@@ -75,6 +86,25 @@ type ConnectionLog = {
   action: string;
   status: string;
   message: string | null;
+  created_at: string;
+};
+
+type ConnectorExecution = {
+  id: string;
+  connector_id: string;
+  action: string;
+  success: boolean;
+  error_message: string | null;
+  duration_ms: number | null;
+  approval_required: boolean;
+  approval_id: string | null;
+  params?: Record<string, any> | null;
+  result?: Record<string, any> | null;
+  requested_by?: string | null;
+  policy_snapshot?: Record<string, any> | null;
+  before_state?: Record<string, any> | null;
+  after_state?: Record<string, any> | null;
+  remediation?: Record<string, any> | null;
   created_at: string;
 };
 
@@ -166,6 +196,17 @@ function fromApp(app: MarketplaceApp): UnifiedConnector {
     authType: app.installMethod, requiredFields: app.requiredFields,
     permissions: app.permissions, actionsUnlocked: app.actionsUnlocked,
     setupTimeMinutes: app.setupTimeMinutes, developer: app.developer,
+    trustTier: app.category === 'finance' || app.category === 'it' || app.category === 'compliance'
+      ? 'high-trust-operational'
+      : app.actionsUnlocked?.length
+        ? 'controlled-write'
+        : 'observe-only',
+    maturity: app.installed ? (app.actionsUnlocked?.length ? 'action-ready' : 'read-ready') : 'connected',
+    governanceSummary: {
+      readCount: app.permissions?.length || 0,
+      actionCount: app.actionsUnlocked?.length || 0,
+      enabledActionCount: app.actionsUnlocked?.length || 0,
+    },
     featured: app.featured, appData: app,
   };
 }
@@ -190,6 +231,13 @@ function fromIntegration(row: any): UnifiedConnector {
     requiredFields: row.requiredFields,
     permissions: row.capabilities?.reads?.map((r: string) => `Read: ${r}`) || [],
     actionsUnlocked: row.capabilities?.writes?.map((w: any) => w.label) || [],
+    trustTier: row.trustTier || 'observe-only',
+    maturity: row.maturity || 'connected',
+    governanceSummary: row.governanceSummary,
+    wave: row.wave,
+    wave1GuardrailsStatus: row.wave1GuardrailsStatus,
+    wave1GuardrailsApplied: row.wave1GuardrailsApplied,
+    wave1GuardrailsTotal: row.wave1GuardrailsTotal,
     integrationData: row,
   };
 }
@@ -197,6 +245,298 @@ function fromIntegration(row: any): UnifiedConnector {
 function fmtDate(v?: string | null) {
   if (!v) return '—';
   return new Date(v).toLocaleString();
+}
+
+function trustTierTone(tier?: UnifiedConnector['trustTier']) {
+  if (tier === 'high-trust-operational') return 'border-rose-400/25 bg-rose-500/10 text-rose-200';
+  if (tier === 'controlled-write') return 'border-amber-400/25 bg-amber-500/10 text-amber-200';
+  return 'border-white/10 bg-white/5 text-slate-300';
+}
+
+function maturityTone(maturity?: UnifiedConnector['maturity']) {
+  if (maturity === 'governed') return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200';
+  if (maturity === 'action-ready') return 'border-blue-400/25 bg-blue-500/10 text-blue-200';
+  if (maturity === 'read-ready') return 'border-violet-400/25 bg-violet-500/10 text-violet-200';
+  return 'border-white/10 bg-white/5 text-slate-300';
+}
+
+function guardrailTone(status?: UnifiedConnector['wave1GuardrailsStatus']) {
+  if (status === 'applied') return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200';
+  if (status === 'partial') return 'border-amber-400/25 bg-amber-500/10 text-amber-200';
+  if (status === 'missing') return 'border-rose-400/25 bg-rose-500/10 text-rose-200';
+  return 'border-white/10 bg-white/5 text-slate-300';
+}
+
+function financeConnectorMode(connectorId?: string | null): 'razorpay' | 'paytm' | null {
+  const value = String(connectorId || '').toLowerCase();
+  if (value.includes('razorpay')) return 'razorpay';
+  if (value.includes('paytm')) return 'paytm';
+  return null;
+}
+
+function isTallyConnector(connectorId?: string | null) {
+  return String(connectorId || '').toLowerCase().includes('tally');
+}
+
+function isClearTaxConnector(connectorId?: string | null) {
+  return String(connectorId || '').toLowerCase().includes('cleartax');
+}
+
+function isNaukriConnector(connectorId?: string | null) {
+  return String(connectorId || '').toLowerCase().includes('naukri');
+}
+
+function isSlackRail(connectorId?: string | null) {
+  return String(connectorId || '').toLowerCase().includes('slack');
+}
+
+function financeActionGuidance(mode: 'razorpay' | 'paytm', action: string) {
+  if (mode === 'razorpay') {
+    if (action === 'finance.refund.create') return 'Use for customer refunds after checking payment state, refund reason, and approval threshold.';
+    if (action === 'finance.settlement.check') return 'Use during reconciliation when finance needs to trace settlement lag, status, or mismatch.';
+    if (action === 'finance.payment.list') return 'Use for payment investigation, refund eligibility review, and exception triage.';
+  }
+  if (mode === 'paytm') {
+    if (action === 'finance.refund.create') return 'Use for controlled refund initiation with amount thresholds and reviewer rationale.';
+    if (action === 'finance.payout.initiate') return 'Use only for approved disbursements; beneficiary and amount should be reviewed before release.';
+    if (action === 'finance.payment.status') return 'Use to verify customer payment state before issuing refunds or escalating payment incidents.';
+  }
+  return null;
+}
+
+function financeExecutionSummary(mode: 'razorpay' | 'paytm', execution: ConnectorExecution) {
+  const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
+  const beforeState = execution.before_state && typeof execution.before_state === 'object' ? execution.before_state : {};
+  const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
+  const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
+
+  if (mode === 'razorpay') {
+    if (execution.action === 'finance.refund.create') {
+      const amount = (afterState as any).amount ?? (result as any).amount ?? (params as any).amount ?? null;
+      const paymentId = (beforeState as any).payment_id ?? (result as any).payment_id ?? (params as any).payment_id ?? null;
+      return {
+        title: 'Refund trail',
+        lines: [
+          paymentId ? `Payment: ${paymentId}` : null,
+          amount != null ? `Refund amount: ${amount}` : null,
+          execution.approval_required ? 'Approval-gated finance action' : 'Direct finance action',
+        ].filter(Boolean),
+      };
+    }
+    if (execution.action === 'finance.settlement.check') {
+      const settlementId = (result as any).id ?? (params as any).settlement_id ?? null;
+      const status = (result as any).status ?? (afterState as any).status ?? null;
+      return {
+        title: 'Settlement context',
+        lines: [
+          settlementId ? `Settlement: ${settlementId}` : null,
+          status ? `Status: ${status}` : null,
+          'Use this when closing reconciliation exceptions.',
+        ].filter(Boolean),
+      };
+    }
+  }
+
+  if (mode === 'paytm') {
+    if (execution.action === 'finance.payout.initiate') {
+      const beneficiaryId = (params as any).beneficiary_id ?? (afterState as any).beneficiary_id ?? null;
+      const amount = (afterState as any).amount ?? (result as any).amount ?? (params as any).amount ?? null;
+      return {
+        title: 'Payout release',
+        lines: [
+          beneficiaryId ? `Beneficiary: ${beneficiaryId}` : null,
+          amount != null ? `Amount: ${amount}` : null,
+          execution.approval_required ? 'Dual-approval candidate' : 'Payout executed without extra approval',
+        ].filter(Boolean),
+      };
+    }
+    if (execution.action === 'finance.refund.create') {
+      const paymentId = (params as any).payment_id ?? (afterState as any).payment_id ?? null;
+      const amount = (afterState as any).amount ?? (result as any).amount ?? (params as any).amount ?? null;
+      return {
+        title: 'Refund request',
+        lines: [
+          paymentId ? `Payment: ${paymentId}` : null,
+          amount != null ? `Amount: ${amount}` : null,
+          'Cross-check against customer communication before release.',
+        ].filter(Boolean),
+      };
+    }
+  }
+
+  return null;
+}
+
+function tallyActionGuidance(action: string) {
+  if (action === 'finance.ledger.read') return 'Use for fast ledger review before reconciliation, posting checks, or exception handling.';
+  if (action === 'finance.voucher.reconcile') return 'Use when finance needs a governed reconciliation step with evidence of mismatches and reviewer notes.';
+  if (action === 'finance.voucher.post') return 'Use only after journal details, amounts, and approval path are confirmed.';
+  return null;
+}
+
+function tallyExecutionSummary(execution: ConnectorExecution) {
+  const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
+  const beforeState = execution.before_state && typeof execution.before_state === 'object' ? execution.before_state : {};
+  const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
+  const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
+
+  if (execution.action === 'finance.voucher.post') {
+    return {
+      title: 'Voucher posting evidence',
+      lines: [
+        (params as any).voucher_number ? `Voucher: ${(params as any).voucher_number}` : null,
+        (afterState as any).status ?? (result as any).status ? `Status: ${String((afterState as any).status ?? (result as any).status)}` : null,
+        execution.approval_required ? 'Approval-gated accounting write' : 'Direct accounting write',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'finance.voucher.reconcile') {
+    const mismatchCount = (afterState as any).mismatch_count ?? (result as any).mismatch_count ?? null;
+    return {
+      title: 'Reconciliation context',
+      lines: [
+        mismatchCount != null ? `Mismatches: ${mismatchCount}` : null,
+        Object.keys(beforeState).length > 0 ? 'Before-state captured for reconciliation review' : null,
+        'Use this to close voucher exceptions with evidence.',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'finance.ledger.read') {
+    return {
+      title: 'Ledger review',
+      lines: [
+        Object.keys(result).length > 0 ? 'Ledger snapshot returned for finance review' : null,
+        'Useful as the first step before posting or reconciliation changes.',
+      ].filter(Boolean),
+    };
+  }
+  return null;
+}
+
+function clearTaxActionGuidance(action: string) {
+  if (action === 'compliance.status.check') return 'Use to assess current compliance posture before approving filings or remediation.';
+  if (action === 'compliance.notice.read') return 'Use for regulated notice review with a clear audit trail of who accessed the notice.';
+  if (action === 'compliance.tds.calculate') return 'Use to calculate TDS before filing or reconciliation; preserve inputs and generated summary.';
+  if (action === 'compliance.gst.file') return 'Use only after filing data, approval chain, and evidence export requirements are complete.';
+  return null;
+}
+
+function clearTaxExecutionSummary(execution: ConnectorExecution) {
+  const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
+  const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
+  const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
+
+  if (execution.action === 'compliance.gst.file') {
+    return {
+      title: 'GST filing evidence',
+      lines: [
+        (result as any).filing_id ?? (afterState as any).filing_id ? `Filing: ${String((result as any).filing_id ?? (afterState as any).filing_id)}` : null,
+        (result as any).status ?? (afterState as any).status ? `Status: ${String((result as any).status ?? (afterState as any).status)}` : null,
+        execution.approval_required ? 'Compliance filing required approval' : 'Compliance filing executed directly',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'compliance.tds.calculate') {
+    return {
+      title: 'TDS calculation record',
+      lines: [
+        Object.keys(params).length > 0 ? 'Calculation inputs captured for review' : null,
+        Object.keys(result).length > 0 ? 'Result available for audit and finance follow-up' : null,
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'compliance.notice.read') {
+    return {
+      title: 'Notice review',
+      lines: [
+        Object.keys(result).length > 0 ? 'Notice metadata captured for investigation' : null,
+        'Use this when triaging regulatory or tax notices.',
+      ].filter(Boolean),
+    };
+  }
+  return null;
+}
+
+function naukriActionGuidance(action: string) {
+  if (action === 'recruitment.candidate.search') return 'Use to build a governed shortlist with query context and recruiter review before outreach.';
+  if (action === 'recruitment.candidate.profile.read') return 'Use when recruiters need candidate context with a clear audit trail of profile access.';
+  if (action === 'recruitment.resume.parse') return 'Use to structure resume evidence before shortlist decisions or human screening.';
+  if (action === 'recruitment.job.publish') return 'Use only after role details, posting approval, and target audience are confirmed.';
+  return null;
+}
+
+function naukriExecutionSummary(execution: ConnectorExecution) {
+  const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
+  const beforeState = execution.before_state && typeof execution.before_state === 'object' ? execution.before_state : {};
+  const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
+  const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
+
+  if (execution.action === 'recruitment.job.publish') {
+    return {
+      title: 'Job publishing trail',
+      lines: [
+        (params as any).job_title ?? (afterState as any).job_title ? `Role: ${String((params as any).job_title ?? (afterState as any).job_title)}` : null,
+        (result as any).job_id ?? (afterState as any).job_id ? `Job ID: ${String((result as any).job_id ?? (afterState as any).job_id)}` : null,
+        execution.approval_required ? 'Publishing required recruiter approval' : 'Role posted without extra approval',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'recruitment.candidate.search') {
+    const total = (result as any).count ?? (afterState as any).count ?? null;
+    return {
+      title: 'Candidate shortlist search',
+      lines: [
+        Object.keys(params).length > 0 ? 'Search query captured for recruiter review' : null,
+        total != null ? `Profiles returned: ${total}` : null,
+        'Use this to explain why candidates entered a shortlist.',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'recruitment.resume.parse') {
+    return {
+      title: 'Resume parsing evidence',
+      lines: [
+        Object.keys(beforeState).length > 0 ? 'Original resume context preserved' : null,
+        Object.keys(result).length > 0 ? 'Structured candidate summary captured' : null,
+      ].filter(Boolean),
+    };
+  }
+  return null;
+}
+
+function slackActionGuidance(action: string) {
+  if (action === 'communication.channel.read') return 'Use for channel context and incident review before posting or escalating messages.';
+  if (action === 'communication.message.send') return 'Use for governed outbound communication with message preview, business-hours policy, and approval routing when needed.';
+  if (action === 'communication.message.reply') return 'Use when responding into an existing thread so the response trail stays reviewable and attributable.';
+  if (action === 'communication.user.lookup') return 'Use to verify recipient identity before sending sensitive or operational messages.';
+  return null;
+}
+
+function slackExecutionSummary(execution: ConnectorExecution) {
+  const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
+  const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
+  const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
+
+  if (execution.action === 'communication.message.send' || execution.action === 'communication.message.reply') {
+    return {
+      title: execution.action === 'communication.message.reply' ? 'Thread reply trail' : 'Outbound message trail',
+      lines: [
+        (params as any).channel ?? (afterState as any).channel ? `Channel: ${String((params as any).channel ?? (afterState as any).channel)}` : null,
+        (result as any).ts ?? (afterState as any).ts ? `Message ref: ${String((result as any).ts ?? (afterState as any).ts)}` : null,
+        execution.approval_required ? 'Communication was approval-gated' : 'Message sent without extra approval',
+      ].filter(Boolean),
+    };
+  }
+  if (execution.action === 'communication.channel.read') {
+    return {
+      title: 'Channel context review',
+      lines: [
+        Object.keys(result).length > 0 ? 'Channel snapshot returned for operator review' : null,
+        'Use this before outbound messaging when context matters.',
+      ].filter(Boolean),
+    };
+  }
+  return null;
 }
 
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
@@ -557,13 +897,16 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   onConfigure: (c: UnifiedConnector) => void;
   onDisconnect: (c: UnifiedConnector) => void;
 }) {
-  type Tab = 'overview' | 'agents' | 'logs' | 'actions' | 'slack';
+  type Tab = 'overview' | 'agents' | 'history' | 'actions' | 'slack';
   const isSlack = connector.source === 'integration' && connector.integrationData?.id?.toLowerCase().includes('slack');
   const [tab, setTab] = useState<Tab>('overview');
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [executions, setExecutions] = useState<ConnectorExecution[]>([]);
+  const [executionsLoading, setExecutionsLoading] = useState(false);
   const [catalog, setCatalog] = useState<any[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [seedingPolicies, setSeedingPolicies] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -581,6 +924,12 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   const rawConnectorId = connector.source === 'marketplace'
     ? connector.appData?.id
     : connector.integrationData?.id;
+  const isWave1Connector = connector.source === 'integration' && connector.wave === 1;
+  const financeMode = financeConnectorMode(rawConnectorId);
+  const isTally = isTallyConnector(rawConnectorId);
+  const isClearTax = isClearTaxConnector(rawConnectorId);
+  const isNaukri = isNaukriConnector(rawConnectorId);
+  const isSlackConnector = isSlackRail(rawConnectorId);
 
   const agentNames = useMemo(() => {
     if (connector.source === 'marketplace' && connector.appData) {
@@ -601,6 +950,14 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
     if (res.success) setLogs((res.data as ConnectionLog[]) || []);
     setLogsLoading(false);
   }, [connector]);
+
+  const loadExecutions = useCallback(async () => {
+    if (!rawConnectorId) return;
+    setExecutionsLoading(true);
+    const res = await api.integrations.getExecutionHistory(rawConnectorId, 12);
+    if (res.success) setExecutions((res.data as ConnectorExecution[]) || []);
+    setExecutionsLoading(false);
+  }, [rawConnectorId]);
 
   const toActionLabel = (name: string) =>
     name.split('__').pop()!.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -637,9 +994,12 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   }, [connector, rawConnectorId]);
 
   useEffect(() => {
-    if (tab === 'logs') void loadLogs();
+    if (tab === 'history') {
+      void loadLogs();
+      void loadExecutions();
+    }
     if (tab === 'actions') void loadCatalog();
-  }, [tab, loadLogs, loadCatalog]);
+  }, [tab, loadLogs, loadCatalog, loadExecutions]);
 
   const testConnection = async () => {
     setTesting(true); setTestResult(null);
@@ -662,6 +1022,19 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
     const res = await api.integrations.upsertActions([{ service: item.service || connector.integrationData?.id, action: item.action, enabled: !item.enabled }]);
     if (res.success) setCatalog((p) => p.map((a) => a.action === item.action ? { ...a, enabled: !a.enabled } : a));
     else toast.error('Failed to update action');
+  };
+
+  const seedWave1Policies = async () => {
+    if (!rawConnectorId) return;
+    setSeedingPolicies(true);
+    const res = await api.integrations.seedWave1Policies([rawConnectorId]);
+    if (res.success) {
+      toast.success('Recommended Wave 1 guardrails applied');
+      await loadCatalog();
+    } else {
+      toast.error((res as any).error || 'Failed to apply recommended guardrails');
+    }
+    setSeedingPolicies(false);
   };
 
   const handleDisconnect = async () => {
@@ -688,7 +1061,7 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   const TABS: Array<{ id: Tab; label: string }> = [
     { id: 'overview', label: 'Overview' },
     ...(connector.connected ? [{ id: 'agents' as Tab, label: `Agents (${linkedAgentIds.size})` }] : []),
-    ...(connector.source === 'integration' && connector.connected ? [{ id: 'logs' as Tab, label: 'Logs' }] : []),
+    ...(connector.connected ? [{ id: 'history' as Tab, label: 'Execution History' }] : []),
     ...(rawConnectorId ? [{ id: 'actions' as Tab, label: 'Actions' }] : []),
     ...(isSlack && connector.connected ? [{ id: 'slack' as Tab, label: 'Slack Inbox' }] : []),
   ];
@@ -775,6 +1148,186 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
           {tab === 'overview' && (
             <>
               {connector.description && <p className="text-sm text-slate-300 leading-relaxed">{connector.description}</p>}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Trust tier</p>
+                  <span className={cn('inline-flex text-[10px] px-2 py-1 rounded-md border font-medium', trustTierTone(connector.trustTier))}>
+                    {connector.trustTier || 'observe-only'}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Operational maturity</p>
+                  <span className={cn('inline-flex text-[10px] px-2 py-1 rounded-md border font-medium', maturityTone(connector.maturity))}>
+                    {connector.maturity || 'connected'}
+                  </span>
+                </div>
+                {connector.governanceSummary && (
+                  <>
+                    <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                      <p className="text-[10px] text-slate-500 mb-0.5">Capabilities</p>
+                      <p className="text-xs text-slate-200 font-medium">
+                        {connector.governanceSummary.readCount} reads · {connector.governanceSummary.actionCount} actions
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                      <p className="text-[10px] text-slate-500 mb-0.5">Governed actions</p>
+                      <p className="text-xs text-slate-200 font-medium">
+                        {connector.governanceSummary.enabledActionCount}/{connector.governanceSummary.actionCount} enabled
+                      </p>
+                    </div>
+                  </>
+                )}
+                {isWave1Connector && (
+                  <div className="col-span-2 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                    <p className="text-[10px] text-slate-500 mb-1">Wave 1 guardrails</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={cn('inline-flex text-[10px] px-2 py-1 rounded-md border font-medium', guardrailTone(connector.wave1GuardrailsStatus))}>
+                        {connector.wave1GuardrailsStatus || 'missing'}
+                      </span>
+                      <span className="text-xs text-slate-300">
+                        {connector.wave1GuardrailsApplied || 0}/{connector.wave1GuardrailsTotal || 0} policies applied
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {financeMode && (
+                <div className="rounded-xl border border-rose-400/15 bg-rose-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <HandCoins className="w-4 h-4 text-rose-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        {financeMode === 'razorpay' ? 'Refund and settlement control' : 'Refund and payout control'}
+                      </p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        {financeMode === 'razorpay'
+                          ? 'Use this connector as the governed surface for payment investigation, customer refunds, and settlement checks.'
+                          : 'Use this connector as the governed surface for payment verification, refunds, and approval-gated disbursements.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {(financeMode === 'razorpay'
+                      ? [
+                          'Start with payment review, then move to refund initiation only after reason and amount are confirmed.',
+                          'Use settlement checks when finance needs evidence for reconciliation or delayed settlement cases.',
+                          'Refunds should include customer-facing reason, payment reference, and approver trail.',
+                        ]
+                      : [
+                          'Verify payment state before issuing refunds or escalating failed collection issues.',
+                          'Treat payouts as release actions: beneficiary, amount, and business context should all be reviewed.',
+                          'Use payout approvals to separate finance verification from final release authority.',
+                        ]
+                    ).map((line) => (
+                      <div key={line} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-[11px] text-slate-300">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isTally && (
+                <div className="rounded-xl border border-blue-400/15 bg-blue-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <HandCoins className="w-4 h-4 text-blue-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Accounting and reconciliation control</p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Use Tally as the governed rail for ledger review, voucher reconciliation, and approval-gated accounting writes.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      'Review ledger context before modifying accounting records.',
+                      'Use voucher reconciliation to surface mismatches with evidence, not just status changes.',
+                      'Voucher posting should preserve before/after state and reviewer intent for audit.',
+                    ].map((line) => (
+                      <div key={line} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-[11px] text-slate-300">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isClearTax && (
+                <div className="rounded-xl border border-sky-400/15 bg-sky-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Gavel className="w-4 h-4 text-sky-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Compliance filing and notice control</p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Use ClearTax as the governed rail for compliance posture review, TDS calculations, and approval-gated GST filings.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      'Check compliance posture and notices before taking filing actions.',
+                      'Use TDS calculations as evidence-backed preparation, not as a hidden intermediate step.',
+                      'Treat GST filing as an exportable evidence event with approval chain and remediation path.',
+                    ].map((line) => (
+                      <div key={line} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-[11px] text-slate-300">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isNaukri && (
+                <div className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <BriefcaseBusiness className="w-4 h-4 text-fuchsia-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Recruiting search and publishing control</p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Use Naukri as the governed rail for candidate search, resume evidence, shortlist review, and approval-gated job publishing.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      'Capture recruiter query context before shortlisting candidates.',
+                      'Treat resume parsing as evidence generation for human screening, not as an autonomous decision step.',
+                      'Gate job publishing behind approval so role details and audience are deliberate.',
+                    ].map((line) => (
+                      <div key={line} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-[11px] text-slate-300">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isSlackConnector && (
+                <div className="rounded-xl border border-cyan-400/15 bg-cyan-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <MessageSquare className="w-4 h-4 text-cyan-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Communication and escalation control</p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Use Slack as the governed rail for channel review, outbound messages, and approval-aware replies into operational threads.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      'Review channel context before posting high-stakes or customer-facing messages.',
+                      'Use approval and business-hours policies to control outbound communication.',
+                      'Keep reply trails attributable so operators can explain what was sent, where, and why.',
+                    ].map((line) => (
+                      <div key={line} className="rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-[11px] text-slate-300">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Agents using this */}
               {agentNames.length > 0 && (
@@ -873,7 +1426,7 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
               {/* Governance note */}
               <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 flex items-start gap-3">
                 <Shield className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
-                <p className="text-xs text-slate-400">All actions governed by <strong className="text-slate-300">Action Policies</strong> with incident detection + audit logging.</p>
+                <p className="text-xs text-slate-400">This connector is exposed as a governed operational rail. Actions can be blocked, approval-gated, audited, and investigated from SyntheticHR.</p>
               </div>
 
               {/* Danger zone */}
@@ -952,19 +1505,185 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
             </div>
           )}
 
-          {/* ── LOGS TAB ── */}
-          {tab === 'logs' && (
+          {/* ── HISTORY TAB ── */}
+          {tab === 'history' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-slate-400">Last 20 connection events</p>
-                <button onClick={() => void loadLogs()} className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+                <p className="text-xs text-slate-400">Recent governed activity and connection events</p>
+                <button onClick={() => { void loadLogs(); void loadExecutions(); }} className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
               </div>
-              {logsLoading ? (
+              {financeMode && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Finance evidence checklist</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] text-slate-300">
+                    <p>Capture the payment or beneficiary reference for every money-moving action.</p>
+                    <p>Record reviewer intent before approval when thresholds or dual approval apply.</p>
+                    <p>Use before/after state and remediation notes to close reconciliation gaps.</p>
+                  </div>
+                </div>
+              )}
+              {isTally && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Accounting evidence checklist</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] text-slate-300">
+                    <p>Capture voucher identifiers, mismatch counts, and ledger snapshots for each accounting workflow.</p>
+                    <p>Use before/after state to explain exactly what changed in a posting or reconciliation step.</p>
+                    <p>Document remediation when finance has to correct a mismatch or replay a posting.</p>
+                  </div>
+                </div>
+              )}
+              {isClearTax && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Compliance evidence checklist</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] text-slate-300">
+                    <p>Capture filing identifiers, notice context, and approval rationale for every regulated action.</p>
+                    <p>Persist TDS inputs and outputs so calculations can be reviewed after the fact.</p>
+                    <p>Use remediation notes to track missed deadlines, rejected submissions, or notice follow-up.</p>
+                  </div>
+                </div>
+              )}
+              {isNaukri && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recruiting evidence checklist</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] text-slate-300">
+                    <p>Capture search criteria, candidate identifiers, and reviewer rationale for shortlist actions.</p>
+                    <p>Preserve resume parsing output so recruiting teams can explain why a profile was advanced.</p>
+                    <p>Use publishing evidence and remediation notes when job postings need correction or rollback.</p>
+                  </div>
+                </div>
+              )}
+              {isSlackConnector && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Communication evidence checklist</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] text-slate-300">
+                    <p>Capture destination channel, message intent, and any approval rationale for outbound messages.</p>
+                    <p>Preserve thread references so replies can be traced back to the triggering conversation.</p>
+                    <p>Use remediation notes when a message is blocked, revised, or requires follow-up communication.</p>
+                  </div>
+                </div>
+              )}
+              {executionsLoading ? (
                 <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 text-slate-500 animate-spin" /></div>
+              ) : executions.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-4">No governed actions recorded yet.</p>
               ) : logs.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No logs yet.</p>
-              ) : (
-                logs.map((log) => (
+                <p className="text-xs text-slate-500 text-center py-4">No connection events yet.</p>
+              ) : null}
+              {executions.map((execution) => (
+                <div key={execution.id} className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium',
+                      execution.success ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+                    )}>{execution.success ? 'success' : 'failed'}</span>
+                    {execution.approval_required && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-amber-400/20 bg-amber-400/10 text-amber-100 font-medium">
+                        approval gated
+                      </span>
+                    )}
+                    <p className="text-xs text-slate-300 flex-1 truncate">{execution.action}</p>
+                    <p className="text-[10px] text-slate-600 shrink-0">{fmtDate(execution.created_at)}</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {execution.duration_ms ? `${execution.duration_ms} ms` : 'Duration unavailable'}
+                    {execution.error_message ? ` · ${execution.error_message}` : ''}
+                  </p>
+                  {financeMode && financeExecutionSummary(financeMode, execution) && (
+                    <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {financeExecutionSummary(financeMode, execution)!.title}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {financeExecutionSummary(financeMode, execution)!.lines.map((line) => (
+                          <p key={line} className="text-[11px] text-slate-300">{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isTally && tallyExecutionSummary(execution) && (
+                    <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {tallyExecutionSummary(execution)!.title}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {tallyExecutionSummary(execution)!.lines.map((line) => (
+                          <p key={line} className="text-[11px] text-slate-300">{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isClearTax && clearTaxExecutionSummary(execution) && (
+                    <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {clearTaxExecutionSummary(execution)!.title}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {clearTaxExecutionSummary(execution)!.lines.map((line) => (
+                          <p key={line} className="text-[11px] text-slate-300">{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isNaukri && naukriExecutionSummary(execution) && (
+                    <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {naukriExecutionSummary(execution)!.title}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {naukriExecutionSummary(execution)!.lines.map((line) => (
+                          <p key={line} className="text-[11px] text-slate-300">{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isSlackConnector && slackExecutionSummary(execution) && (
+                    <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {slackExecutionSummary(execution)!.title}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {slackExecutionSummary(execution)!.lines.map((line) => (
+                          <p key={line} className="text-[11px] text-slate-300">{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(execution.requested_by || execution.policy_snapshot || execution.before_state || execution.after_state || execution.remediation) && (
+                    <div className="mt-2 space-y-2 border-t border-white/[0.06] pt-2">
+                      {execution.requested_by && (
+                        <p className="text-[11px] text-slate-500">Requested by <span className="font-mono text-slate-300">{execution.requested_by}</span></p>
+                      )}
+                      {execution.policy_snapshot && Object.keys(execution.policy_snapshot).length > 0 && (
+                        <details className="text-[11px] text-slate-500">
+                          <summary className="cursor-pointer text-slate-400">Policy snapshot</summary>
+                          <pre className="mt-1 overflow-x-auto rounded-lg bg-black/20 p-2 text-[10px] text-slate-300">{JSON.stringify(execution.policy_snapshot, null, 2)}</pre>
+                        </details>
+                      )}
+                      {execution.before_state && Object.keys(execution.before_state).length > 0 && (
+                        <details className="text-[11px] text-slate-500">
+                          <summary className="cursor-pointer text-slate-400">Before state</summary>
+                          <pre className="mt-1 overflow-x-auto rounded-lg bg-black/20 p-2 text-[10px] text-slate-300">{JSON.stringify(execution.before_state, null, 2)}</pre>
+                        </details>
+                      )}
+                      {execution.after_state && Object.keys(execution.after_state).length > 0 && (
+                        <details className="text-[11px] text-slate-500">
+                          <summary className="cursor-pointer text-slate-400">After state</summary>
+                          <pre className="mt-1 overflow-x-auto rounded-lg bg-black/20 p-2 text-[10px] text-slate-300">{JSON.stringify(execution.after_state, null, 2)}</pre>
+                        </details>
+                      )}
+                      {execution.remediation && Object.keys(execution.remediation).length > 0 && (
+                        <details className="text-[11px] text-slate-500">
+                          <summary className="cursor-pointer text-slate-400">Remediation</summary>
+                          <pre className="mt-1 overflow-x-auto rounded-lg bg-black/20 p-2 text-[10px] text-slate-300">{JSON.stringify(execution.remediation, null, 2)}</pre>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {logs.length > 0 && (
+                <>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider pt-2">Connection events</p>
+                  {logs.map((log) => (
                   <div key={log.id} className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium',
@@ -977,7 +1696,8 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
                     </div>
                     {log.message && <p className="text-[11px] text-slate-500 mt-1 font-mono">{log.message}</p>}
                   </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
           )}
@@ -985,7 +1705,79 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
           {/* ── ACTIONS TAB ── */}
           {tab === 'actions' && (
             <div className="space-y-2">
-              <p className="text-xs text-slate-400 mb-3">Toggle which actions agents can perform through this connector.</p>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <p className="text-xs text-slate-400">Review what this connector can safely do, what requires approval, and which actions are currently enabled.</p>
+                {isWave1Connector && (
+                  <button
+                    onClick={() => void seedWave1Policies()}
+                    disabled={seedingPolicies}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-medium text-cyan-100 hover:bg-cyan-500/15 disabled:opacity-60"
+                  >
+                    {seedingPolicies ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+                    Apply Wave 1 guardrails
+                  </button>
+                )}
+              </div>
+              {financeMode && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended finance workflow</p>
+                  <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
+                    {financeMode === 'razorpay' ? (
+                      <>
+                        <p>1. Review payment activity or settlement status.</p>
+                        <p>2. Confirm refund reason, amount, and threshold routing.</p>
+                        <p>3. Use execution history as the evidence trail for finance review.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>1. Verify customer payment state before issuing a refund.</p>
+                        <p>2. For payouts, validate beneficiary and amount before release.</p>
+                        <p>3. Require explicit approval notes on high-value disbursements.</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              {isTally && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended accounting workflow</p>
+                  <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
+                    <p>1. Review ledger context and account state before changing voucher records.</p>
+                    <p>2. Reconcile mismatches with explicit evidence instead of silent accounting updates.</p>
+                    <p>3. Post vouchers only after the approver trail and before/after state are complete.</p>
+                  </div>
+                </div>
+              )}
+              {isClearTax && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended compliance workflow</p>
+                  <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
+                    <p>1. Assess compliance posture and notice context before creating filing actions.</p>
+                    <p>2. Use TDS and GST preparation steps to build evidence and approval context.</p>
+                    <p>3. File only when the approval chain and remediation path are visible from history.</p>
+                  </div>
+                </div>
+              )}
+              {isNaukri && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended recruiting workflow</p>
+                  <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
+                    <p>1. Search and review candidate context before creating or updating a shortlist.</p>
+                    <p>2. Parse resume evidence so recruiters can validate structured signals against the source document.</p>
+                    <p>3. Publish jobs only after role content and approval routing are confirmed.</p>
+                  </div>
+                </div>
+              )}
+              {isSlackConnector && (
+                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended communication workflow</p>
+                  <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
+                    <p>1. Review channel or user context before sending a message.</p>
+                    <p>2. Preview outbound content and let policy decide whether approval or business-hours delay applies.</p>
+                    <p>3. Use execution history to confirm where the message landed and whether follow-up is needed.</p>
+                  </div>
+                </div>
+              )}
               {catalogLoading ? (
                 <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 text-slate-500 animate-spin" /></div>
               ) : catalog.length === 0 ? (
@@ -996,12 +1788,54 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-slate-200">{item.label || item.action}</p>
                       {item.description && <p className="text-[11px] text-slate-500 mt-0.5">{item.description}</p>}
-                      {item.risk && (
-                        <span className={cn('inline-block text-[10px] px-1.5 py-0.5 rounded-md border mt-1 font-medium',
-                          item.risk === 'high' || item.risk === 'money' ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
-                          : item.risk === 'medium' ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
-                          : 'border-white/10 bg-white/5 text-slate-300'
-                        )}>{item.risk} risk</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {item.risk && (
+                          <span className={cn('inline-block text-[10px] px-1.5 py-0.5 rounded-md border font-medium',
+                            item.risk === 'high' || item.risk === 'money' ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+                            : item.risk === 'medium' ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+                            : 'border-white/10 bg-white/5 text-slate-300'
+                          )}>{item.risk} risk</span>
+                        )}
+                        {item.operation && <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-300 font-medium">{item.operation}</span>}
+                        {item.objectType && <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-300 font-medium">{item.objectType}</span>}
+                        {item.trustTier && <span className={cn('inline-block text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(item.trustTier))}>{item.trustTier}</span>}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {item.policySummary || (item.requireApproval ? 'Approval required' : 'Direct execution')}
+                        {item.requiredRole ? ` · ${item.requiredRole}+` : ''}
+                        {item.reversible ? ' · reversible' : ''}
+                      </p>
+                      {financeMode && financeActionGuidance(financeMode, item.action) && (
+                        <div className="mt-1.5 rounded-lg border border-white/8 bg-black/10 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-300">{financeActionGuidance(financeMode, item.action)}</p>
+                        </div>
+                      )}
+                      {isTally && tallyActionGuidance(item.action) && (
+                        <div className="mt-1.5 rounded-lg border border-white/8 bg-black/10 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-300">{tallyActionGuidance(item.action)}</p>
+                        </div>
+                      )}
+                      {isClearTax && clearTaxActionGuidance(item.action) && (
+                        <div className="mt-1.5 rounded-lg border border-white/8 bg-black/10 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-300">{clearTaxActionGuidance(item.action)}</p>
+                        </div>
+                      )}
+                      {isNaukri && naukriActionGuidance(item.action) && (
+                        <div className="mt-1.5 rounded-lg border border-white/8 bg-black/10 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-300">{naukriActionGuidance(item.action)}</p>
+                        </div>
+                      )}
+                      {isSlackConnector && slackActionGuidance(item.action) && (
+                        <div className="mt-1.5 rounded-lg border border-white/8 bg-black/10 px-2.5 py-2">
+                          <p className="text-[11px] text-slate-300">{slackActionGuidance(item.action)}</p>
+                        </div>
+                      )}
+                      {Array.isArray(item.constraints) && item.constraints.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {item.constraints.slice(0, 2).map((constraint: string) => (
+                            <p key={constraint} className="text-[10px] text-slate-600">• {constraint}</p>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <button
@@ -1351,6 +2185,21 @@ function ConnectorRow({ connector, agentNames, onClick, onConfigure, onDisconnec
           <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
             {connector.source === 'marketplace' ? 'App' : 'Integration'}
           </span>
+          {connector.trustTier && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(connector.trustTier))}>
+              {connector.trustTier}
+            </span>
+          )}
+          {connector.wave === 1 && connector.wave1GuardrailsStatus && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', guardrailTone(connector.wave1GuardrailsStatus))}>
+              {connector.wave1GuardrailsStatus === 'applied' ? 'guardrails applied' : connector.wave1GuardrailsStatus === 'partial' ? 'guardrails partial' : 'guardrails missing'}
+            </span>
+          )}
+          {connector.maturity && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(connector.maturity))}>
+              {connector.maturity}
+            </span>
+          )}
         </div>
         {agentNames.length > 0 && (
           <div className="flex items-center gap-1 mt-0.5">
@@ -1361,10 +2210,10 @@ function ConnectorRow({ connector, agentNames, onClick, onConfigure, onDisconnec
         {connector.lastErrorMsg && <p className="text-[11px] text-rose-400 mt-0.5 truncate">{connector.lastErrorMsg}</p>}
       </div>
 
-      {connector.actionsUnlocked && connector.actionsUnlocked.length > 0 && !hasError && (
+      {connector.governanceSummary && !hasError && (
         <div className="hidden sm:flex items-center gap-1 shrink-0">
           <Zap className="w-3 h-3 text-amber-400" />
-          <span className="text-xs text-slate-500">{connector.actionsUnlocked.length} actions</span>
+          <span className="text-xs text-slate-500">{connector.governanceSummary.enabledActionCount}/{connector.governanceSummary.actionCount} governed</span>
         </div>
       )}
 
@@ -1501,8 +2350,9 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
     } catch (e: any) { toast.error(e.message || 'Disconnect failed'); }
   }, [loadData]);
 
-  const totalActions = connectedList.reduce((s, c) => s + (c.actionsUnlocked?.length || 0), 0);
+  const totalActions = connectedList.reduce((s, c) => s + (c.governanceSummary?.enabledActionCount || c.actionsUnlocked?.length || 0), 0);
   const errorCount = connectedList.filter((c) => c.status === 'error' || c.status === 'expired').length;
+  const governedCount = connectedList.filter((c) => c.maturity === 'governed').length;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
@@ -1510,7 +2360,7 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Connectors</h1>
-          <p className="text-slate-400 text-sm mt-1">Connect your agents to apps and integrations.</p>
+          <p className="text-slate-400 text-sm mt-1">Operate external systems through governed connectors with visible trust, approvals, and evidence.</p>
         </div>
         <button onClick={() => void loadData()} className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0" title="Refresh">
           <RefreshCw className="w-4 h-4" />
@@ -1552,11 +2402,11 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
           </div>
           <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 text-center">
             <p className="text-xl font-bold text-white">{totalActions}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Actions unlocked</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Governed actions</p>
           </div>
           <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 text-center">
-            <p className="text-xl font-bold text-white">{new Set(connectedList.flatMap((c) => agentNamesFor(c))).size}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Agents powered</p>
+            <p className="text-xl font-bold text-white">{governedCount}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Governed connectors</p>
           </div>
         </div>
       )}

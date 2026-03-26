@@ -7,6 +7,7 @@ import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest'
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 import { auditLog } from '../lib/audit-logger';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
+import { evaluatePolicyConstraints, type PolicyConstraints } from '../lib/action-policy-constraints';
 
 const router = Router();
 
@@ -75,6 +76,21 @@ function resolveRoutingRules(rules: RoutingRule[], payload: Record<string, any>,
   return { required_role: defaultRole, assigned_to: null };
 }
 
+type ApprovalHistoryEntry = {
+  reviewer_id: string;
+  decision: 'approved' | 'rejected';
+  decided_at: string;
+};
+
+async function loadJobApproval(userJwt: string, jobId: string) {
+  const apprQ = new URLSearchParams();
+  apprQ.set('job_id', eq(jobId));
+  apprQ.set('select', '*');
+  apprQ.set('limit', '1');
+  const apprs = (await supabaseRestAsUser(userJwt, 'agent_job_approvals', apprQ)) as any[];
+  return apprs?.[0] || null;
+}
+
 async function getActionPolicy(
   userJwt: string,
   orgId: string,
@@ -86,12 +102,13 @@ async function getActionPolicy(
   require_approval: boolean;
   required_role: Role;
   routing_rules: RoutingRule[];
+  policy_constraints: PolicyConstraints;
 }> {
   const q = new URLSearchParams();
   q.set('organization_id', eq(orgId));
   q.set('service', eq(service));
   q.set('action', eq(action));
-  q.set('select', 'id,enabled,require_approval,required_role,routing_rules');
+  q.set('select', 'id,enabled,require_approval,required_role,routing_rules,policy_constraints');
   q.set('limit', '1');
 
   const rows = (await supabaseRestAsUser(userJwt, 'action_policies', q)) as any[];
@@ -108,6 +125,7 @@ async function getActionPolicy(
     require_approval: row.require_approval !== false,
     required_role: requiredRole,
     routing_rules: Array.isArray(row.routing_rules) ? row.routing_rules : [],
+    policy_constraints: row.policy_constraints && typeof row.policy_constraints === 'object' ? row.policy_constraints : {},
   };
 }
 
@@ -141,33 +159,46 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
     const isConnectorAction = data.type === 'connector_action';
     const connectorService = isConnectorAction ? String((data.input as any)?.connector?.service || '') : '';
     const connectorAction = isConnectorAction ? String((data.input as any)?.connector?.action || '') : '';
+    const actionPayload = isConnectorAction ? (((data.input as any)?.connector?.params || {}) as Record<string, any>) : {};
     const userRole = String((req.user as any)?.role || 'viewer');
 
     let policy = null as Awaited<ReturnType<typeof getActionPolicy>>;
     if (isConnectorAction && connectorService && connectorAction) {
       policy = await getActionPolicy(getUserJwt(req), orgId, connectorService, connectorAction);
     }
+    const constraintEvaluation = isConnectorAction
+      ? evaluatePolicyConstraints(actionPayload, policy?.policy_constraints || {})
+      : { blocked: false, blockReasons: [], approvalRequired: false, approvalReasons: [], requiredRole: null, dualApproval: false };
 
     if (isConnectorAction) {
       if (!hasPermission(userRole, 'workitems.manage')) {
         return res.status(403).json({ success: false, error: 'Insufficient permissions', required_permission: 'workitems.manage' });
       }
 
-      const requiredRole = policy?.required_role || requireRoleForConnectorAction(connectorAction);
-      if (roleRank(userRole) < roleRank(requiredRole)) {
-        return res.status(403).json({ success: false, error: 'Insufficient role privileges', required_role: requiredRole });
-      }
-
       if (policy && policy.enabled === false) {
         return res.status(403).json({ success: false, error: 'Action disabled by policy' });
+      }
+      if (constraintEvaluation.blocked) {
+        return res.status(403).json({
+          success: false,
+          error: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints',
+          policy_reasons: constraintEvaluation.blockReasons,
+        });
       }
     }
 
     // chat_turn and workflow_run have no side effects — run immediately.
     // connector_action requires explicit approval unless the policy waives it.
+    const effectiveRequiredRole = constraintEvaluation.requiredRole || policy?.required_role || requireRoleForConnectorAction(connectorAction);
+    const approvalRequired = isConnectorAction
+      ? (policy ? policy.require_approval !== false : true) || constraintEvaluation.approvalRequired
+      : false;
+    if (isConnectorAction && !approvalRequired && roleRank(userRole) < roleRank(effectiveRequiredRole)) {
+      return res.status(403).json({ success: false, error: 'Insufficient role privileges', required_role: effectiveRequiredRole });
+    }
     const initialStatus = !isConnectorAction
       ? 'queued'
-      : (policy && policy.require_approval === false ? 'queued' : 'pending_approval');
+      : (approvalRequired ? 'pending_approval' : 'queued');
 
     const createdJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', '', {
       method: 'POST',
@@ -194,19 +225,29 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
     let routedRole: Role | null = null;
     let routedAssignedTo: string | null = null;
     if (isConnectorAction && policy?.routing_rules?.length) {
-      const actionPayload = (data.input as any)?.connector?.params || (data.input as any) || {};
-      const resolved = resolveRoutingRules(policy.routing_rules, actionPayload, policy.required_role);
+      const resolved = resolveRoutingRules(policy.routing_rules, actionPayload, effectiveRequiredRole);
       routedRole = resolved.required_role;
       routedAssignedTo = resolved.assigned_to;
     }
 
     const policySnapshot = {
       ...(deployment.execution_policy || { approvals: { required: true }, llm: { route: 'synthetichr_gateway' }, secrets: { mode: 'mixed' } }),
-      ...(routedRole ? { required_role: routedRole } : {}),
+      ...(routedRole ? { required_role: routedRole } : { required_role: effectiveRequiredRole }),
       ...(routedAssignedTo ? { assigned_to: routedAssignedTo } : {}),
+      connector_policy: {
+        service: connectorService,
+        action: connectorAction,
+        approval_required: approvalRequired,
+        policy_id: policy?.id || null,
+        constraints: policy?.policy_constraints || {},
+        constraint_evaluation: constraintEvaluation,
+      },
     };
 
     const autoApproved = initialStatus === 'queued';
+    const approvalHistory: ApprovalHistoryEntry[] = autoApproved
+      ? [{ reviewer_id: userId, decision: 'approved', decided_at: now }]
+      : [];
     const approvals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', '', {
       method: 'POST',
       body: {
@@ -214,6 +255,8 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
         requested_by: userId,
         approved_by: autoApproved ? userId : null,
         status: autoApproved ? 'approved' : 'pending',
+        required_approvals: constraintEvaluation.dualApproval ? 2 : 1,
+        approval_history: approvalHistory,
         policy_snapshot: policySnapshot,
         created_at: now,
         ...(autoApproved ? { decided_at: now } : {}),
@@ -272,7 +315,26 @@ router.get('/', requirePermission('agents.read'), async (req: Request, res: Resp
     query.set('limit', String(Math.max(1, Math.min(200, Number(req.query.limit || 50)))));
 
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', query)) as any[];
-    return res.json({ success: true, data: rows || [], count: rows?.length || 0 });
+    const data = Array.isArray(rows) ? rows : [];
+
+    await Promise.all(data.map(async (job: any) => {
+      if (job?.type !== 'connector_action' || String(job?.status) !== 'pending_approval') return;
+      try {
+        const approval = await loadJobApproval(getUserJwt(req), job.id);
+        if (!approval) return;
+        const history = Array.isArray(approval.approval_history) ? approval.approval_history : [];
+        const approvalsRecorded = history.filter((entry: any) => entry?.decision === 'approved').length;
+        job.required_approvals = Math.max(1, Number(approval.required_approvals || 1));
+        job.approvals_recorded = approvalsRecorded;
+        job.approvals_remaining = Math.max(0, job.required_approvals - approvalsRecorded);
+        const snapshot = approval.policy_snapshot || {};
+        if (snapshot.required_role) job.required_role = snapshot.required_role;
+        if (snapshot.assigned_to) job.assigned_to = snapshot.assigned_to;
+      } catch {
+        // non-fatal augmentation
+      }
+    }));
+    return res.json({ success: true, data, count: data.length || 0 });
   } catch (err: any) {
     return safeError(res, err);
   }
@@ -376,17 +438,22 @@ router.get('/:id', requirePermission('agents.read'), async (req: Request, res: R
     const job = rows?.[0];
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
 
-    // For connector actions awaiting approval, augment with approval metadata (required_role, assigned_to).
-    if (job.type === 'connector_action' && job.status === 'pending_approval') {
+    // For connector actions, augment with approval metadata for richer review UX.
+    if (job.type === 'connector_action') {
       try {
-        const apprQ = new URLSearchParams();
-        apprQ.set('job_id', eq(job.id));
-        apprQ.set('select', 'policy_snapshot');
-        apprQ.set('limit', '1');
-        const apprs = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', apprQ)) as any[];
-        const snapshot = apprs?.[0]?.policy_snapshot || {};
+        const approval = await loadJobApproval(getUserJwt(req), job.id);
+        const snapshot = approval?.policy_snapshot || {};
         if (snapshot.required_role) job.required_role = snapshot.required_role;
         if (snapshot.assigned_to) job.assigned_to = snapshot.assigned_to;
+        if (approval) {
+          const history = Array.isArray(approval.approval_history) ? approval.approval_history : [];
+          const approvalsRecorded = history.filter((entry: any) => entry?.decision === 'approved').length;
+          job.approval = approval;
+          job.required_approvals = Math.max(1, Number(approval.required_approvals || 1));
+          job.approvals_recorded = approvalsRecorded;
+          job.approvals_remaining = Math.max(0, job.required_approvals - approvalsRecorded);
+          job.awaiting_additional_approval = approval.status === 'pending' && approvalsRecorded > 0;
+        }
       } catch { /* non-fatal */ }
     }
 
@@ -448,14 +515,35 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
     if (!approval) return res.status(409).json({ success: false, error: 'Approval row missing for job' });
     if (approval.status !== 'pending') return res.status(409).json({ success: false, error: `Job already decided (${approval.status})` });
 
+    const approvalHistory = Array.isArray(approval.approval_history) ? approval.approval_history as ApprovalHistoryEntry[] : [];
+    const requiredApprovals = Math.max(1, Number(approval.required_approvals || 1));
+
     // Routing rule enforcement: if a specific approver was assigned, only they can decide.
     const snapshotAssignedTo: string | null = (approval.policy_snapshot as any)?.assigned_to || null;
-    if (snapshotAssignedTo && snapshotAssignedTo !== userId) {
+    const priorApprovals = approvalHistory.filter((entry) => entry.decision === 'approved');
+    const awaitingAdditionalApproval = priorApprovals.length > 0 && priorApprovals.length < requiredApprovals;
+    if (snapshotAssignedTo && snapshotAssignedTo !== userId && !awaitingAdditionalApproval) {
       return res.status(403).json({ success: false, error: 'This action is assigned to a specific approver — only they can approve or reject it', assigned_to: snapshotAssignedTo });
+    }
+
+    if (approvalHistory.some((entry) => entry.reviewer_id === userId && entry.decision === 'approved')) {
+      return res.status(409).json({ success: false, error: 'This approver has already approved the job', approvals_recorded: priorApprovals.length, required_approvals: requiredApprovals });
     }
 
     const now = nowIso();
     const decision = data.decision;
+    const nextHistory: ApprovalHistoryEntry[] = [
+      ...approvalHistory,
+      {
+        reviewer_id: userId,
+        decision,
+        decided_at: now,
+      },
+    ];
+    const approvedCount = nextHistory.filter((entry) => entry.decision === 'approved').length;
+    const finalDecision = decision === 'approved' && approvedCount < requiredApprovals
+      ? 'pending'
+      : decision;
 
     // Update approval
     const apprPatchQ = new URLSearchParams();
@@ -463,23 +551,27 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
     const updatedApprovals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', apprPatchQ, {
       method: 'PATCH',
       body: {
-        status: decision,
-        approved_by: decision === 'approved' ? userId : null,
-        decided_at: now,
+        status: finalDecision,
+        approved_by: finalDecision === 'approved' ? userId : null,
+        approval_history: nextHistory,
+        ...(finalDecision === 'pending' ? {} : { decided_at: now }),
       },
     })) as any[];
 
-    // Update job status
-    const jobPatchQ = new URLSearchParams();
-    jobPatchQ.set('id', eq(id));
-    jobPatchQ.set('organization_id', eq(orgId));
-    const newJobStatus = decision === 'approved' ? 'queued' : 'canceled';
-    const updatedJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobPatchQ, {
-      method: 'PATCH',
-      body: {
-        status: newJobStatus,
-      },
-    })) as any[];
+    let updatedJobs: any[] = [];
+    let newJobStatus = job.status;
+    if (finalDecision !== 'pending') {
+      const jobPatchQ = new URLSearchParams();
+      jobPatchQ.set('id', eq(id));
+      jobPatchQ.set('organization_id', eq(orgId));
+      newJobStatus = finalDecision === 'approved' ? 'queued' : 'canceled';
+      updatedJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobPatchQ, {
+        method: 'PATCH',
+        body: {
+          status: newJobStatus,
+        },
+      })) as any[];
+    }
 
     await auditLog.log({
       user_id: userId,
@@ -491,18 +583,23 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
       user_agent: req.get('user-agent') || undefined,
       metadata: {
         decision,
+        final_decision: finalDecision,
         previous_status: job.status,
         new_status: newJobStatus,
         approval_id: approval.id,
         agent_id: job.agent_id || null,
+        required_approvals: requiredApprovals,
+        approvals_recorded: approvedCount,
       },
     });
 
     return res.json({
       success: true,
       data: {
-        job: updatedJobs?.[0] || job,
+        job: updatedJobs?.[0] || { ...job, status: newJobStatus },
         approval: updatedApprovals?.[0] || approval,
+        awaiting_additional_approval: finalDecision === 'pending',
+        approvals_remaining: Math.max(0, requiredApprovals - approvedCount),
       },
     });
   } catch (err: any) {

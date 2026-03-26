@@ -4,6 +4,7 @@ import { supabase, supabaseAdmin } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
 import { decryptSecret } from '../lib/integrations/encryption';
+import { evaluatePolicyConstraints } from '../lib/action-policy-constraints';
 
 const router = Router();
 
@@ -3841,26 +3842,45 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
       organization_id: eqFilter(orgId),
       service: eqFilter(connectorId),
       action: eqFilter(action),
-      select: 'enabled,require_approval',
+      select: 'id,enabled,require_approval,required_role,policy_constraints',
       limit: '1',
-    }))) as Array<{ enabled: boolean; require_approval: boolean }>;
+    }))) as Array<{ id?: string; enabled: boolean; require_approval: boolean; required_role?: string; policy_constraints?: Record<string, any> }>;
+    const policy = policies?.[0] || null;
+    const constraintEvaluation = evaluatePolicyConstraints(params, policy?.policy_constraints || {});
 
-    if (policies?.length > 0 && policies[0].enabled === false) {
+    if (policy?.enabled === false) {
       return res.status(403).json({ success: false, error: `Action "${action}" is disabled for this connector` });
     }
+    if (constraintEvaluation.blocked) {
+      return res.status(403).json({
+        success: false,
+        error: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints',
+        policy_reasons: constraintEvaluation.blockReasons,
+      });
+    }
 
-    if (policies?.length > 0 && policies[0].require_approval) {
+    if ((policy?.require_approval ?? false) || constraintEvaluation.approvalRequired) {
       // Create an approval request instead of executing
       const now = new Date().toISOString();
       const approvalRows = (await supabaseRestAsService('approval_requests', '', {
         method: 'POST',
         body: {
           organization_id: orgId,
-          connector_id: connectorId,
-          action_type: action,
-          action_data: params,
-          requested_by: (req as any).user?.id,
+          action_policy_id: policy?.id || null,
+          service: connectorId,
+          action,
+          action_payload: {
+            ...params,
+            __policy: {
+              constraint_evaluation: constraintEvaluation,
+            },
+          },
+          requested_by: 'user',
+          required_role: constraintEvaluation.requiredRole || policy?.required_role || 'manager',
           status: 'pending',
+          assigned_to: null,
+          expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+          updated_at: now,
           created_at: now,
         },
       })) as any[];
@@ -3910,6 +3930,13 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           success: result.success,
           error_message: result.error || null,
           duration_ms: duration,
+          requested_by: (req as any).user?.id || null,
+          policy_snapshot: {
+            policy_id: policy?.id || null,
+            require_approval: policy?.require_approval ?? false,
+            constraints: policy?.policy_constraints || {},
+            constraint_evaluation: constraintEvaluation,
+          },
         },
       });
     } catch { /* non-critical */ }

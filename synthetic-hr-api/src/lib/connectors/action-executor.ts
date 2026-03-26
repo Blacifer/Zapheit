@@ -57,6 +57,10 @@ export async function executeConnectorAction(
       case 'salesforce': return await salesforceAction(action, params, credentials);
       case 'hubspot': return await hubspotAction(action, params, credentials);
       case 'razorpay': return await razorpayAction(action, params, credentials);
+      case 'paytm': return await paytmAction(action, params, credentials);
+      case 'tally': return await tallyAction(action, params, credentials);
+      case 'naukri': return await naukriAction(action, params, credentials);
+      case 'cleartax': return await clearTaxAction(action, params, credentials);
       case 'google-workspace': return await googleWorkspaceAction(action, params, credentials);
       case 'microsoft-365': return await microsoft365Action(action, params, credentials);
       case 'zoho': return await zohoAction(action, params, credentials);
@@ -398,6 +402,274 @@ async function razorpayAction(
     }
     default:
       return { success: false, error: `Unknown Razorpay action: ${action}`, statusCode: 400 };
+  }
+}
+
+async function paytmAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const merchantId = creds.merchant_id;
+  const merchantKey = creds.merchant_key;
+  const channelId = creds.channel_id;
+
+  if (!merchantId || !merchantKey || !channelId) {
+    return { success: false, error: 'Paytm credentials missing: merchant_id, merchant_key, channel_id required' };
+  }
+
+  const base = 'https://api.paytm.com/v1';
+  const headers = {
+    'X-Merchant-Id': merchantId,
+    'X-Merchant-Key': merchantKey,
+    'X-Channel-Id': channelId,
+    'Content-Type': 'application/json',
+  };
+
+  switch (action) {
+    case 'get_payment_status': {
+      const r = await jsonFetch(`${base}/payments/${params.payment_id}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'list_transactions': {
+      const qs = new URLSearchParams();
+      qs.set('limit', String(params.limit || 10));
+      if (params.status) qs.set('status', String(params.status));
+      const r = await jsonFetch(`${base}/transactions?${qs.toString()}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data?.transactions || r.data };
+    }
+    case 'create_refund': {
+      const body: Record<string, any> = {
+        payment_id: params.payment_id,
+      };
+      if (params.amount != null) body.amount = Number(params.amount);
+      if (params.reason) body.reason = params.reason;
+      const r = await jsonFetch(`${base}/refunds`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'initiate_payout': {
+      const body: Record<string, any> = {
+        beneficiary_id: params.beneficiary_id,
+        amount: Number(params.amount),
+      };
+      if (params.reference_id) body.reference_id = params.reference_id;
+      if (params.note) body.note = params.note;
+      const r = await jsonFetch(`${base}/payouts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    default:
+      return { success: false, error: `Unknown Paytm action: ${action}`, statusCode: 400 };
+  }
+}
+
+async function tallyAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const serverUrl = creds.server_url || creds.hostUrl;
+  const companyName = params.company_name || creds.company_name || '';
+  if (!serverUrl) return { success: false, error: 'Tally credentials missing: server_url required' };
+
+  const xmlHeaders = { 'Content-Type': 'text/xml' };
+  const xmlEscape = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+  const envelope = (reportName: string, staticVars = '', body = '') => `
+<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>${reportName}</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        ${companyName ? `<SVCURRENTCOMPANY>${xmlEscape(String(companyName))}</SVCURRENTCOMPANY>` : ''}
+        ${staticVars}
+      </STATICVARIABLES>
+    </DESC>
+    ${body}
+  </BODY>
+</ENVELOPE>`.trim();
+
+  switch (action) {
+    case 'list_ledgers': {
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: xmlHeaders,
+        body: envelope('List of Accounts'),
+      });
+      const text = await response.text();
+      if (!response.ok) return { success: false, error: `HTTP ${response.status}`, statusCode: response.status };
+      return { success: true, data: { xml: text } };
+    }
+    case 'list_vouchers': {
+      const staticVars = [
+        params.from_date ? `<SVFROMDATE>${xmlEscape(String(params.from_date))}</SVFROMDATE>` : '',
+        params.to_date ? `<SVTODATE>${xmlEscape(String(params.to_date))}</SVTODATE>` : '',
+      ].filter(Boolean).join('');
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: xmlHeaders,
+        body: envelope('Voucher Register', staticVars),
+      });
+      const text = await response.text();
+      if (!response.ok) return { success: false, error: `HTTP ${response.status}`, statusCode: response.status };
+      return { success: true, data: { xml: text } };
+    }
+    case 'post_voucher': {
+      if (!params.voucher_xml) return { success: false, error: 'post_voucher requires: voucher_xml' };
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: xmlHeaders,
+        body: String(params.voucher_xml),
+      });
+      const text = await response.text();
+      if (!response.ok) return { success: false, error: text || `HTTP ${response.status}`, statusCode: response.status };
+      return { success: true, data: { xml: text } };
+    }
+    default:
+      return { success: false, error: `Unknown Tally action: ${action}`, statusCode: 400 };
+  }
+}
+
+async function naukriAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const apiKey = creds.api_key;
+  const clientId = creds.client_id;
+  const employerId = creds.employer_id;
+  if (!apiKey || !clientId || !employerId) {
+    return { success: false, error: 'Naukri credentials missing: api_key, client_id, employer_id required' };
+  }
+
+  const base = 'https://api.naukri.com/v1';
+  const headers = {
+    'X-Api-Key': apiKey,
+    'X-Client-Id': clientId,
+    'X-Employer-Id': employerId,
+    'Content-Type': 'application/json',
+  };
+
+  switch (action) {
+    case 'search_candidates': {
+      const qs = new URLSearchParams();
+      qs.set('q', String(params.query || ''));
+      qs.set('limit', String(params.limit || 10));
+      if (params.job_id) qs.set('job_id', String(params.job_id));
+      const r = await jsonFetch(`${base}/candidates/search?${qs.toString()}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data?.candidates || r.data };
+    }
+    case 'get_candidate': {
+      const r = await jsonFetch(`${base}/candidates/${params.candidate_id}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'create_job': {
+      const body: Record<string, any> = {
+        title: params.title,
+        description: params.description,
+      };
+      if (params.location) body.location = params.location;
+      if (params.employment_type) body.employment_type = params.employment_type;
+      const r = await jsonFetch(`${base}/jobs`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'parse_resume': {
+      const body: Record<string, any> = {};
+      if (params.resume_text) body.resume_text = params.resume_text;
+      if (params.candidate_id) body.candidate_id = params.candidate_id;
+      const r = await jsonFetch(`${base}/candidates/parse`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    default:
+      return { success: false, error: `Unknown Naukri action: ${action}`, statusCode: 400 };
+  }
+}
+
+async function clearTaxAction(
+  action: string,
+  params: Record<string, any>,
+  creds: Record<string, string>,
+): Promise<ActionResult> {
+  const apiKey = creds.api_key;
+  const gstin = creds.gstin;
+  if (!apiKey) return { success: false, error: 'ClearTax credentials missing: api_key required' };
+
+  const base = 'https://api.cleartax.in/v1';
+  const headers = {
+    'X-Cleartax-Api-Key': apiKey,
+    'Content-Type': 'application/json',
+  };
+
+  switch (action) {
+    case 'get_compliance_status': {
+      const resolvedGstin = params.gstin || gstin;
+      if (!resolvedGstin) return { success: false, error: 'get_compliance_status requires: gstin' };
+      const r = await jsonFetch(`${base}/compliance/status?gstin=${encodeURIComponent(String(resolvedGstin))}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'list_notices': {
+      const qs = new URLSearchParams();
+      if (params.limit) qs.set('limit', String(params.limit));
+      const r = await jsonFetch(`${base}/notices${qs.toString() ? `?${qs.toString()}` : ''}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data?.notices || r.data };
+    }
+    case 'calculate_tds': {
+      const payload = typeof params.payload === 'string' ? JSON.parse(params.payload) : params.payload;
+      const r = await jsonFetch(`${base}/tds/calculate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload || {}),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'file_gst_return': {
+      const payload = typeof params.payload === 'string' ? JSON.parse(params.payload) : params.payload;
+      const r = await jsonFetch(`${base}/gst/returns`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload || {}),
+      });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    default:
+      return { success: false, error: `Unknown ClearTax action: ${action}`, statusCode: 400 };
   }
 }
 
