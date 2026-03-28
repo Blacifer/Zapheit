@@ -1401,12 +1401,22 @@ router.post('/hr/headcount', requirePermission('workitems.manage'), async (req: 
 // DEMO DATA SEED
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.post('/demo/generate', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+router.post('/demo/generate', requirePermission('team.manage'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
     const jwt = getUserJwt(req);
     const hub = String(req.body?.hub || 'all');
+
+    // Guard: block if org already has data to prevent spam
+    if (hub === 'marketing' || hub === 'all') {
+      const existing = (await supabaseRestAsUser(jwt, 'hub_marketing_campaigns', new URLSearchParams(`organization_id=eq.${orgId}&limit=1`))) as any[];
+      if ((existing || []).length > 0) return res.status(409).json({ success: false, error: 'Marketing Hub already has data. Clear existing records first.' });
+    }
+    if (hub === 'hr' || hub === 'all') {
+      const existing = (await supabaseRestAsUser(jwt, 'hub_hr_attendance', new URLSearchParams(`organization_id=eq.${orgId}&limit=1`))) as any[];
+      if ((existing || []).length > 0) return res.status(409).json({ success: false, error: 'HR Hub already has data. Clear existing records first.' });
+    }
     const created: Record<string, number> = {};
 
     async function insert(table: string, rows: object[]) {
