@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Users, Calendar, ClipboardList, DollarSign, TrendingDown,
-  RefreshCw, Plus, X, Check, Loader2, Sparkles,
+  Users, Calendar, ClipboardList, DollarSign,
+  RefreshCw, X, Check, Database,
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { authenticatedFetch } from '../../lib/api/_helpers';
@@ -137,6 +137,16 @@ export default function HRHubPage() {
 
   useEffect(() => { void load(); }, []);
 
+  const handleSeedDemo = async () => {
+    setBusy(true);
+    try {
+      const res: any = await authenticatedFetch('/hubs/demo/generate', { method: 'POST', body: JSON.stringify({ hub: 'hr' }) });
+      if (res.success) { toast.success('Sample data loaded'); void load(); }
+      else toast.error(res.error || 'Failed to load sample data');
+    } catch (e: any) { toast.error(e?.message || 'Failed'); }
+    finally { setBusy(false); }
+  };
+
   const handleLeaveAction = async (id: string, action: 'approved' | 'rejected') => {
     setBusy(true);
     try {
@@ -218,6 +228,14 @@ export default function HRHubPage() {
               </div>
               <p className="text-slate-300 font-medium">No attendance records</p>
               <p className="text-slate-500 text-sm mt-1 max-w-xs">Connect an HR app like Keka or Darwinbox to sync attendance data here.</p>
+              <button
+                onClick={handleSeedDemo}
+                disabled={busy}
+                className="mt-4 h-9 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-slate-200 text-sm transition-colors flex items-center gap-1.5"
+              >
+                <Database className="w-3.5 h-3.5" />
+                Load sample data
+              </button>
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Megaphone, Mail, MessageSquare, Smartphone, Sparkles, RefreshCw,
-  Plus, X, Check, Loader2, Users, TrendingUp, BarChart3,
+  Plus, X, Check, Loader2, Users, TrendingUp, BarChart3, Database,
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { authenticatedFetch } from '../../lib/api/_helpers';
@@ -127,6 +127,16 @@ export default function MarketingHubPage() {
       toast.success(`Scored ${r.scored} campaigns`);
       void load();
     } catch (e: any) { toast.error(e?.message || 'Scoring failed'); }
+    finally { setBusy(false); }
+  };
+
+  const handleSeedDemo = async () => {
+    setBusy(true);
+    try {
+      const res: any = await authenticatedFetch('/hubs/demo/generate', { method: 'POST', body: JSON.stringify({ hub: 'marketing' }) });
+      if (res.success) { toast.success('Sample data loaded'); void load(); }
+      else toast.error(res.error || 'Failed to load sample data');
+    } catch (e: any) { toast.error(e?.message || 'Failed'); }
     finally { setBusy(false); }
   };
 
@@ -283,13 +293,23 @@ export default function MarketingHubPage() {
                 </div>
                 <p className="text-slate-300 font-medium">No campaigns yet</p>
                 <p className="text-slate-500 text-sm mt-1 max-w-xs">Create your first campaign to start reaching your audience via Email, WhatsApp, or SMS.</p>
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="mt-4 h-9 px-4 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New Campaign
-                </button>
+                <div className="flex items-center gap-2 mt-4">
+                  <button
+                    onClick={() => setShowCreate(true)}
+                    className="h-9 px-4 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New Campaign
+                  </button>
+                  <button
+                    onClick={handleSeedDemo}
+                    disabled={busy}
+                    className="h-9 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-slate-200 text-sm transition-colors flex items-center gap-1.5"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    Load sample data
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">

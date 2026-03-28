@@ -347,7 +347,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
-        await fetch(`${apiUrl}/users/invite`, {
+        await fetch(`${apiUrl}/invites`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ email: inviteEmail, role: inviteRole }),

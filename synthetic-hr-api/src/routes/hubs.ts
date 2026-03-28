@@ -1397,5 +1397,98 @@ router.post('/hr/headcount', requirePermission('workitems.manage'), async (req: 
   } catch (err: any) { return safeError(res, err); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEMO DATA SEED
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/demo/generate', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const jwt = getUserJwt(req);
+    const hub = String(req.body?.hub || 'all');
+    const created: Record<string, number> = {};
+
+    async function insert(table: string, rows: object[]) {
+      for (const row of rows) {
+        await supabaseRestAsUser(jwt, table, new URLSearchParams(), {
+          method: 'POST', body: { ...row, organization_id: orgId },
+        });
+      }
+      created[table] = (created[table] || 0) + rows.length;
+    }
+
+    if (hub === 'marketing' || hub === 'all') {
+      const campaigns = [
+        { name: 'Q1 Re-engagement Blast', channel: 'Email', status: 'active', audience_size: 4200, engagement_score: 72, created_at: nowIso(), updated_at: nowIso() },
+        { name: 'Diwali Offers 2024', channel: 'WhatsApp', status: 'completed', audience_size: 8500, engagement_score: 88, created_at: nowIso(), updated_at: nowIso() },
+        { name: 'Product Launch — v2', channel: 'Email', status: 'draft', audience_size: 1200, engagement_score: null, created_at: nowIso(), updated_at: nowIso() },
+        { name: 'Churn Win-back SMS', channel: 'SMS', status: 'paused', audience_size: 670, engagement_score: 41, created_at: nowIso(), updated_at: nowIso() },
+        { name: 'New Feature Announcement', channel: 'Email', status: 'active', audience_size: 3100, engagement_score: 65, created_at: nowIso(), updated_at: nowIso() },
+      ];
+      await insert('hub_marketing_campaigns', campaigns);
+
+      await insert('hub_marketing_contacts', [
+        { email: 'priya.sharma@acmecorp.in', tags: ['enterprise', 'india'], subscribed: true, source: 'import', created_at: nowIso() },
+        { email: 'ravi.kumar@startupxyz.com', tags: ['smb', 'trial'], subscribed: true, source: 'landing_page', created_at: nowIso() },
+        { email: 'ananya.patel@bigco.com', tags: ['enterprise'], subscribed: false, source: 'import', created_at: nowIso() },
+        { email: 'arjun.mehta@techfirm.io', tags: ['developer', 'india'], subscribed: true, source: 'api', created_at: nowIso() },
+        { email: 'sunita.rao@consultants.in', tags: ['smb'], subscribed: true, source: 'referral', created_at: nowIso() },
+        { email: 'vikram.nair@fintech.co', tags: ['fintech', 'enterprise'], subscribed: true, source: 'webinar', created_at: nowIso() },
+      ]);
+
+      await insert('hub_marketing_performance', [
+        { campaign_name: 'Q1 Re-engagement Blast', sent: 4200, delivered: 4118, opened: 1890, clicked: 312, recorded_at: nowIso() },
+        { campaign_name: 'Diwali Offers 2024', sent: 8500, delivered: 8402, opened: 5900, clicked: 2100, recorded_at: nowIso() },
+        { campaign_name: 'New Feature Announcement', sent: 3100, delivered: 3055, opened: 1420, clicked: 198, recorded_at: nowIso() },
+      ]);
+    }
+
+    if (hub === 'hr' || hub === 'all') {
+      const today = new Date();
+      const dateStr = (offset: number) => {
+        const d = new Date(today); d.setDate(d.getDate() - offset);
+        return d.toISOString().split('T')[0];
+      };
+
+      await insert('hub_hr_attendance', [
+        { employee_name: 'Priya Sharma', employee_email: 'priya@company.in', date: dateStr(0), status: 'present', absence_risk: 12, created_at: nowIso() },
+        { employee_name: 'Ravi Kumar', employee_email: 'ravi@company.in', date: dateStr(0), status: 'wfh', absence_risk: 8, created_at: nowIso() },
+        { employee_name: 'Ananya Patel', employee_email: 'ananya@company.in', date: dateStr(0), status: 'absent', absence_risk: 74, created_at: nowIso() },
+        { employee_name: 'Arjun Mehta', employee_email: 'arjun@company.in', date: dateStr(0), status: 'present', absence_risk: 5, created_at: nowIso() },
+        { employee_name: 'Sunita Rao', employee_email: 'sunita@company.in', date: dateStr(0), status: 'half-day', absence_risk: 31, created_at: nowIso() },
+        { employee_name: 'Priya Sharma', employee_email: 'priya@company.in', date: dateStr(1), status: 'present', absence_risk: 12, created_at: nowIso() },
+        { employee_name: 'Ravi Kumar', employee_email: 'ravi@company.in', date: dateStr(1), status: 'absent', absence_risk: 22, created_at: nowIso() },
+        { employee_name: 'Ananya Patel', employee_email: 'ananya@company.in', date: dateStr(1), status: 'absent', absence_risk: 68, created_at: nowIso() },
+      ]);
+
+      await insert('hub_hr_leave', [
+        { employee_name: 'Ananya Patel', employee_email: 'ananya@company.in', leave_type: 'sick', start_date: dateStr(2), end_date: dateStr(0), status: 'pending', reason: 'Fever and rest', created_at: nowIso(), updated_at: nowIso() },
+        { employee_name: 'Ravi Kumar', employee_email: 'ravi@company.in', leave_type: 'casual', start_date: dateStr(10), end_date: dateStr(8), status: 'approved', reason: 'Family function', reviewed_at: nowIso(), created_at: nowIso(), updated_at: nowIso() },
+        { employee_name: 'Sunita Rao', employee_email: 'sunita@company.in', leave_type: 'earned', start_date: dateStr(5), end_date: dateStr(3), status: 'pending', reason: 'Vacation', created_at: nowIso(), updated_at: nowIso() },
+        { employee_name: 'Arjun Mehta', employee_email: 'arjun@company.in', leave_type: 'casual', start_date: dateStr(20), end_date: dateStr(19), status: 'rejected', reason: 'Short notice', reviewed_at: nowIso(), created_at: nowIso(), updated_at: nowIso() },
+      ]);
+
+      await insert('hub_hr_payroll', [
+        { month: 'March 2025', total_gross: 4200000, total_net: 3528000, headcount: 48, status: 'draft', created_at: nowIso(), updated_at: nowIso() },
+        { month: 'February 2025', total_gross: 4150000, total_net: 3486000, headcount: 47, status: 'paid', processed_at: nowIso(), created_at: nowIso(), updated_at: nowIso() },
+        { month: 'January 2025', total_gross: 4050000, total_net: 3402000, headcount: 46, status: 'paid', processed_at: nowIso(), created_at: nowIso(), updated_at: nowIso() },
+      ]);
+
+      await insert('hub_hr_headcount', [
+        { department: 'Engineering', total: 18, joiners_this_month: 2, exits_this_month: 0, attrition_risk: 22, updated_at: nowIso() },
+        { department: 'Sales', total: 10, joiners_this_month: 1, exits_this_month: 1, attrition_risk: 48, updated_at: nowIso() },
+        { department: 'Customer Success', total: 8, joiners_this_month: 0, exits_this_month: 1, attrition_risk: 61, updated_at: nowIso() },
+        { department: 'Product', total: 6, joiners_this_month: 1, exits_this_month: 0, attrition_risk: 15, updated_at: nowIso() },
+        { department: 'Finance & HR', total: 6, joiners_this_month: 0, exits_this_month: 0, attrition_risk: 9, updated_at: nowIso() },
+      ]);
+    }
+
+    await auditLog.log({ action: 'demo.seed', resource_type: 'hubs', organization_id: orgId, user_id: getUserId(req) || '', metadata: { hub, created } });
+    return res.json({ success: true, data: { created } });
+  } catch (err: any) { return safeError(res, err); }
+});
+
 export default router;
+
 
