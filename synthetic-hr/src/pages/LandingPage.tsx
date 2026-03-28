@@ -1113,6 +1113,21 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                     <p className="mt-3 text-lg font-bold text-white">₹{calculator.savingsWindow.low.toLocaleString('en-IN')} to ₹{calculator.savingsWindow.high.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
+
+                {/* CTA after results */}
+                <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 pt-5 border-t border-white/10">
+                  <button
+                    onClick={() => {
+                      const msg = `Hi, I used the Rasi workload estimator. My setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month. I'd like to discuss the right plan.`;
+                      window.open(`https://wa.me/919433116259?text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-cyan-500/20"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.85L.057 23.571a.5.5 0 0 0 .61.61l5.757-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.89 0-3.663-.523-5.17-1.432l-.37-.22-3.818.985.998-3.75-.242-.386A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+                    Talk to us — ₹{calculator.monthlyInvestment.toLocaleString('en-IN')}/mo estimated
+                  </button>
+                  <p className="text-xs text-slate-500 text-center sm:text-left">We'll recommend the right plan based on your numbers.</p>
+                </div>
               </div>
             </div>
           </div>
