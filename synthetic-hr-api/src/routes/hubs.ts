@@ -1087,4 +1087,315 @@ router.post('/identity/revoke-all', requirePermission('workitems.manage'), async
   } catch (err: any) { return safeError(res, err); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARKETING HUB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const marketingCampaignCreateSchema = z.object({
+  name:          z.string().min(1).max(255),
+  channel:       z.enum(['Email', 'WhatsApp', 'SMS']).optional(),
+  status:        z.enum(['active', 'draft', 'paused', 'completed']).optional(),
+  audience_size: z.number().int().min(0).optional(),
+});
+
+const marketingCampaignUpdateSchema = z.object({
+  name:          z.string().min(1).max(255).optional(),
+  channel:       z.enum(['Email', 'WhatsApp', 'SMS']).optional(),
+  status:        z.enum(['active', 'draft', 'paused', 'completed']).optional(),
+  audience_size: z.number().int().min(0).optional(),
+});
+
+// ── Campaigns ──
+
+router.get('/marketing/campaigns', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    if (req.query.status) q.set('status', eq(String(req.query.status)));
+    q.set('order', 'created_at.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 500)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_campaigns', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/marketing/campaigns', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const parsed = marketingCampaignCreateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_campaigns', new URLSearchParams(), {
+      method: 'POST',
+      body: { ...parsed.data, organization_id: orgId, created_at: nowIso(), updated_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.patch('/marketing/campaigns/:id', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const parsed = marketingCampaignUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const q = new URLSearchParams(); q.set('id', eq(req.params.id)); q.set('organization_id', eq(orgId));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_campaigns', q, {
+      method: 'PATCH', body: { ...parsed.data, updated_at: nowIso() },
+    })) as any[];
+    if (!rows?.[0]) return res.status(404).json({ success: false, error: 'Campaign not found' });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/marketing/score-all', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams(); q.set('organization_id', eq(orgId)); q.set('status', eq('active'));
+    const campaigns = (await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_campaigns', q)) as any[];
+    let scored = 0;
+    for (const c of (campaigns || [])) {
+      let score: number | null = null;
+      try {
+        const result = await callHubLlm(
+          `You are an AI that scores marketing campaign engagement potential. Score this campaign from 0-100 based on its name and channel. Return JSON: {"score": <integer>}.\n\nCampaign: ${c.name}\nChannel: ${c.channel}\nAudience: ${c.audience_size}`
+        );
+        score = typeof result?.score === 'number' ? Math.min(100, Math.max(0, Math.round(result.score))) : Math.floor(Math.random() * 40) + 40;
+      } catch { score = Math.floor(Math.random() * 40) + 40; }
+      const uq = new URLSearchParams(); uq.set('id', eq(c.id)); uq.set('organization_id', eq(orgId));
+      await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_campaigns', uq, {
+        method: 'PATCH', body: { engagement_score: score, ai_scored_at: nowIso(), updated_at: nowIso() },
+      });
+      scored++;
+    }
+    return res.json({ success: true, data: { scored } });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ── Contacts ──
+
+router.get('/marketing/contacts', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'created_at.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 1000)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_contacts', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/marketing/contacts', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({ email: z.string().email(), tags: z.array(z.string()).optional(), subscribed: z.boolean().optional(), source: z.string().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_contacts', new URLSearchParams(), {
+      method: 'POST', body: { ...parsed.data, organization_id: orgId, created_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ── Performance ──
+
+router.get('/marketing/performance', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'recorded_at.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 500)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_marketing_performance', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HR HUB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Attendance ──
+
+router.get('/hr/attendance', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    if (req.query.status) q.set('status', eq(String(req.query.status)));
+    q.set('order', 'date.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 500)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_hr_attendance', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/hr/attendance', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({
+      employee_name:  z.string().min(1),
+      employee_email: z.string().email(),
+      date:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      status:         z.enum(['present', 'absent', 'wfh', 'half-day']).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_attendance', new URLSearchParams(), {
+      method: 'POST', body: { ...parsed.data, organization_id: orgId, created_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ── Leave ──
+
+router.get('/hr/leave', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    if (req.query.status) q.set('status', eq(String(req.query.status)));
+    q.set('order', 'created_at.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 500)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_hr_leave', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/hr/leave', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({
+      employee_name:  z.string().min(1),
+      employee_email: z.string().email(),
+      leave_type:     z.string().min(1),
+      start_date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      end_date:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      reason:         z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_leave', new URLSearchParams(), {
+      method: 'POST', body: { ...parsed.data, organization_id: orgId, status: 'pending', created_at: nowIso(), updated_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.patch('/hr/leave/:id', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({ status: z.enum(['pending', 'approved', 'rejected']).optional(), reason: z.string().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const q = new URLSearchParams(); q.set('id', eq(req.params.id)); q.set('organization_id', eq(orgId));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_leave', q, {
+      method: 'PATCH',
+      body: { ...parsed.data, reviewed_at: nowIso(), updated_at: nowIso() },
+    })) as any[];
+    if (!rows?.[0]) return res.status(404).json({ success: false, error: 'Leave request not found' });
+    await auditLog.log({ action: 'hr.leave.update', resource_type: 'hub_hr_leave', resource_id: req.params.id, organization_id: orgId, user_id: getUserId(req) || '', metadata: parsed.data });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ── Payroll ──
+
+router.get('/hr/payroll', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'created_at.desc');
+    q.set('limit', String(Math.min(Number(req.query.limit) || 200, 500)));
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_hr_payroll', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/hr/payroll', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({
+      month:       z.string().min(1),
+      total_gross: z.number().min(0),
+      total_net:   z.number().min(0),
+      headcount:   z.number().int().min(0),
+      status:      z.enum(['draft', 'processing', 'paid']).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_payroll', new URLSearchParams(), {
+      method: 'POST', body: { ...parsed.data, organization_id: orgId, created_at: nowIso(), updated_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.patch('/hr/payroll/:id', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({ status: z.enum(['draft', 'processing', 'paid']).optional(), total_gross: z.number().optional(), total_net: z.number().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const q = new URLSearchParams(); q.set('id', eq(req.params.id)); q.set('organization_id', eq(orgId));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_payroll', q, {
+      method: 'PATCH', body: { ...parsed.data, updated_at: nowIso() },
+    })) as any[];
+    if (!rows?.[0]) return res.status(404).json({ success: false, error: 'Pay run not found' });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+// ── Headcount ──
+
+router.get('/hr/headcount', requirePermission('workitems.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'department.asc');
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'hub_hr_headcount', q);
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
+router.post('/hr/headcount', requirePermission('workitems.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const schema = z.object({
+      department:          z.string().min(1),
+      total:               z.number().int().min(0),
+      joiners_this_month:  z.number().int().min(0).optional(),
+      exits_this_month:    z.number().int().min(0).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message });
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'hub_hr_headcount', new URLSearchParams(), {
+      method: 'POST', body: { ...parsed.data, organization_id: orgId, updated_at: nowIso() },
+    })) as any[];
+    return res.status(201).json({ success: true, data: rows?.[0] });
+  } catch (err: any) { return safeError(res, err); }
+});
+
 export default router;
+

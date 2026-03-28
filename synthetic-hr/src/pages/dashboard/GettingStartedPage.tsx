@@ -658,7 +658,7 @@ export default function GettingStartedPage(props: {
                       <button
                         key={label}
                         type="button"
-                        onClick={() => props.onNavigate('marketplace')}
+                        onClick={() => props.onNavigate('apps')}
                         className="flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-700 bg-slate-900/30 hover:bg-slate-800/50 text-left transition-colors"
                       >
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: color + '25', border: `1px solid ${color}40` }}>
@@ -676,7 +676,7 @@ export default function GettingStartedPage(props: {
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => props.onNavigate('marketplace')}
+                    onClick={() => props.onNavigate('apps')}
                     className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
                   >
                     <ShoppingBag className="w-4 h-4" />
