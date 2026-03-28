@@ -1,5 +1,13 @@
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowLeft, Zap, Shield, Building2 } from 'lucide-react';
+import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle } from 'lucide-react';
+
+// Replace with your WhatsApp number (country code + number, no + or spaces)
+const CONTACT_WA = '919999999999';
+
+function openWhatsApp(planName: string, note?: string) {
+  const text = note ?? `Hi, I'm interested in ${planName} by Rasi. Can we connect?`;
+  window.open(`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(text)}`, '_blank');
+}
 
 const PLANS = [
   {
@@ -18,7 +26,8 @@ const PLANS = [
       'Governance action plan',
       'Up to 5 agents assessed',
     ],
-    cta: 'Book Audit',
+    cta: 'Book an Audit',
+    waText: "Hi, I'd like to book an AI Governance Audit with Rasi. Can we connect?",
     ctaStyle: 'bg-slate-700 hover:bg-slate-600 text-white',
   },
   {
@@ -42,7 +51,8 @@ const PLANS = [
       'Monthly performance report',
       'Slack alerts & webhook integrations',
     ],
-    cta: 'Start Retainer',
+    cta: 'Talk to us',
+    waText: "Hi, I'm interested in The Retainer plan by Rasi for continuous AI governance. Can we connect?",
     ctaStyle: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20',
   },
   {
@@ -67,6 +77,7 @@ const PLANS = [
       'Priority support & onboarding',
     ],
     cta: 'Contact Sales',
+    waText: "Hi, I'd like to discuss Enterprise pricing with Rasi. We're a regulated org and need a governance partnership.",
     ctaStyle: 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20',
   },
 ];
@@ -182,9 +193,10 @@ export default function PricingPage() {
                 </ul>
 
                 <button
-                  onClick={() => navigate('/signup')}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${plan.ctaStyle}`}
+                  onClick={() => openWhatsApp(plan.name, plan.waText)}
+                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${plan.ctaStyle}`}
                 >
+                  <MessageCircle className="w-4 h-4" />
                   {plan.cta}
                 </button>
               </div>
@@ -276,18 +288,19 @@ export default function PricingPage() {
         <div className="text-center space-y-4 pb-8">
           <h2 className="text-2xl font-bold">Not sure where to start?</h2>
           <p className="text-slate-400">Book a 30-minute governance review. We'll map your current AI footprint and recommend the right plan.</p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-4 flex-wrap">
             <button
-              onClick={() => navigate('/signup')}
-              className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20"
+              onClick={() => openWhatsApp('Rasi', "Hi, I'd like to book a 30-minute AI governance review with Rasi. Can we find a time?")}
+              className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2"
             >
-              Get started free
+              <MessageCircle className="w-4 h-4" />
+              Talk to us on WhatsApp
             </button>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/login')}
               className="px-8 py-3 rounded-xl border border-slate-700 text-slate-300 font-semibold hover:border-slate-600 hover:text-white transition-all"
             >
-              Learn more
+              Log in
             </button>
           </div>
         </div>

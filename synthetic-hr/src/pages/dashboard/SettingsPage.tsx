@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type MouseEvent } from 'react';
 import {
   User, Building2, Users, Bell, Shield,
   UserPlus, Trash2, Eye, Save, CheckCircle2, AlertTriangle,
@@ -6,7 +6,7 @@ import {
   Lock, Smartphone, Monitor, Globe, Zap, FileText,
   TrendingUp, Scale, Webhook, Sparkles, Database, DollarSign,
   Mail, Edit3, Check, Upload, ImagePlus, Send, ExternalLink,
-  Phone, Slack, Download
+  Phone, Slack, Download, MessageCircle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { toast } from '../../lib/toast';
@@ -220,6 +220,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
       ? DEMO_SESSIONS
       : [{ id: 's-current', device: 'This device', browser: 'Current browser', location: 'Your location', lastActive: 'Now', current: true }]
   );
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -623,7 +624,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
             {usageData.planKey !== 'enterprise' && (
               <div className="flex justify-end">
                 <button
-                  onClick={() => onNavigate?.('pricing')}
+                  onClick={() => setShowUpgradeModal(true)}
                   className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-semibold hover:from-cyan-500/20 hover:to-blue-500/20 transition-all"
                 >
                   View plans &amp; upgrade →
@@ -1518,6 +1519,96 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
           {TAB_CONTENT[activeTab]()}
         </div>
       </div>
+
+      {/* Upgrade modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowUpgradeModal(false)}>
+          <div className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl p-8 shadow-2xl" onClick={(e: MouseEvent) => e.stopPropagation()}>
+            <button onClick={() => setShowUpgradeModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400 mb-1">Upgrade your plan</p>
+            <h2 className="text-2xl font-bold text-white mb-1">You're on <span className="text-cyan-300">{usageData?.plan ?? 'Free'}</span></h2>
+            <p className="text-sm text-slate-400 mb-8">Tell us which plan you'd like — we'll reach out within one business day to get you set up.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              {[
+                {
+                  key: 'audit',
+                  name: 'The Audit',
+                  price: '₹25,000',
+                  cadence: 'one-time',
+                  color: 'border-slate-700/60',
+                  highlights: ['AI Workforce Health Scan', 'Risk score report', 'Up to 5 agents assessed'],
+                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to upgrade to The Audit plan. Can we connect?`,
+                },
+                {
+                  key: 'retainer',
+                  name: 'The Retainer',
+                  price: '₹40k–60k',
+                  cadence: '/month',
+                  color: 'border-cyan-500/40',
+                  badge: 'Most popular',
+                  highlights: ['200k gateway requests/month', 'Real-time PII detection', 'Action policies & kill switch'],
+                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to upgrade to The Retainer plan. Can we connect?`,
+                },
+                {
+                  key: 'enterprise',
+                  name: 'Enterprise',
+                  price: 'Custom',
+                  cadence: '',
+                  color: 'border-emerald-500/30',
+                  highlights: ['Unlimited gateway requests', 'VPC / on-prem runtime', 'Dedicated governance manager'],
+                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to discuss Enterprise pricing. Can we connect?`,
+                },
+              ].map(plan => {
+                const isCurrent = usageData?.planKey === plan.key;
+                return (
+                  <div key={plan.key} className={`relative flex flex-col gap-3 rounded-2xl border p-5 ${plan.color} ${isCurrent ? 'opacity-50 cursor-default' : 'bg-slate-800/40'}`}>
+                    {plan.badge && !isCurrent && (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500 text-white">
+                        {plan.badge}
+                      </span>
+                    )}
+                    {isCurrent && (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-600 text-slate-300">
+                        Current plan
+                      </span>
+                    )}
+                    <div>
+                      <p className="font-bold text-white text-sm">{plan.name}</p>
+                      <p className="text-xs text-slate-400 font-mono">{plan.price}{plan.cadence}</p>
+                    </div>
+                    <ul className="space-y-1.5 flex-1">
+                      {plan.highlights.map(h => (
+                        <li key={h} className="flex items-start gap-1.5 text-xs text-slate-300">
+                          <Check className="w-3 h-3 text-emerald-400 mt-0.5 flex-shrink-0" />
+                          {h}
+                        </li>
+                      ))}
+                    </ul>
+                    {!isCurrent && (
+                      <button
+                        onClick={() => { window.open(`https://wa.me/919999999999?text=${encodeURIComponent(plan.waText)}`, '_blank'); setShowUpgradeModal(false); }}
+                        className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-green-400" />
+                        Request upgrade
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-center text-xs text-slate-500">
+              We'll confirm your upgrade and handle onboarding personally.{' '}
+              <span className="text-slate-400">No automated billing — you stay in control.</span>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
