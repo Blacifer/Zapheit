@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle } from 'lucide-react';
 
 // Replace with your WhatsApp number (country code + number, no + or spaces)
-const CONTACT_WA = '919999999999';
+const CONTACT_WA = '919433116259';
 
 function openWhatsApp(planName: string, note?: string) {
   const text = note ?? `Hi, I'm interested in ${planName} by Rasi. Can we connect?`;

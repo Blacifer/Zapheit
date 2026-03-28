@@ -1590,7 +1590,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                     </ul>
                     {!isCurrent && (
                       <button
-                        onClick={() => { window.open(`https://wa.me/919999999999?text=${encodeURIComponent(plan.waText)}`, '_blank'); setShowUpgradeModal(false); }}
+                        onClick={() => { window.open(`https://wa.me/919433116259?text=${encodeURIComponent(plan.waText)}`, '_blank'); setShowUpgradeModal(false); }}
                         className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
                       >
                         <MessageCircle className="w-3.5 h-3.5 text-green-400" />
