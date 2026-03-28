@@ -22,3 +22,7 @@ create policy "service role can read contact leads"
   on contact_leads for select
   to service_role
   using (true);
+
+-- Explicit grants required in addition to RLS policies
+grant insert on contact_leads to anon;
+grant insert on contact_leads to authenticated;
