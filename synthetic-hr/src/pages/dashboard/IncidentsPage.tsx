@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, type MouseEvent, type ChangeEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Search, ShieldAlert, Trash2, X } from 'lucide-react';
 import type { AIAgent, Incident, IncidentSeverity, IncidentType } from '../../types';
 import { toast } from '../../lib/toast';
@@ -145,6 +146,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [barAnimated, setBarAnimated] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   // incidentMeta is derived from DB-backed incident fields (owner/priority/source/notes/next_action
   // added by migration_014). No localStorage needed.
   const deriveMetaFromIncident = (incident: Incident): IncidentUiMeta => ({
@@ -726,16 +728,26 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                   </div>
                 </div>
                 <div className="max-h-[860px] space-y-3 overflow-y-auto pr-2">
+                <AnimatePresence initial={false}>
                 {orderedIncidents.map((incident, index) => {
                   const meta = incidentMeta[incident.id] || defaultMetaForIncident(incident);
                   const isSelected = incident.id === selectedIncidentId;
                   const isChecked = selectedIds.includes(incident.id);
+                  const isResolving = resolvingId === incident.id;
                   const severityAccent = incident.severity === 'critical' ? 'bg-rose-500' : incident.severity === 'high' ? 'bg-orange-500' : incident.severity === 'medium' ? 'bg-amber-400' : 'bg-slate-600';
                   return (
-                    <div
+                    <motion.div
                       key={incident.id}
+                      layout
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={isResolving
+                        ? { scale: [1, 0.98, 1], borderColor: ['rgba(71,85,105,0.6)', '#10B981', 'rgba(71,85,105,0.6)'] }
+                        : { opacity: 1, y: 0, scale: 1 }
+                      }
+                      exit={{ opacity: 0, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, overflow: 'hidden' }}
+                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                       onClick={() => setSelectedIncidentId(incident.id)}
-                      onKeyDown={(event) => {
+                      onKeyDown={(event: React.KeyboardEvent) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           setSelectedIncidentId(incident.id);
@@ -796,9 +808,13 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
-                                updateIncidentStatus(incident.id, 'resolved');
+                                setResolvingId(incident.id);
+                                setTimeout(() => {
+                                  setResolvingId(null);
+                                  void updateIncidentStatus(incident.id, 'resolved');
+                                }, 420);
                               }}
-                              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
+                              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15 active:scale-[0.97]"
                             >
                               <CheckCircle2 className="h-4 w-4" />
                               Resolve
@@ -827,9 +843,10 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
+                </AnimatePresence>
                 </div>
               </div>
             )}

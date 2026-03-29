@@ -5,7 +5,7 @@ import {
   Brain, BarChart3, Users, AlertTriangle, MessageSquare, DollarSign,
   Layers, Settings, Sparkles, Zap, Bot, CheckSquare, Shield, ScrollText,
   Key, PlugZap, FileText, ClipboardList, Database, Server,
-  User, LogOut, Sun, Moon, Bell, ChevronRight,
+  User, LogOut, Sun, Moon, Bell, ChevronRight, Search,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -209,6 +209,35 @@ export function Sidebar({
             </motion.div>
           </button>
         </div>
+
+        {/* Cmd+K search trigger */}
+        {expanded ? (
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
+            className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
+          >
+            <Search className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1 text-left">Search...</span>
+            <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
+          </button>
+        ) : (
+          <Tooltip.Root delayDuration={300}>
+            <Tooltip.Trigger asChild>
+              <button
+                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
+                className="mx-auto mb-3 w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] transition-colors"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content side="right" sideOffset={10} className="z-[100] px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-xs text-white shadow-xl">
+                Search <kbd className="font-mono ml-1">⌘K</kbd>
+                <Tooltip.Arrow className="fill-slate-800" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        )}
 
         {/* Getting Started */}
         {needsOnboarding && (

@@ -983,64 +983,122 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       </div>
 
       {/* Mobile sidebar overlay */}
-      {mobileNavOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
-          <aside className="relative w-72 sidebar-surface p-4 flex flex-col min-h-screen overflow-y-auto">
-            <div className="flex items-center justify-between mb-6 px-2">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                  <Brain className="w-5 h-5 text-white" />
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex">
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setMobileNavOpen(false)}
+            />
+            <motion.aside
+              className="relative w-72 sidebar-surface flex flex-col min-h-screen overflow-y-auto"
+              initial={{ x: -288 }}
+              animate={{ x: 0 }}
+              exit={{ x: -288 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
+                    <Brain className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <span className="text-base font-bold text-white leading-none">RASI</span>
+                    <span className="text-[10px] text-blue-300 block leading-none mt-0.5">Synthetic HR</span>
+                  </div>
                 </div>
-                <span className="text-base font-bold text-white">RASI</span>
-              </div>
-              <button onClick={() => setMobileNavOpen(false)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {/* Reuse the same nav content */}
-            <nav className="flex-1 space-y-1">
-              {needsOnboarding && (
-                <button onClick={() => { navigateTo('getting-started'); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === 'getting-started' && 'nav-item-active')}>
-                  <Sparkles className="w-5 h-5" />
-                  <span className="flex-1 text-left">Getting Started</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">New</span>
+                <button onClick={() => setMobileNavOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors">
+                  <X className="w-4 h-4" />
                 </button>
-              )}
-              {([
-                { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
-                { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
-                { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
-                { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
-                { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
-                { id: 'apps', icon: Layers, label: 'Apps', badge: null },
-                { id: 'settings', icon: Settings, label: 'Settings', badge: null },
-              ] as const).map((item) => (
-                <button key={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
-                  <item.icon className="w-5 h-5 shrink-0" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.badge ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold">{item.badge}</span> : null}
-                </button>
-              ))}
-            </nav>
-            <div className="pt-4 border-t border-white/10">
-              <div className="flex items-center gap-3 px-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-                  <User className="w-4 h-4 text-slate-300" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{user?.organizationName}</p>
-                  <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-                </div>
               </div>
-              <button onClick={signOut} className="w-full flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-red-400 transition-colors">
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
+
+              {/* Cmd+K */}
+              <div className="px-3 pt-3 pb-1">
+                <button
+                  onClick={() => { setMobileNavOpen(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 opacity-0 absolute" aria-hidden />
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <span className="flex-1 text-left">Search...</span>
+                  <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
+                </button>
+              </div>
+
+              {/* Nav */}
+              <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+                {needsOnboarding && (
+                  <button onClick={() => { navigateTo('getting-started'); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === 'getting-started' && 'nav-item-active')}>
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span className="flex-1 text-left text-sm">Getting Started</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">New</span>
+                  </button>
+                )}
+                {([
+                  { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
+                  { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
+                  { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
+                  { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
+                  { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
+                  { id: 'apps', icon: Layers, label: 'Apps', badge: null },
+                  { id: 'settings', icon: Settings, label: 'Settings', badge: null },
+                ] as const).map((item) => (
+                  <button key={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    <span className="flex-1 text-left text-sm">{item.label}</span>
+                    {item.badge ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold tabular-nums">{item.badge}</span> : null}
+                  </button>
+                ))}
+
+                <div className="my-2 border-t border-white/[0.06]" />
+                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Build</p>
+                {(['templates', 'agent-library', 'playbooks', 'action-policies'] as const).map((id) => {
+                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', playbooks: 'Playbooks', 'action-policies': 'Action Policies' };
+                  return (
+                    <button key={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
+                      <span className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-left text-sm">{labels[id]}</span>
+                    </button>
+                  );
+                })}
+
+                <p className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Observe</p>
+                {(['approvals', 'audit-log', 'api-access'] as const).map((id) => {
+                  const labels: Record<string, string> = { approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access' };
+                  return (
+                    <button key={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
+                      <span className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-left text-sm">{labels[id]}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* Footer */}
+              <div className="px-4 py-4 border-t border-white/[0.06]">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
+                    <User className="w-3.5 h-3.5 text-slate-300" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate">{user?.organizationName}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
+                  </div>
+                </div>
+                <button onClick={signOut} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-white/[0.03]">
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out
+                </button>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''} md:pt-0`}>
         {/* Sidebar — desktop only */}

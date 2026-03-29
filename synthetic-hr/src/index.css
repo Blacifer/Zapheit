@@ -165,12 +165,12 @@
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-slate-950;
-    @apply shadow-sm transition-colors hover:bg-slate-100 active:bg-white/90;
+    @apply shadow-sm transition-[colors,transform] duration-100 hover:bg-slate-100 active:bg-white/90 active:scale-[0.97];
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.02] px-5 py-3 font-semibold text-slate-100;
-    @apply transition-colors hover:bg-white/[0.06] active:bg-white/[0.04];
+    @apply transition-[colors,transform] duration-100 hover:bg-white/[0.06] active:bg-white/[0.04] active:scale-[0.97];
   }
 
   .section-padding {
