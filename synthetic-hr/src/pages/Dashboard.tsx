@@ -1,11 +1,10 @@
-import { useState, useEffect, lazy, Suspense, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
-  DollarSign, Database, Key, Settings, X, Play, Layers,
-  Sparkles, ChevronLeft, ChevronDown, MessageSquare, AlertTriangle, PlugZap, Bot,
-  CheckSquare, ClipboardList, ScrollText, Server, Shield, Search, Sun, Moon, Menu,
+  Brain, Bell, User, LogOut, BarChart3, Users, DollarSign, Settings, X,
+  Layers, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, Menu,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -14,6 +13,7 @@ import { useAgents, useIncidents, useCostData, queryKeys } from '../hooks/useDat
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
+import { Sidebar } from '../components/Sidebar';
 import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
 
@@ -299,24 +299,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     localStorage.setItem(themePrefKey, isLightMode ? 'light' : 'dark');
   }, [isLightMode]);
 
-  // Sidebar expansion state
-  const MORE_PAGES = useMemo(() => new Set([
-    'templates', 'agent-library', 'approvals', 'action-policies', 'audit-log', 'api-access',
-  ]), []);
-  const ADVANCED_PAGES = useMemo(() => new Set([
-    'developer', 'playbooks', 'jobs', 'blackbox', 'runtime-workers',
-  ]), []);
-  const [sidebarMoreOpen, setSidebarMoreOpen] = useState(() =>
-    MORE_PAGES.has(location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || '')
-  );
-  const [sidebarAdvancedOpen, setSidebarAdvancedOpen] = useState(() =>
-    ADVANCED_PAGES.has(location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || '')
-  );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  useEffect(() => {
-    if (MORE_PAGES.has(currentPage)) setSidebarMoreOpen(true);
-    if (ADVANCED_PAGES.has(currentPage)) setSidebarAdvancedOpen(true);
-  }, [currentPage, MORE_PAGES, ADVANCED_PAGES]);
 
   // Setup progress bar
   const setupBarDismissKey = `synthetic_hr_setup_bar_dismissed:${user?.organizationName || 'workspace'}`;
@@ -1061,202 +1044,21 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
       <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''} md:pt-0`}>
         {/* Sidebar — desktop only */}
-        <aside className="hidden md:flex w-64 sidebar-surface p-4 flex-col min-h-screen">
-          <div className="flex items-center gap-3 mb-6 px-2">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-              <Brain className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-lg font-bold text-white">RASI</span>
-              <span className="text-xs text-blue-300 block">Synthetic HR</span>
-            </div>
-          </div>
-
-          {/* Cmd+K search trigger */}
-          <button
-            onClick={() => {
-              const e = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
-              window.dispatchEvent(e);
-            }}
-            className="flex items-center gap-2 w-full mb-4 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span className="flex-1 text-left">Search...</span>
-            <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
-          </button>
-
-          <nav className="flex-1 space-y-1" role="navigation" aria-label="Main navigation">
-            {/* ── Core 7 (always visible) ── */}
-            {needsOnboarding && (
-              <button
-                onClick={() => navigateTo('getting-started')}
-                className={cn('nav-item', currentPage === 'getting-started' && 'nav-item-active')}
-                aria-current={currentPage === 'getting-started' ? 'page' : undefined}
-              >
-                <Sparkles className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">Getting Started</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">New</span>
-              </button>
-            )}
-            {([
-              { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
-              { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
-              { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
-              { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
-              { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
-              { id: 'apps', icon: Layers, label: 'Apps', badge: null },
-              { id: 'settings', icon: Settings, label: 'Settings', badge: null },
-            ] as const).map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-                {item.badge ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold tabular-nums">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-
-            {/* ── More (expandable) ── */}
-            <button
-              onClick={() => setSidebarMoreOpen(v => !v)}
-              className="nav-item mt-1"
-              aria-expanded={sidebarMoreOpen}
-            >
-              <span className="flex-1 min-w-0 text-left text-xs font-semibold uppercase tracking-[0.16em]">More</span>
-              <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', sidebarMoreOpen && 'rotate-180')} />
-            </button>
-
-            {sidebarMoreOpen && (
-              <div className="space-y-1 pl-1 border-l border-white/[0.06] ml-2">
-                {/* Agents */}
-                <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-medium">Agents</p>
-                {[
-                  { id: 'templates', icon: Zap, label: 'Templates' },
-                  { id: 'agent-library', icon: Bot, label: 'Agent Library' },
-                ].map((item) => (
-                  <button key={item.id} onClick={() => navigateTo(item.id)}
-                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                    aria-current={currentPage === item.id ? 'page' : undefined}>
-                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
-                  </button>
-                ))}
-
-                {/* Monitor+ */}
-                <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-medium">Monitor</p>
-                {[
-                  { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
-                  { id: 'action-policies', icon: Shield, label: 'Action Policies' },
-                  { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
-                  { id: 'api-access', icon: Key, label: 'API Access' },
-                ].map((item) => (
-                  <button key={item.id} onClick={() => navigateTo(item.id)}
-                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                    aria-current={currentPage === item.id ? 'page' : undefined}>
-                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
-                  </button>
-                ))}
-
-              </div>
-            )}
-
-            {/* ── Advanced (expandable) ── */}
-            <button
-              onClick={() => setSidebarAdvancedOpen(v => !v)}
-              className="nav-item mt-1"
-              aria-expanded={sidebarAdvancedOpen}
-            >
-              <span className="flex-1 min-w-0 text-left text-xs font-semibold uppercase tracking-[0.16em]">Advanced</span>
-              <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', sidebarAdvancedOpen && 'rotate-180')} />
-            </button>
-
-            {sidebarAdvancedOpen && (
-              <div className="space-y-1 pl-1 border-l border-white/[0.06] ml-2">
-                {[
-                  { id: 'developer', icon: PlugZap, label: 'Developer' },
-                  { id: 'playbooks', icon: FileText, label: 'Playbooks' },
-                  { id: 'jobs', icon: ClipboardList, label: 'Run History' },
-                  { id: 'blackbox', icon: Database, label: 'Black Box' },
-                  { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
-                ].map((item) => (
-                  <button key={item.id} onClick={() => navigateTo(item.id)}
-                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                    aria-current={currentPage === item.id ? 'page' : undefined}>
-                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </nav>
-
-          <div className="pt-4 border-t border-white/10">
-            {/* Demo Mode Badge */}
-            {isDemoMode && (
-              <div className="flex items-center gap-2 px-2 mb-3">
-                <span className="px-2 py-1 rounded text-xs bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1">
-                  <Play className="w-3 h-3" />
-                  Demo Mode
-                </span>
-              </div>
-            )}
-            {/* Role Badge */}
-            <div className="flex items-center gap-2 px-2 mb-4">
-              <span className={`px-2 py-1 rounded text-xs ${role === 'super_admin' ? 'bg-purple-400/10 text-purple-400' :
-                role === 'ops_manager' ? 'bg-blue-400/10 text-blue-400' :
-                  'bg-slate-400/10 text-slate-400'
-                }`}>
-                {role === 'super_admin' ? 'Admin' : role === 'ops_manager' ? 'Manager' : 'Auditor'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 px-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-                <User className="w-4 h-4 text-slate-300" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user?.organizationName}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-              </div>
-              {/* Theme toggle */}
-              <button
-                onClick={() => setIsLightMode((v: boolean) => !v)}
-                className="p-2 text-slate-400 hover:text-white transition-colors"
-                title={isLightMode ? 'Switch to dark mode' : 'Switch to dim mode'}
-              >
-                {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-              </button>
-              {/* Notification Bell */}
-              <button
-                onClick={() => setShowNotificationPanel(!showNotificationPanel)}
-                className="relative p-2 text-slate-400 hover:text-white transition-colors"
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-            </div>
-            <button
-              onClick={signOut}
-              className="w-full flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-red-400 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-          </div>
-        </aside>
+        <Sidebar
+          currentPage={currentPage}
+          onNavigate={navigateTo}
+          incidentBadge={incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length}
+          unreadCount={unreadCount}
+          needsOnboarding={needsOnboarding}
+          isDemoMode={isDemoMode}
+          isLightMode={isLightMode}
+          onToggleTheme={() => setIsLightMode((v: boolean) => !v)}
+          onToggleNotifications={() => setShowNotificationPanel(!showNotificationPanel)}
+          onSignOut={signOut}
+          orgName={user?.organizationName}
+          email={user?.email}
+          role={role}
+        />
 
         {/* Notification Panel */}
         {showNotificationPanel && (
@@ -1499,6 +1301,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           {loading ? (
             <DashboardSectionLoading />
           ) : (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              >
             <Suspense fallback={<DashboardSectionLoading />}>
               {[
                 'persona', 'shadow', 'api-analytics',
@@ -1743,6 +1553,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 </Routes>
               </ErrorBoundary>
 	            </Suspense>
+              </motion.div>
+            </AnimatePresence>
 	          )}
           </div>
 	        </main>

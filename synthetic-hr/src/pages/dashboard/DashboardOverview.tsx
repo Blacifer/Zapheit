@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity,
   ArrowRight,
@@ -497,8 +498,23 @@ const hasData = agents.length > 0;
     return limit > 0 && spend / limit >= 0.75;
   });
 
+  // Ambient health color based on system state
+  const ambientColor = severeIncidents.length > 0
+    ? '#EF4444'
+    : openIncidents.length > 0
+      ? '#F59E0B'
+      : '#10B981';
+
   return (
     <div className="space-y-8">
+      {/* Ambient system health bar */}
+      <motion.div
+        className="h-0.5 rounded-full -mt-2 mb-0"
+        animate={{ backgroundColor: ambientColor, opacity: [0.6, 1, 0.6] }}
+        transition={{ backgroundColor: { duration: 1.5, ease: 'easeInOut' }, opacity: { duration: 3, repeat: Infinity, ease: 'easeInOut' } }}
+        style={{ backgroundColor: ambientColor }}
+      />
+
       {/* 90% quota warning banner */}
       {usageData && !isUnlimited && quotaPct >= 90 && !quotaBannerDismissed && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm">
@@ -563,6 +579,50 @@ const hasData = agents.length > 0;
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* Agent Status Grid — one node per governed agent */}
+      {agents.length > 0 && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Fleet · {agents.length} agent{agents.length !== 1 ? 's' : ''}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {agents.map((agent) => {
+              const isActive = agent.status === 'active';
+              const isPaused = agent.status === 'paused';
+              const isTerminated = agent.status === 'terminated';
+              const dotColor = isActive ? '#10B981' : isPaused ? '#F59E0B' : '#64748b';
+              return (
+                <motion.button
+                  key={agent.id}
+                  title={`${agent.name} · ${agent.status}`}
+                  onClick={() => onNavigate?.('fleet')}
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: isTerminated ? 0.45 : 1, scale: 1 }}
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+                  className="relative flex items-center justify-center w-8 h-8 rounded-full border border-white/10 bg-slate-800/60"
+                >
+                  {/* Pulse ring for active agents */}
+                  {isActive && (
+                    <motion.span
+                      className="absolute inset-0 rounded-full"
+                      animate={{ scale: [1, 1.45], opacity: [0.5, 0] }}
+                      transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
+                      style={{ border: `1.5px solid ${dotColor}` }}
+                    />
+                  )}
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: dotColor }}
+                  />
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -717,15 +777,25 @@ const hasData = agents.length > 0;
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+            variants={{ show: { transition: { staggerChildren: 0.07 } } }}
+            initial="hidden"
+            animate="show"
+          >
             {nowCards.map((card) => (
-              <div key={card.label} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <motion.div
+                key={card.label}
+                variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0 } }}
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.04)]"
+              >
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">{card.label}</p>
                 <p className={`mt-3 text-3xl font-bold font-mono tabular-nums ${card.tone}`}>{card.value}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{card.note}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-800/80 pt-5 md:grid-cols-2 xl:grid-cols-4">
           {movementCards.map((card) => (
@@ -863,24 +933,31 @@ const hasData = agents.length > 0;
 
           <div className="mt-6 space-y-3">
             {activityFeed.length > 0 ? (
-              activityFeed.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`flex items-start gap-4 rounded-2xl border border-slate-800 p-4 ${index === 0
-                    ? 'bg-[linear-gradient(180deg,rgba(8,47,73,0.24),rgba(2,6,23,0.56))] shadow-[inset_0_1px_0_rgba(34,211,238,0.10)]'
-                    : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
-                    }`}
-                >
-                  <div className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-blue-300'}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="font-semibold text-white">{item.title}</p>
-                      <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(item.at)}</span>
+              <AnimatePresence initial={false}>
+                {activityFeed.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, y: 12, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -8, height: 0 }}
+                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                    className={`flex items-start gap-4 rounded-2xl border border-slate-800 p-4 overflow-hidden ${index === 0
+                      ? 'bg-[linear-gradient(180deg,rgba(8,47,73,0.24),rgba(2,6,23,0.56))] shadow-[inset_0_1px_0_rgba(34,211,238,0.10)]'
+                      : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
+                      }`}
+                  >
+                    <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-blue-300'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <p className="font-semibold text-white">{item.title}</p>
+                        <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(item.at)}</span>
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
                     </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
-                  </div>
-                </div>
-              ))
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             ) : (
               <div className="rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_42%),rgba(2,6,23,0.55)] p-5">
                 <p className="font-semibold text-white">No recent activity yet</p>

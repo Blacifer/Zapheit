@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
@@ -1156,15 +1157,23 @@ export default function FleetPage({
           <button onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterType('all'); }} className="mt-4 text-xs text-cyan-400 transition hover:text-cyan-300">Clear filters</button>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <motion.div
+          className="grid gap-4"
+          variants={{ show: { transition: { staggerChildren: 0.05 } } }}
+          initial="hidden"
+          animate="show"
+        >
           {filteredAgents.map((agent) => {
             return (
-              <div
+              <motion.div
                 key={agent.id}
-                className={`relative border rounded-2xl overflow-hidden transition-all backdrop-blur-sm ${highlightedAgentId === agent.id
+                variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                whileHover={{ y: agent.status !== 'terminated' ? -2 : 0, transition: { duration: 0.15 } }}
+                className={`relative border rounded-2xl overflow-hidden transition-colors backdrop-blur-sm ${highlightedAgentId === agent.id
                   ? 'border-cyan-400/60 ring-1 ring-cyan-400/40 bg-cyan-500/5'
                   : 'border-slate-700/60 bg-slate-900/60 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
-                  }`}
+                  } ${agent.status === 'terminated' ? 'opacity-60' : ''}`}
               >
                 {/* Main card row */}
                 <div className="p-5">
@@ -1176,7 +1185,16 @@ export default function FleetPage({
                           agent.status === 'paused' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'
                           }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${agent.status === 'active' ? 'bg-emerald-400 animate-pulse shadow-[0_0_6px_theme(colors.emerald.400)]' : agent.status === 'paused' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'}`} />
+                          <span className="relative flex-shrink-0 w-1.5 h-1.5">
+                            {agent.status === 'active' && (
+                              <motion.span
+                                className="absolute inset-0 rounded-full bg-emerald-400"
+                                animate={{ scale: [1, 2.2], opacity: [0.6, 0] }}
+                                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+                              />
+                            )}
+                            <span className={`absolute inset-0 rounded-full ${agent.status === 'active' ? 'bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]' : agent.status === 'paused' ? 'bg-amber-400' : 'bg-red-400'}`} />
+                          </span>
                           {agent.status}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${agent.risk_level === 'low' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
@@ -1370,10 +1388,10 @@ export default function FleetPage({
                   </div>
                 )}
 
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       )}
 
       {activeWorkspaceAgent ? (
