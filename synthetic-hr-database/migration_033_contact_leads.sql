@@ -19,7 +19,7 @@ create policy "anon can insert contact leads"
 
 -- Only service role can read (owner views via Supabase dashboard)
 create policy "service role can read contact leads"
-  on contact_leads for select
+  on contact_leads for select 
   to service_role
   using (true);
 
