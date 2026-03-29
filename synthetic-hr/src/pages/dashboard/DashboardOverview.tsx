@@ -21,6 +21,7 @@ import type { AIAgent, Incident, CostData } from '../../types';
 import type { AuditLogEntry } from '../../lib/api/governance';
 import OperationalMetrics from '../../components/OperationalMetrics';
 import { api } from '../../lib/api-client';
+import { authenticatedFetch } from '../../lib/api/_helpers';
 import { useCountUp } from '../../hooks/useCountUp';
 import { useApp } from '../../context/AppContext';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
@@ -220,6 +221,33 @@ export default function DashboardOverview({
       }
     } catch { /* silently ignore */ }
   }, []);
+
+  // Plan & Usage
+  type UsageData = { used: number; quota: number; plan: string; planKey: string; month: string };
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
+  const quotaWarnKey = `synthetic_hr_quota_warn_dismissed:${orgScope}`;
+  const [quotaBannerDismissed, setQuotaBannerDismissed] = useState<boolean>(() => {
+    const stored = loadFromStorage<string>(quotaWarnKey, '');
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    return stored === thisMonth;
+  });
+  const dismissQuotaBanner = useCallback(() => {
+    saveToStorage(quotaWarnKey, new Date().toISOString().slice(0, 7));
+    setQuotaBannerDismissed(true);
+  }, [quotaWarnKey]);
+
+  useEffect(() => {
+    authenticatedFetch<UsageData>('/usage').then((res) => {
+      if (res.success && res.data) setUsageData(res.data);
+    }).catch(() => {});
+  }, []);
+
+  const quotaPct = usageData && usageData.quota > 0 ? Math.round((usageData.used / usageData.quota) * 100) : 0;
+  const isUnlimited = usageData?.quota === -1;
+  const resetLabel = (() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1, 1);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  })();
 
   // Initial load
   useEffect(() => { void loadOverviewState(); void loadTeamActivity(); }, [loadOverviewState, loadTeamActivity]);
@@ -471,6 +499,28 @@ const hasData = agents.length > 0;
 
   return (
     <div className="space-y-8">
+      {/* 90% quota warning banner */}
+      {usageData && !isUnlimited && quotaPct >= 90 && !quotaBannerDismissed && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-rose-300">
+            <span className="h-2 w-2 rounded-full bg-rose-400 animate-pulse shrink-0" />
+            <span>
+              You&apos;ve used <span className="font-semibold">{quotaPct}%</span> of your monthly gateway quota
+              ({usageData.used.toLocaleString()} / {usageData.quota.toLocaleString()} requests).
+              Requests will be blocked at 100%.
+            </span>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => onNavigate?.('settings')} className="text-xs font-semibold text-rose-200 hover:text-white transition-colors underline underline-offset-2">
+              Upgrade plan →
+            </button>
+            <button onClick={dismissQuotaBanner} className="p-1 text-rose-400 hover:text-rose-200 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Morning Briefing — shown once per calendar day */}
       {showBriefing && (
         <div className="relative flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 shadow-sm">
@@ -498,6 +548,12 @@ const hasData = agents.length > 0;
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-400">
                 Month spend: {formatCompactCurrency(totalCost)}
               </span>
+              {usageData && !isUnlimited && quotaPct >= 70 && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${quotaPct >= 90 ? 'border-rose-500/30 bg-rose-500/10 text-rose-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${quotaPct >= 90 ? 'bg-rose-400' : 'bg-amber-400'}`} />
+                  {quotaPct}% gateway quota used
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -695,6 +751,50 @@ const hasData = agents.length > 0;
           ))}
         </div>
       </section>
+
+      {/* Plan & Usage card */}
+      {usageData && (
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-white">Plan &amp; Usage</p>
+            <div className="flex items-center gap-3">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/25 text-blue-300 font-medium">{usageData.plan}</span>
+              <button onClick={() => onNavigate?.('settings')} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                Settings →
+              </button>
+            </div>
+          </div>
+          {isUnlimited ? (
+            <p className="text-sm text-emerald-300 font-medium">Unlimited requests — no quota</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500 mb-2">Gateway requests this month</p>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex-1 h-2 rounded-full bg-slate-700/60 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${quotaPct >= 90 ? 'bg-rose-500' : quotaPct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(quotaPct, 100)}%` }}
+                  />
+                </div>
+                <span className={`text-xs font-semibold tabular-nums shrink-0 ${quotaPct >= 90 ? 'text-rose-300' : quotaPct >= 70 ? 'text-amber-300' : 'text-slate-300'}`}>
+                  {quotaPct}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>{usageData.used.toLocaleString()} / {usageData.quota.toLocaleString()} requests</span>
+                <span>Resets {resetLabel}</span>
+              </div>
+              {quotaPct >= 70 && (
+                <p className={`mt-3 text-xs ${quotaPct >= 90 ? 'text-rose-400' : 'text-amber-400'}`}>
+                  {quotaPct >= 90
+                    ? 'Over 90% used — requests will be blocked at 100%. Consider upgrading.'
+                    : `${100 - quotaPct}% remaining — consider upgrading if usage is growing.`}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
