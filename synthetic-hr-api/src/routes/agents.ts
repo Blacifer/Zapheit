@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { validateRequestBody, agentSchemas } from '../schemas/validation';
 import { requirePermission } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { supabaseRestAsUser, supabaseRest, eq, gte, in_ } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 
@@ -450,10 +450,13 @@ router.post('/agents', requirePermission('agents.create'), async (req: Request, 
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
 
     // Enforce per-plan agent limits
+    const jwt = getUserJwt(req);
     try {
+      const orgParams = new URLSearchParams({ id: eq(orgId), select: 'plan' });
+      const agentParams = new URLSearchParams({ organization_id: eq(orgId), status: 'neq.terminated', select: 'id' });
       const [orgRows, agentCountRows] = await Promise.all([
-        supabaseRest('organizations', `id=eq.${orgId}&select=plan`, { method: 'GET' }),
-        supabaseRest('ai_agents', `organization_id=eq.${orgId}&status=neq.terminated&select=id`, { method: 'GET' }),
+        supabaseRestAsUser(jwt, 'organizations', orgParams),
+        supabaseRestAsUser(jwt, 'ai_agents', agentParams),
       ]);
       const plan = String(Array.isArray(orgRows) ? orgRows[0]?.plan || 'free' : 'free').toLowerCase();
       const limit = PLAN_AGENT_LIMITS[plan] ?? PLAN_AGENT_LIMITS.free;
