@@ -298,6 +298,13 @@ const PLAN_QUOTAS: Record<string, number> = {
   enterprise: -1,
 };
 
+const PLAN_AGENT_LIMITS: Record<string, number> = {
+  free: 3,
+  audit: 5,
+  retainer: 50,
+  enterprise: -1,
+};
+
 const PLAN_DISPLAY: Record<string, string> = {
   free: 'Free',
   audit: 'The Audit',
@@ -326,13 +333,24 @@ router.get('/usage', requirePermission('dashboard.read'), async (req: Request, r
     const usageParams = new URLSearchParams();
     usageParams.set('org_id', eq(orgId));
     usageParams.set('month', `eq.${month}`);
-    const usageRows = await supabaseRestAsUser(jwt, 'gateway_usage', usageParams);
+
+    const agentCountParams = new URLSearchParams();
+    agentCountParams.set('organization_id', eq(orgId));
+    agentCountParams.set('status', 'neq.terminated');
+    agentCountParams.set('select', 'id');
+
+    const [usageRows, agentRows] = await Promise.all([
+      supabaseRestAsUser(jwt, 'gateway_usage', usageParams),
+      supabaseRestAsUser(jwt, 'ai_agents', agentCountParams),
+    ]);
     const usage = Array.isArray(usageRows) ? usageRows[0] : null;
     const used: number = usage?.request_count ?? 0;
+    const agentCount: number = Array.isArray(agentRows) ? agentRows.length : 0;
+    const agentLimit: number = PLAN_AGENT_LIMITS[planKey] ?? PLAN_AGENT_LIMITS.free;
 
     return res.json({
       success: true,
-      data: { used, quota, plan: planName, planKey, month },
+      data: { used, quota, plan: planName, planKey, month, agentCount, agentLimit },
     });
   } catch (error: any) {
     errorResponse(res, error);

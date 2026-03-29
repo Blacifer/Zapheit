@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
@@ -61,6 +61,17 @@ export default function FleetPage({
   isLoading = false,
 }: FleetPageProps) {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [agentLimit, setAgentLimit] = useState<number>(-1);
+  const fetchAgentLimit = useCallback(async () => {
+    try {
+      const { authenticatedFetch } = await import('../../lib/api/_helpers');
+      const res = await authenticatedFetch<{ agentLimit?: number }>('/usage');
+      if (res.success && res.data?.agentLimit !== undefined) setAgentLimit(res.data.agentLimit);
+    } catch { /* non-blocking */ }
+  }, []);
+  useEffect(() => { void fetchAgentLimit(); }, [fetchAgentLimit]);
+  const activeAgentCount = agents.filter(a => a.status !== 'terminated').length;
+  const atAgentLimit = agentLimit !== -1 && activeAgentCount >= agentLimit;
   type PolicyRec = { service: string; action: string; require_approval: boolean; required_role: 'manager' | 'admin'; reason: string; notes: string };
   const [policyRecs, setPolicyRecs] = useState<PolicyRec[] | null>(null);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
@@ -483,7 +494,12 @@ export default function FleetPage({
           return;
         }
       }
-      toast.error('Failed to create agent properly.');
+      const errMsg = (created as any)?.error;
+      if (errMsg && String(errMsg).includes('plan')) {
+        toast.error(errMsg);
+      } else {
+        toast.error('Failed to create agent properly.');
+      }
     } catch (err) {
       console.error('Add agent error:', err);
       toast.error('An error occurred while adding the agent to fleet.');
@@ -1040,14 +1056,23 @@ export default function FleetPage({
               Export CSV
             </button>
           )}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="btn-primary px-4 py-2 text-sm flex items-center gap-2"
-            aria-label="Add new AI agent"
-          >
-            <Plus className="w-4 h-4" />
-            Add Agent
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={() => !atAgentLimit && setShowAddModal(true)}
+              disabled={atAgentLimit}
+              className={`px-4 py-2 text-sm flex items-center gap-2 rounded-xl font-semibold transition-all ${atAgentLimit ? 'bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600/50' : 'btn-primary'}`}
+              aria-label="Add new AI agent"
+              title={atAgentLimit ? `Plan limit reached (${activeAgentCount}/${agentLimit} agents)` : undefined}
+            >
+              <Plus className="w-4 h-4" />
+              Add Agent
+            </button>
+            {agentLimit !== -1 && (
+              <span className={`text-[10px] tabular-nums ${atAgentLimit ? 'text-rose-400' : 'text-slate-500'}`}>
+                {activeAgentCount}/{agentLimit} agents used
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

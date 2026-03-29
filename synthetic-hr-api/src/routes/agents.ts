@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { validateRequestBody, agentSchemas } from '../schemas/validation';
 import { requirePermission } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
+import { supabaseRestAsUser, supabaseRest, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 
@@ -437,10 +437,40 @@ router.get('/agents/:id/workspace', requirePermission('agents.read'), async (req
   }
 });
 
+const PLAN_AGENT_LIMITS: Record<string, number> = {
+  free: 3,
+  audit: 5,
+  retainer: 50,
+  enterprise: -1,
+};
+
 router.post('/agents', requirePermission('agents.create'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    // Enforce per-plan agent limits
+    try {
+      const [orgRows, agentCountRows] = await Promise.all([
+        supabaseRest('organizations', `id=eq.${orgId}&select=plan`, { method: 'GET' }),
+        supabaseRest('ai_agents', `organization_id=eq.${orgId}&status=neq.terminated&select=id`, { method: 'GET' }),
+      ]);
+      const plan = String(Array.isArray(orgRows) ? orgRows[0]?.plan || 'free' : 'free').toLowerCase();
+      const limit = PLAN_AGENT_LIMITS[plan] ?? PLAN_AGENT_LIMITS.free;
+      const currentCount = Array.isArray(agentCountRows) ? agentCountRows.length : 0;
+      if (limit !== -1 && currentCount >= limit) {
+        return res.status(403).json({
+          success: false,
+          error: `Your ${plan} plan allows up to ${limit} active agent${limit !== 1 ? 's' : ''}. You currently have ${currentCount}. Upgrade your plan to add more.`,
+          code: 'agent_limit_exceeded',
+          plan,
+          limit,
+          current: currentCount,
+        });
+      }
+    } catch (limitErr: any) {
+      logger.warn('Agent limit check failed (allowing creation)', { orgId, error: String(limitErr?.message || limitErr) });
+    }
 
     const { valid, data: validatedData, errors } = validateRequestBody<z.infer<typeof agentSchemas.create>>(agentSchemas.create, req.body);
     if (!valid || !validatedData) {

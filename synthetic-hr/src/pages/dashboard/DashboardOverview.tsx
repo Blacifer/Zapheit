@@ -223,7 +223,7 @@ export default function DashboardOverview({
   }, []);
 
   // Plan & Usage
-  type UsageData = { used: number; quota: number; plan: string; planKey: string; month: string };
+  type UsageData = { used: number; quota: number; plan: string; planKey: string; month: string; agentCount?: number; agentLimit?: number };
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const quotaWarnKey = `synthetic_hr_quota_warn_dismissed:${orgScope}`;
   const [quotaBannerDismissed, setQuotaBannerDismissed] = useState<boolean>(() => {
@@ -792,6 +792,14 @@ const hasData = agents.length > 0;
                 </p>
               )}
             </>
+          )}
+          {usageData.agentLimit !== undefined && usageData.agentLimit !== -1 && (
+            <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between text-xs text-slate-500">
+              <span>Active agents</span>
+              <span className={`font-semibold tabular-nums ${(usageData.agentCount ?? 0) >= usageData.agentLimit ? 'text-rose-300' : 'text-slate-300'}`}>
+                {usageData.agentCount ?? 0} / {usageData.agentLimit}
+              </span>
+            </div>
           )}
         </div>
       )}

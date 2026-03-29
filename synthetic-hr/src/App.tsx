@@ -307,7 +307,7 @@ function App() {
               ? <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />
               : <Navigate to="/login" replace />
           } />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage onHome={() => navigate('/')} />} />
         </Routes>
       </Suspense>
 
@@ -338,3 +338,21 @@ function App() {
 }
 
 export default App;
+
+function NotFoundPage({ onHome }: { onHome: () => void }) {
+  return (
+    <div className="min-h-screen bg-[#050d1a] flex items-center justify-center p-6">
+      <div className="text-center max-w-sm">
+        <p className="text-7xl font-bold text-white/10 font-mono">404</p>
+        <h1 className="mt-4 text-xl font-bold text-white">Page not found</h1>
+        <p className="mt-2 text-sm text-slate-400">The page you're looking for doesn't exist or has been moved.</p>
+        <button
+          onClick={onHome}
+          className="mt-8 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-sm font-semibold hover:from-blue-600 hover:to-cyan-500 transition-all"
+        >
+          Go to home
+        </button>
+      </div>
+    </div>
+  );
+}
