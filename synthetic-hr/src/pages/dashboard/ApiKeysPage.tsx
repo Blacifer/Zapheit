@@ -562,7 +562,7 @@ export default function ApiKeysPage({
               </section>
 
               <div className="space-y-4">
-                <MetricTile label="Observed requests" value={formatNumber(totalRequests30d)} hint="Across all active keys in the last 30 days" icon={<Activity className="h-5 w-5 text-violet-300" />} />
+                <MetricTile label="Observed requests · 30d" value={formatNumber(totalRequests30d)} hint="Across all active keys in the last 30 days" icon={<Activity className="h-5 w-5 text-violet-300" />} />
                 <MetricTile label="Error rate" value={formatPercent(averageErrorRate)} hint={`${formatNumber(totalErrors30d)} error responses across all keys`} icon={<ShieldAlert className="h-5 w-5 text-amber-300" />} />
                 <MetricTile label="Active managers" value={String(activeManagers)} hint="Users assigned to manage one or more active keys" icon={<Users className="h-5 w-5 text-cyan-300" />} />
                 <MetricTile label="Last key activity" value={latestUsed ? formatRelativeTime(latestUsed) : 'Never'} hint={latestUsed ? formatDateTime(latestUsed) : 'No key activity recorded'} icon={<CalendarClock className="h-5 w-5 text-emerald-300" />} />

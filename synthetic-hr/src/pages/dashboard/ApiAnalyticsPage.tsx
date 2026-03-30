@@ -384,11 +384,11 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
               </svg>
             </div>
 
-            <div className="text-[13px] text-zinc-400 mb-0.5">Total requests</div>
+            <div className="text-[13px] text-zinc-400 mb-0.5">Total requests · {timeRange === '24h' ? 'last 24h' : timeRange === '7d' ? 'last 7 days' : 'last 30 days'}</div>
             <div className="text-sm font-semibold">{formatNumber(data.totals.requests)}</div>
-            <div className="mt-4 text-[13px] text-zinc-400 mb-0.5">Total tokens</div>
+            <div className="mt-4 text-[13px] text-zinc-400 mb-0.5">Total tokens · {timeRange === '24h' ? 'last 24h' : timeRange === '7d' ? 'last 7 days' : 'last 30 days'}</div>
             <div className="text-sm font-semibold">{formatCompact(data.totals.tokens)}</div>
-            <div className="mt-4 text-[13px] text-zinc-400 mb-0.5">Total cost</div>
+            <div className="mt-4 text-[13px] text-zinc-400 mb-0.5">Total cost · {timeRange === '24h' ? 'last 24h' : timeRange === '7d' ? 'last 7 days' : 'last 30 days'}</div>
             <div className="text-sm font-semibold">{formatCurrency(data.totals.cost)}</div>
           </div>
 

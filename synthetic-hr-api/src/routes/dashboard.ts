@@ -330,21 +330,33 @@ router.get('/usage', requirePermission('dashboard.read'), async (req: Request, r
     const quota = PLAN_QUOTAS[planKey] ?? PLAN_QUOTAS.free;
     const planName = PLAN_DISPLAY[planKey] ?? planKey;
 
-    const usageParams = new URLSearchParams();
-    usageParams.set('org_id', eq(orgId));
-    usageParams.set('month', `eq.${month}`);
+    // Sum request_count from cost_tracking for this calendar month.
+    // gateway_usage is only incremented by /chat/completions; agent chat
+    // endpoints write to cost_tracking exclusively, so cost_tracking is
+    // the authoritative source for all request counts.
+    const monthStart = `${month}-01`;
+    const nextMonth = new Date(`${month}-01`);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthEnd = nextMonth.toISOString().slice(0, 10);
+
+    const costUsageParams = new URLSearchParams();
+    costUsageParams.set('organization_id', eq(orgId));
+    costUsageParams.set('date', gte(monthStart));
+    costUsageParams.set('date', `lt.${monthEnd}`);
+    costUsageParams.set('select', 'request_count');
 
     const agentCountParams = new URLSearchParams();
     agentCountParams.set('organization_id', eq(orgId));
     agentCountParams.set('status', 'neq.terminated');
     agentCountParams.set('select', 'id');
 
-    const [usageRows, agentRows] = await Promise.all([
-      supabaseRestAsUser(jwt, 'gateway_usage', usageParams),
+    const [costUsageRows, agentRows] = await Promise.all([
+      supabaseRestAsUser(jwt, 'cost_tracking', costUsageParams),
       supabaseRestAsUser(jwt, 'ai_agents', agentCountParams),
     ]);
-    const usage = Array.isArray(usageRows) ? usageRows[0] : null;
-    const used: number = usage?.request_count ?? 0;
+    const used: number = Array.isArray(costUsageRows)
+      ? costUsageRows.reduce((sum: number, r: any) => sum + (r.request_count ?? 0), 0)
+      : 0;
     const agentCount: number = Array.isArray(agentRows) ? agentRows.length : 0;
     const agentLimit: number = PLAN_AGENT_LIMITS[planKey] ?? PLAN_AGENT_LIMITS.free;
 
