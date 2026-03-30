@@ -1,6 +1,7 @@
 import {
   BriefcaseBusiness, Building2, Gavel, HandCoins, Headset,
   Layers, Wrench, Users, Briefcase, Megaphone, TrendingUp, ShoppingBag,
+  MessageSquare, BarChart2, Scale,
 } from 'lucide-react';
 
 // ─── Category sidebar (from AppsPage — includes hub routes) ─────────────────
@@ -29,13 +30,18 @@ export const CATEGORIES: Category[] = [
 // ─── Category meta (from ConnectorsPage — icons + colors for browse filters) ─
 
 export const CATEGORY_META: Record<string, { label: string; Icon: React.ElementType; color: string }> = {
-  all:         { label: 'All',           Icon: ShoppingBag,       color: 'text-slate-400' },
-  finance:     { label: 'Finance',       Icon: HandCoins,         color: 'text-rose-400' },
-  support:     { label: 'Support',       Icon: Headset,           color: 'text-blue-400' },
-  sales:       { label: 'Sales',         Icon: Building2,         color: 'text-emerald-400' },
-  it:          { label: 'IT / Identity', Icon: Wrench,            color: 'text-amber-400' },
-  compliance:  { label: 'Compliance',    Icon: Gavel,             color: 'text-sky-400' },
-  recruitment: { label: 'Recruitment',   Icon: BriefcaseBusiness, color: 'text-violet-400' },
+  all:           { label: 'All',             Icon: ShoppingBag,       color: 'text-slate-400' },
+  finance:       { label: 'Finance',         Icon: HandCoins,         color: 'text-rose-400' },
+  support:       { label: 'Support',         Icon: Headset,           color: 'text-blue-400' },
+  sales:         { label: 'Sales',           Icon: Building2,         color: 'text-emerald-400' },
+  hr:            { label: 'HR & People',     Icon: Users,             color: 'text-pink-400' },
+  it:            { label: 'IT / DevOps',     Icon: Wrench,            color: 'text-amber-400' },
+  compliance:    { label: 'Compliance',      Icon: Gavel,             color: 'text-sky-400' },
+  recruitment:   { label: 'Recruitment',     Icon: BriefcaseBusiness, color: 'text-violet-400' },
+  communication: { label: 'Communication',   Icon: MessageSquare,     color: 'text-cyan-400' },
+  marketing:     { label: 'Marketing',       Icon: Megaphone,         color: 'text-orange-400' },
+  analytics:     { label: 'Analytics',       Icon: BarChart2,         color: 'text-indigo-400' },
+  legal:         { label: 'Legal',           Icon: Scale,             color: 'text-teal-400' },
 };
 
 // ─── Browse / filter constants ──────────────────────────────────────────────
@@ -72,6 +78,7 @@ export const INTENTS = [
 
 export const BUNDLE_ICONS: Record<string, React.ElementType> = {
   BriefcaseBusiness, Building2, HandCoins, Headset, Wrench, Gavel,
+  MessageSquare, BarChart2, Scale, Users, Megaphone,
 };
 
 // ─── Featured apps ──────────────────────────────────────────────────────────
@@ -115,8 +122,54 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'brevo':            'brevo.com',
   'google-ads':       'google.com',
   'meta-ads':         'meta.com',
-  'darwinbox':        'darwinbox.com',
-  'keka':             'keka.com',
-  'greythr':          'greythr.com',
-  'bamboohr':         'bamboohr.com',
+  'darwinbox':          'darwinbox.com',
+  'keka':               'keka.com',
+  'greythr':            'greythr.com',
+  'bamboohr':           'bamboohr.com',
+  // HR & Payroll
+  'freshteam':          'freshworks.com',
+  'rippling':           'rippling.com',
+  'workday':            'workday.com',
+  // Recruitment
+  'naukri':             'naukri.com',
+  'shine':              'shine.com',
+  'workable':           'workable.com',
+  'iimjobs':            'iimjobs.com',
+  'smartrecruiters':    'smartrecruiters.com',
+  // Communication
+  'whatsapp-business':  'whatsapp.com',
+  'microsoft-teams':    'microsoft.com',
+  'zoom':               'zoom.us',
+  'google-chat':        'google.com',
+  // IT / DevOps
+  'github':             'github.com',
+  'gitlab':             'gitlab.com',
+  'pagerduty':          'pagerduty.com',
+  'datadog':            'datadoghq.com',
+  'newrelic':           'newrelic.com',
+  // Marketing
+  'moengage':           'moengage.com',
+  'clevertap':          'clevertap.com',
+  'mailmodo':           'mailmodo.com',
+  'webengage':          'webengage.com',
+  'mailchimp':          'mailchimp.com',
+  // Analytics
+  'mixpanel':           'mixpanel.com',
+  'amplitude':          'amplitude.com',
+  'segment':            'segment.com',
+  'metabase':           'metabase.com',
+  'posthog':            'posthog.com',
+  // Finance India
+  'payu':               'payu.in',
+  'cashfree':           'cashfree.com',
+  // Legal / Compliance
+  'docusign':           'docusign.com',
+  'leegality':          'leegality.com',
+  'zoho-sign':          'zoho.com',
+  // Support
+  'helpscout':          'helpscout.com',
+  'kayako':             'kayako.com',
+  // Sales
+  'apollo':             'apollo.io',
+  'outreach':           'outreach.io',
 };
