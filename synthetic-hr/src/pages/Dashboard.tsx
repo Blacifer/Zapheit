@@ -1588,7 +1588,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
-                  <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />} />
+                  <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" onNavigate={navigateTo} />} />
                   <Route path="settings" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
                   <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
                   <Route path="playbooks" element={<PlaybooksPage agents={enrichedAgents} onNavigate={(page) => navigateTo(page)} />} />

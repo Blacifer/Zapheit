@@ -1,4 +1,4 @@
-import { ChevronDown, CheckCircle2, Layers, Search } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, CheckCircle2, Layers, Search } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
 import { CATEGORIES } from '../constants';
@@ -15,12 +15,13 @@ interface CategorySidebarProps {
   onSelectApp: (app: UnifiedApp) => void;
   showCategories: boolean;
   onToggleCategories: () => void;
+  onNavigate?: (route: string) => void;
 }
 
 export function CategorySidebar({
   search, onSearchChange, selectedCat, onSelectCat,
   showMyApps, onToggleMyApps, myApps, allApps, onSelectApp,
-  showCategories, onToggleCategories,
+  showCategories, onToggleCategories, onNavigate,
 }: CategorySidebarProps) {
   return (
     <div className="hidden md:flex w-56 shrink-0 border-r border-white/8 flex-col bg-[#080f1a] overflow-y-auto">
@@ -105,20 +106,31 @@ export function CategorySidebar({
               {CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const count = allApps.filter((a) => a.category === cat.apiCategory && a.connected).length;
+                const isSelected = selectedCat === cat.id;
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => { onSelectCat(cat.id); if (showMyApps) onToggleMyApps(); }}
-                    className={cn('w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-colors', selectedCat === cat.id ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-white hover:bg-white/[0.04]')}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="flex-1 text-left truncate">{cat.label}</span>
-                    {count > 0 && (
-                      <span className="text-[10px] w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-semibold shrink-0">
-                        {count}
-                      </span>
+                  <div key={cat.id}>
+                    <button
+                      onClick={() => { onSelectCat(cat.id); if (showMyApps) onToggleMyApps(); }}
+                      className={cn('w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-colors', isSelected ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-white hover:bg-white/[0.04]')}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-left truncate">{cat.label}</span>
+                      {count > 0 && (
+                        <span className="text-[10px] w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-semibold shrink-0">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                    {isSelected && cat.hubRoute && cat.hubLabel && onNavigate && (
+                      <button
+                        onClick={() => onNavigate(cat.hubRoute!)}
+                        className="w-full flex items-center gap-1.5 pl-8 pr-2 py-1.5 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                      >
+                        <ArrowUpRight className="w-3 h-3 shrink-0" />
+                        <span>{cat.hubLabel}</span>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

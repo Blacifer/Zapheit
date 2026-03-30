@@ -120,6 +120,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         onSelectApp={(app) => setDrawerApp(app)}
         showCategories={showCategories}
         onToggleCategories={() => setShowCategories((v) => !v)}
+        onNavigate={onNavigate}
       />
 
       {/* Main content */}

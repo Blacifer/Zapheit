@@ -187,10 +187,12 @@ export default function ApiKeysPage({
   apiKeys,
   setApiKeys,
   initialView = 'keys',
+  onNavigate,
 }: {
   apiKeys: ApiKey[];
   setApiKeys: (keys: ApiKey[]) => void;
   initialView?: ViewMode;
+  onNavigate?: (route: string) => void;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [loading, setLoading] = useState(false);
@@ -359,6 +361,15 @@ export default function ApiKeysPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('api-analytics')}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-2.5 text-sm font-medium text-cyan-300 transition hover:border-cyan-500/40 hover:bg-slate-900"
+                >
+                  <BarChart3 className="h-4 w-4" /> API Analytics
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void loadKeys()}
