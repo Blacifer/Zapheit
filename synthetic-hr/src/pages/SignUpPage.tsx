@@ -282,9 +282,21 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                 onClick={() => setAgreedToTerms((v) => !v)}
               >
                 I agree to the{' '}
-                <span className="text-blue-300 hover:text-blue-200">Terms of Service</span>
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline underline-offset-2"
+                  onClick={(e: MouseEvent) => e.stopPropagation()}
+                >Terms of Service</a>
                 {' '}and{' '}
-                <span className="text-blue-300 hover:text-blue-200">Privacy Policy</span>
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-300 hover:text-blue-200 underline underline-offset-2"
+                  onClick={(e: MouseEvent) => e.stopPropagation()}
+                >Privacy Policy</a>
               </span>
             </div>
 
