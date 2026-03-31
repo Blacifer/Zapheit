@@ -131,7 +131,6 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'rippling':           'rippling.com',
   'workday':            'workday.com',
   // Recruitment
-  'naukri':             'naukri.com',
   'shine':              'shine.com',
   'workable':           'workable.com',
   'iimjobs':            'iimjobs.com',
@@ -152,7 +151,6 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'clevertap':          'clevertap.com',
   'mailmodo':           'mailmodo.com',
   'webengage':          'webengage.com',
-  'mailchimp':          'mailchimp.com',
   // Analytics
   'mixpanel':           'mixpanel.com',
   'amplitude':          'amplitude.com',

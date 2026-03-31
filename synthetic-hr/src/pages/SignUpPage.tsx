@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Brain, AlertCircle, ArrowRight, Loader2, Eye, EyeOff, Check, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -287,7 +287,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-300 hover:text-blue-200 underline underline-offset-2"
-                  onClick={(e: MouseEvent) => e.stopPropagation()}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 >Terms of Service</a>
                 {' '}and{' '}
                 <a
@@ -295,7 +295,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-300 hover:text-blue-200 underline underline-offset-2"
-                  onClick={(e: MouseEvent) => e.stopPropagation()}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 >Privacy Policy</a>
               </span>
             </div>
