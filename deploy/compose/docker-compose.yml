@@ -1,0 +1,104 @@
+# SyntheticHR — unified self-host stack
+#
+# One-command launch:
+#   cp deploy/compose/stack.env.example deploy/compose/stack.env
+#   # edit stack.env with your values
+#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env up -d
+#
+# The runtime service is in the "runtime" profile and is disabled by default.
+# Customers who want to run their own job executor on-prem enable it with:
+#   docker compose ... --profile runtime up -d
+
+services:
+
+  # ── Database ────────────────────────────────────────────────────────────────
+  synthetic-hr-postgres:
+    image: postgres:16-alpine
+    container_name: synthetic-hr-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-synthetic_hr}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - synthetic-hr-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # ── API ─────────────────────────────────────────────────────────────────────
+  synthetic-hr-api:
+    build:
+      context: ../../synthetic-hr-api
+    env_file:
+      - ./stack.env
+    ports:
+      - "${SYNTHETICHR_API_PORT:-3001}:3001"
+    depends_on:
+      synthetic-hr-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  synthetic-hr-frontend:
+    build:
+      context: ../../synthetic-hr
+    ports:
+      - "${SYNTHETICHR_FRONTEND_PORT:-8080}:80"
+    environment:
+      SYNTHETICHR_API_URL: ${SYNTHETICHR_API_URL:-http://localhost:3001/api}
+      SYNTHETICHR_SUPABASE_URL: ${SYNTHETICHR_SUPABASE_URL}
+      SYNTHETICHR_SUPABASE_ANON_KEY: ${SYNTHETICHR_SUPABASE_ANON_KEY}
+      SYNTHETICHR_SENTRY_DSN: ${SYNTHETICHR_SENTRY_DSN:-}
+      SYNTHETICHR_APP_VERSION: ${SYNTHETICHR_APP_VERSION:-}
+      SYNTHETICHR_ERROR_REPORTING_URL: ${SYNTHETICHR_ERROR_REPORTING_URL:-}
+    depends_on:
+      - synthetic-hr-api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+  # ── Runtime worker (optional, enable with --profile runtime) ─────────────────
+  synthetic-hr-runtime:
+    profiles:
+      - runtime
+    build:
+      context: ../../synthetic-hr-runtime
+    environment:
+      SYNTHETICHR_CONTROL_PLANE_URL: ${SYNTHETICHR_CONTROL_PLANE_URL:-http://synthetic-hr-api:3001}
+      SYNTHETICHR_GATEWAY_URL: ${SYNTHETICHR_GATEWAY_URL:-}
+      SYNTHETICHR_RUNTIME_ID: ${SYNTHETICHR_RUNTIME_ID}
+      SYNTHETICHR_ENROLLMENT_TOKEN: ${SYNTHETICHR_ENROLLMENT_TOKEN}
+      SYNTHETICHR_RUNTIME_SECRET: ${SYNTHETICHR_RUNTIME_SECRET:-}
+      SYNTHETICHR_RUNTIME_SECRET_FILE: ${SYNTHETICHR_RUNTIME_SECRET_FILE:-/data/runtime_secret}
+      SYNTHETICHR_API_KEY: ${SYNTHETICHR_API_KEY}
+      SYNTHETICHR_POLL_INTERVAL_MS: ${SYNTHETICHR_POLL_INTERVAL_MS:-2000}
+      SYNTHETICHR_HEARTBEAT_INTERVAL_MS: ${SYNTHETICHR_HEARTBEAT_INTERVAL_MS:-15000}
+      SYNTHETICHR_MODEL: ${SYNTHETICHR_MODEL:-openai/gpt-4o-mini}
+      SYNTHETICHR_STREAM_MODE: ${SYNTHETICHR_STREAM_MODE:-poll}
+    volumes:
+      - runtime-data:/data
+    depends_on:
+      - synthetic-hr-api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  synthetic-hr-postgres-data:
+  runtime-data:

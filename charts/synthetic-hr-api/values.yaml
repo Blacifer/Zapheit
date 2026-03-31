@@ -1,0 +1,26 @@
+image:
+  repository: synthetic-hr-api
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3001
+
+env:
+  NODE_ENV: "production"
+  PORT: "3001"
+  SUPABASE_URL: ""
+  SUPABASE_ANON_KEY: ""
+  SUPABASE_SERVICE_KEY: ""
+  JWT_SECRET: ""
+  FRONTEND_URL: ""
+  API_URL: ""
+  OPENAI_API_KEY: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi

@@ -1,0 +1,31 @@
+image:
+  repository: synthetic-hr-frontend
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+
+env:
+  SYNTHETICHR_API_URL: "http://synthetic-hr-api:3001/api"
+  SYNTHETICHR_SUPABASE_URL: ""
+  SYNTHETICHR_SUPABASE_ANON_KEY: ""
+  SYNTHETICHR_SENTRY_DSN: ""
+  SYNTHETICHR_APP_VERSION: ""
+  SYNTHETICHR_ERROR_REPORTING_URL: ""
+
+ingress:
+  enabled: false
+  className: nginx
+  host: synthetichr.example.com
+  tls:
+    enabled: false
+    secretName: synthetichr-tls
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 128Mi
