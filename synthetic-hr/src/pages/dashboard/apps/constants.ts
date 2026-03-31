@@ -33,18 +33,19 @@ export const CATEGORIES: Category[] = [
 // ─── Category meta (from ConnectorsPage — icons + colors for browse filters) ─
 
 export const CATEGORY_META: Record<string, { label: string; Icon: React.ElementType; color: string }> = {
-  all:           { label: 'All',             Icon: ShoppingBag,       color: 'text-slate-400' },
-  finance:       { label: 'Finance',         Icon: HandCoins,         color: 'text-rose-400' },
-  support:       { label: 'Support',         Icon: Headset,           color: 'text-blue-400' },
-  sales:         { label: 'Sales',           Icon: Building2,         color: 'text-emerald-400' },
-  hr:            { label: 'HR & People',     Icon: Users,             color: 'text-pink-400' },
-  it:            { label: 'IT / DevOps',     Icon: Wrench,            color: 'text-amber-400' },
-  compliance:    { label: 'Compliance',      Icon: Gavel,             color: 'text-sky-400' },
-  recruitment:   { label: 'Recruitment',     Icon: BriefcaseBusiness, color: 'text-violet-400' },
-  communication: { label: 'Communication',   Icon: MessageSquare,     color: 'text-cyan-400' },
-  marketing:     { label: 'Marketing',       Icon: Megaphone,         color: 'text-orange-400' },
-  analytics:     { label: 'Analytics',       Icon: BarChart2,         color: 'text-indigo-400' },
-  legal:         { label: 'Legal',           Icon: Scale,             color: 'text-teal-400' },
+  all:           { label: 'All',                    Icon: ShoppingBag,       color: 'text-slate-400' },
+  finance:       { label: 'Finance & Payments',     Icon: HandCoins,         color: 'text-rose-400' },
+  support:       { label: 'Support & CX',           Icon: Headset,           color: 'text-blue-400' },
+  sales:         { label: 'Sales & CRM',            Icon: Building2,         color: 'text-emerald-400' },
+  hr:            { label: 'HR & People',            Icon: Users,             color: 'text-pink-400' },
+  it:            { label: 'IT & Security',          Icon: Wrench,            color: 'text-amber-400' },
+  compliance:    { label: 'Compliance & Legal',     Icon: Gavel,             color: 'text-sky-400' },
+  recruitment:   { label: 'Recruitment & Hiring',   Icon: BriefcaseBusiness, color: 'text-violet-400' },
+  communication: { label: 'Communication',          Icon: MessageSquare,     color: 'text-cyan-400' },
+  marketing:     { label: 'Marketing',              Icon: Megaphone,         color: 'text-orange-400' },
+  analytics:     { label: 'Analytics & BI',         Icon: BarChart2,         color: 'text-indigo-400' },
+  legal:         { label: 'Legal & Compliance',     Icon: Scale,             color: 'text-teal-400' },
+  productivity:  { label: 'Productivity',           Icon: Layers,            color: 'text-lime-400' },
 };
 
 // ─── Browse / filter constants ──────────────────────────────────────────────

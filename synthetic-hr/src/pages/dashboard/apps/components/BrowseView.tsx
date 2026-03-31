@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react';
+import { useRef, useMemo, useState, useEffect } from 'react';
 import { ArrowRight, ChevronDown, Plus, Search, Sparkles, Star, X } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
@@ -91,6 +91,15 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
     initialCategory && CATEGORY_META[initialCategory] ? initialCategory : 'all'
   );
   const [activeDropdown, setActiveDropdown] = useState<'sort' | 'type' | 'cat' | null>(null);
+
+  // Sync filterCategory when parent changes the selected sidebar category
+  useEffect(() => {
+    if (initialCategory && CATEGORY_META[initialCategory]) {
+      setFilterCategory(initialCategory);
+    } else if (!initialCategory) {
+      setFilterCategory('all');
+    }
+  }, [initialCategory]);
   const [intentDone, setIntentDone] = useState(apps.some((a) => a.connected));
   const [highlightBundle, setHighlightBundle] = useState<string | null>(null);
   const filtersRef = useRef<HTMLDivElement>(null);

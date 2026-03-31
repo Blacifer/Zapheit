@@ -112,7 +112,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         search={search}
         onSearchChange={setSearch}
         selectedCat={selectedCat}
-        onSelectCat={setSelectedCat}
+        onSelectCat={(cat) => { setSelectedCat(cat); setActiveTab('browse'); }}
         showMyApps={showMyApps}
         onToggleMyApps={() => setShowMyApps((v) => !v)}
         myApps={myApps}
