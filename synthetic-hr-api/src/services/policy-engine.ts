@@ -258,7 +258,7 @@ export function evaluatePolicy(policy: PolicyDefinition, ctx: EvalContext): Poli
       break;
     }
     if (v.action === 'require_approval') {
-      if (decision !== 'block') decision = 'require_approval';
+      if ((decision as string) !== 'block') decision = 'require_approval';
       if (rule.required_role && (!required_role || roleLevel(rule.required_role) > roleLevel(required_role))) {
         required_role = rule.required_role;
       }
@@ -289,7 +289,7 @@ export function evaluatePolicies(policies: PolicyDefinition[], ctx: EvalContext)
       finalDecision = 'block';
       break;
     }
-    if (result.decision === 'require_approval' && finalDecision !== 'block') {
+    if (result.decision === 'require_approval' && (finalDecision as string) !== 'block') {
       finalDecision = 'require_approval';
       if (result.required_role) {
         required_role = result.required_role;
