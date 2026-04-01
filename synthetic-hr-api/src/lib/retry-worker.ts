@@ -19,11 +19,9 @@ const RETRY_BACKOFF_SECONDS = [60, 300, 900]; // 1 min, 5 min, 15 min
 
 async function fetchDueItems(): Promise<any[]> {
   try {
-    const q = new URLSearchParams();
-    q.set('status', eq('pending'));
-    q.set('next_attempt_at', lte(new Date().toISOString()));
-    q.set('order', 'next_attempt_at.asc');
-    q.set('limit', '20');
+    // Build this filter manually: PostgREST expects the raw ISO timestamp in the
+    // comparator value, and URLSearchParams would re-encode the helper output.
+    const q = `status=${eq('pending')}&next_attempt_at=${lte(new Date().toISOString())}&order=next_attempt_at.asc&limit=20`;
     return ((await supabaseRest('connector_retry_queue', q)) as any[]) ?? [];
   } catch (err: any) {
     logger.warn('[retry-worker] Failed to fetch due items', { error: err?.message });

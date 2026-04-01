@@ -43,16 +43,34 @@ while true; do
     body="{\"message\": ${msg_json}}"
   fi
 
-  response=$(
-    curl -sf -X POST "$ENDPOINT" \
+  if ! raw_response=$(
+    curl -sS -X POST "$ENDPOINT" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer ${API_KEY}" \
       -d "$body" \
+      -w $'\n%{http_code}' \
       2>/dev/null
-  )
+  ); then
+    echo "Agent: [Request failed — check your network and endpoint]"
+    continue
+  fi
+
+  http_status=$(printf '%s\n' "$raw_response" | tail -n 1)
+  response=$(printf '%s\n' "$raw_response" | sed '$d')
 
   if [[ -z "$response" ]]; then
-    echo "Agent: [No response — check your API key and agent ID]"
+    echo "Agent: [No response — check your API key, agent ID, and endpoint]"
+    continue
+  fi
+
+  if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    err_text=$(
+      echo "$response" |
+      python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("error") or d.get("message") or (d.get("error", {}) if isinstance(d.get("error"), dict) else ""))' 2>/dev/null ||
+      echo "$response"
+    )
+    echo "Agent: [HTTP ${http_status}] ${err_text}"
+    echo ""
     continue
   fi
 
