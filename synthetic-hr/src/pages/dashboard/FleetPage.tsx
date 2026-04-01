@@ -28,6 +28,7 @@ interface FleetPageProps {
 type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance';
 type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
 type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
+const FLEET_AUTO_REFRESH_MS = 5000;
 type WorkspaceState = {
   summary: AgentWorkspaceSummary | null;
   conversations: AgentWorkspaceConversation[];
@@ -347,7 +348,7 @@ export default function FleetPage({
     }).catch(() => {});
   }, [workspaceAgentId]);
 
-  const loadWorkspace = async (agentId: string) => {
+  const loadWorkspace = useCallback(async (agentId: string) => {
     setWorkspaceState((current) => ({
       ...current,
       loadingConversations: true,
@@ -380,7 +381,7 @@ export default function FleetPage({
       return;
     }
 
-    await setAgents(agents.map((agent) => (
+    await setAgents((currentAgents) => currentAgents.map((agent) => (
       agent.id === agentId ? workspaceResponse.data!.agent : agent
     )));
 
@@ -396,7 +397,50 @@ export default function FleetPage({
       loadingAnalytics: false,
       analyticsError: null,
     });
-  };
+  }, [agents, onSelectAgent, setAgents]);
+
+  const loadDeploymentState = useCallback(async (agentId: string) => {
+    setRuntimesLoading(true);
+    setCreatedEnrollment(null);
+    try {
+      const [rt, deps] = await Promise.all([
+        api.runtimes.list(),
+        api.runtimes.listDeployments(agentId),
+      ]);
+
+      if (rt.success && Array.isArray(rt.data)) {
+        const items = (rt.data as any[]).map((r) => ({
+          id: r.id,
+          name: r.name,
+          mode: r.mode,
+          status: r.status,
+          last_heartbeat_at: r.last_heartbeat_at || null,
+        }));
+        setRuntimes(items);
+        setSelectedRuntimeId((current) => (
+          current && items.find((r) => r.id === current)
+            ? current
+            : items[0]?.id || ''
+        ));
+      } else {
+        setRuntimes([]);
+      }
+
+      if (deps.success && Array.isArray(deps.data)) {
+        const dep = (deps.data as any[]).find((d) => d.agent_id === agentId) || null;
+        setCurrentDeployment(dep);
+        if (dep?.runtime_instance_id) setSelectedRuntimeId(dep.runtime_instance_id);
+      } else {
+        setCurrentDeployment(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setRuntimes([]);
+      setCurrentDeployment(null);
+    } finally {
+      setRuntimesLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!workspaceAgentId) {
@@ -422,104 +466,26 @@ export default function FleetPage({
       return;
     }
 
-    let cancelled = false;
-    (async () => {
-      const workspaceResponse = await api.agents.getWorkspace(workspaceAgentId);
-      if (cancelled) return;
-      setWorkspaceState((current) => ({
-        ...current,
-        loadingConversations: true,
-        conversationsError: null,
-        loadingIncidents: true,
-        incidentsError: null,
-        loadingAnalytics: true,
-        analyticsError: null,
-      }));
-
-      if (!workspaceResponse.success || !workspaceResponse.data) {
-        if (workspaceResponse.error?.toLowerCase().includes('not found')) {
-          setWorkspaceAgentId(null);
-          onSelectAgent?.(null);
-          return;
-        }
-        setWorkspaceState({
-          summary: null,
-          conversations: [],
-          loadingConversations: false,
-          conversationsError: workspaceResponse.error || 'Failed to load recent conversations.',
-          incidents: [],
-          loadingIncidents: false,
-          incidentsError: workspaceResponse.error || 'Failed to load incidents.',
-          analytics: null,
-          loadingAnalytics: false,
-          analyticsError: workspaceResponse.error || 'Failed to load analytics.',
-        });
-        return;
-      }
-
-      setWorkspaceState({
-        summary: workspaceResponse.data.summary,
-        conversations: workspaceResponse.data.conversations || [],
-        loadingConversations: false,
-        conversationsError: null,
-        incidents: workspaceResponse.data.incidents || [],
-        loadingIncidents: false,
-        incidentsError: null,
-        analytics: workspaceResponse.data.analytics || null,
-        loadingAnalytics: false,
-        analyticsError: null,
-      });
-    })();
+    void loadWorkspace(workspaceAgentId);
+    const intervalId = window.setInterval(() => {
+      void loadWorkspace(workspaceAgentId);
+    }, FLEET_AUTO_REFRESH_MS);
 
     return () => {
-      cancelled = true;
+      window.clearInterval(intervalId);
     };
-  }, [workspaceAgentId]);
+  }, [agents, loadWorkspace, onSelectAgent, workspaceAgentId]);
 
   useEffect(() => {
     if (!deployAgentId) return;
-    (async () => {
-      setRuntimesLoading(true);
-      setCreatedEnrollment(null);
-      try {
-        const [rt, deps] = await Promise.all([
-          api.runtimes.list(),
-          api.runtimes.listDeployments(deployAgentId),
-        ]);
-
-        if (rt.success && Array.isArray(rt.data)) {
-          const items = (rt.data as any[]).map((r) => ({
-            id: r.id,
-            name: r.name,
-            mode: r.mode,
-            status: r.status,
-            last_heartbeat_at: r.last_heartbeat_at || null,
-          }));
-          setRuntimes(items);
-          if (!items.find((r) => r.id === selectedRuntimeId) && items.length > 0) {
-            setSelectedRuntimeId(items[0].id);
-          }
-        } else {
-          setRuntimes([]);
-        }
-
-        if (deps.success && Array.isArray(deps.data)) {
-          const dep = (deps.data as any[]).find((d) => d.agent_id === deployAgentId) || null;
-          setCurrentDeployment(dep);
-          if (dep?.runtime_instance_id) setSelectedRuntimeId(dep.runtime_instance_id);
-        } else {
-          setCurrentDeployment(null);
-        }
-      } catch (err) {
-        console.error(err);
-        setRuntimes([]);
-        setCurrentDeployment(null);
-      } finally {
-        setRuntimesLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deployAgentId]);
+    void loadDeploymentState(deployAgentId);
+    const intervalId = window.setInterval(() => {
+      void loadDeploymentState(deployAgentId);
+    }, FLEET_AUTO_REFRESH_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [deployAgentId, loadDeploymentState]);
 
   const computePolicyRecs = (agent: Omit<AIAgent, 'id' | 'created_at'>) => {
     const desc = (agent.description || '').toLowerCase();
@@ -595,7 +561,7 @@ export default function FleetPage({
   };
 
   const mergeAgent = async (updatedAgent: AIAgent) => {
-    await setAgents(agents.map((agent) => (
+    await setAgents((currentAgents) => currentAgents.map((agent) => (
       agent.id === updatedAgent.id
         ? {
             ...agent,
@@ -971,6 +937,8 @@ export default function FleetPage({
         return;
       }
       setCurrentDeployment(res.data || null);
+      await syncAgentPublishState(deployAgentId);
+      await loadDeploymentState(deployAgentId);
       toast.success('Deployment saved.');
     } finally {
       setDeploymentLoading(false);
@@ -2695,6 +2663,8 @@ export default function FleetPage({
                                     ? { ...a, metadata: { ...(a as any).metadata, deploy_method: id } }
                                     : a
                                 ));
+                                void syncAgentPublishState(deployAgentId);
+                                void loadDeploymentState(deployAgentId);
                               }
                             });
                           }
