@@ -1,4 +1,73 @@
-# Blue-Green Deployment & DR Testing Quick Reference
+# Deployment Quick Reference
+
+---
+
+## Self-Host: Docker Compose
+
+All services (postgres, API, frontend) in a single command. The runtime worker is optional and enabled via a Docker Compose profile.
+
+```bash
+# 1. Copy and fill in your env file
+cp deploy/compose/stack.env.example deploy/compose/stack.env
+# Edit deploy/compose/stack.env — fill in SUPABASE_*, JWT_SECRET, OPENAI_API_KEY, etc.
+
+# 2. Start core stack (postgres + API + frontend)
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env up -d
+
+# 3. (Optional) Also start the runtime worker
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env --profile runtime up -d
+
+# 4. Verify
+curl http://localhost:3001/health
+# Frontend available at http://localhost:8080
+```
+
+> **Note:** Supabase is always required (cloud or self-hosted) for auth and PostgREST. The postgres service in the compose stack is for the application database only.
+
+---
+
+## Self-Host: Kubernetes (Helm)
+
+Three charts are provided under `charts/`. Install them in this order so the API is ready before the frontend attempts to connect.
+
+```bash
+# 1. API
+helm install synthetichr-api charts/synthetic-hr-api \
+  --set env.SUPABASE_URL=https://your-project.supabase.co \
+  --set env.SUPABASE_ANON_KEY=your-anon-key \
+  --set env.SUPABASE_SERVICE_KEY=your-service-key \
+  --set env.JWT_SECRET=your-jwt-secret \
+  --set env.OPENAI_API_KEY=sk-your-key \
+  --set env.FRONTEND_URL=https://synthetichr.example.com \
+  --set env.API_URL=https://api.synthetichr.example.com
+
+# 2. Runtime worker (one per customer VPC, or self-managed)
+helm install synthetichr-runtime charts/synthetic-hr-runtime \
+  --set env.SYNTHETICHR_CONTROL_PLANE_URL=https://api.synthetichr.example.com \
+  --set env.SYNTHETICHR_RUNTIME_ID=your-runtime-id \
+  --set env.SYNTHETICHR_ENROLLMENT_TOKEN=your-token \
+  --set env.SYNTHETICHR_API_KEY=your-api-key
+
+# 3. Frontend (enable ingress for external access)
+helm install synthetichr-frontend charts/synthetic-hr-frontend \
+  --set env.SYNTHETICHR_API_URL=https://api.synthetichr.example.com/api \
+  --set env.SYNTHETICHR_SUPABASE_URL=https://your-project.supabase.co \
+  --set env.SYNTHETICHR_SUPABASE_ANON_KEY=your-anon-key \
+  --set ingress.enabled=true \
+  --set ingress.host=synthetichr.example.com \
+  --set ingress.tls.enabled=true \
+  --set ingress.tls.secretName=synthetichr-tls
+
+# Verify
+kubectl get pods
+helm status synthetichr-api
+```
+
+All charts follow the same pattern as `charts/synthetic-hr-runtime/`. See each chart's `values.yaml` for the full list of configurable env vars.
+
+---
+
+## Blue-Green Deployment & DR Testing Quick Reference
 
 **Print this page and keep at your desk during deployments**
 
@@ -8,7 +77,7 @@
 
 ```bash
 # STEP 1: Deploy (do NOT switch yet)
-node blue-green-deploy.js deploy
+node scripts/blue-green-deploy.js deploy
 # Wait for: "GREEN environment is READY for traffic"
 
 # STEP 2: Manually switch load balancer
@@ -18,12 +87,12 @@ node blue-green-deploy.js deploy
 # Then:   sudo systemctl reload nginx
 
 # STEP 3: Monitor (30 minutes minimum)
-node blue-green-deploy.js monitor --duration=30
+node scripts/blue-green-deploy.js monitor --duration=30
 # Wait for: "Monitoring complete"
 
 # STEP 4: Success or Rollback
 # If OK: GREEN becomes new BLUE (done!)
-# If issues: node blue-green-deploy.js rollback
+# If issues: node scripts/blue-green-deploy.js rollback
 ```
 
 ---
@@ -38,7 +107,7 @@ curl http://localhost:3001/health | jq .
 lsof -i :3001 :3002 | grep node
 
 # Show detailed status
-node blue-green-deploy.js status
+node scripts/blue-green-deploy.js status
 
 # Check recent errors
 grep ERROR /tmp/green.log | tail -20
@@ -50,7 +119,7 @@ grep ERROR /tmp/green.log | tail -20
 
 ```bash
 # Immediately switch traffic back to BLUE
-node blue-green-deploy.js rollback
+node scripts/blue-green-deploy.js rollback
 
 # Verify traffic is routed to BLUE
 curl -v http://localhost/health | grep "< HTTP"
@@ -68,10 +137,10 @@ tail -f /tmp/blue.log | grep -E "ERROR|WARN"
 
 ```bash
 # Run quick tests (5 minutes)
-node dr-test.js scenario=database-failure
-node dr-test.js scenario=redis-failure
-node dr-test.js scenario=auth-failure
-node dr-test.js scenario=rate-limit-bypass
+node scripts/dr-test.js scenario=database-failure
+node scripts/dr-test.js scenario=redis-failure
+node scripts/dr-test.js scenario=auth-failure
+node scripts/dr-test.js scenario=rate-limit-bypass
 
 # Expected: All show "✅ PASSED"
 ```
@@ -210,7 +279,7 @@ tail -f /tmp/green.log | grep ERROR
 psql -c "SELECT 1;" # If fails, DB is unreachable
 
 # Rollback immediately
-node blue-green-deploy.js rollback
+node scripts/blue-green-deploy.js rollback
 ```
 
 ### SLOW RESPONSES
@@ -258,7 +327,7 @@ T+34:00  Deployment complete
 # Database failure scenario
 lsof -i :3001 | grep node                    # Get PID
 kill -stop $(PID)                             # Pause process
-node dr-test.js scenario=database-failure     # Test recovery
+node scripts/dr-test.js scenario=database-failure     # Test recovery
 kill -cont $(PID)                             # Resume process
 
 # Result should show: ✅ PASSED

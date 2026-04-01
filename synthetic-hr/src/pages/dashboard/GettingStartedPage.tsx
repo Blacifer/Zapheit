@@ -7,8 +7,8 @@ import type { AIAgent } from '../../types';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 
-type StepId = 'workspace' | 'key' | 'agent' | 'apps' | 'test' | 'verify';
-const STEP_ORDER: StepId[] = ['workspace', 'key', 'agent', 'apps', 'test', 'verify'];
+type StepId = 'workspace' | 'agent' | 'apps' | 'test' | 'verify';
+const STEP_ORDER: StepId[] = ['workspace', 'agent', 'apps', 'test', 'verify'];
 
 type LiveModel = { id: string; name?: string; provider?: string };
 
@@ -32,6 +32,7 @@ export default function GettingStartedPage(props: {
   const [step, setStep] = useState<StepId>('workspace');
   const [isBusy, setIsBusy] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
 
   const stepIndex = STEP_ORDER.indexOf(step);
   const goNext = () => { if (stepIndex < STEP_ORDER.length - 1) setStep(STEP_ORDER[stepIndex + 1]); };
@@ -200,7 +201,7 @@ export default function GettingStartedPage(props: {
       setApiKeySecret((res.data as any).key);
       toast.success('Temporary key created');
       await loadGatewayModels((res.data as any).key);
-      setStep('agent');
+      setStep('test');
     } finally {
       setIsBusy(false);
     }
@@ -334,15 +335,13 @@ export default function GettingStartedPage(props: {
 
   const hasGatewayTraffic = Boolean(coverage?.telemetry?.gatewayObserved);
   const hasAnyAgent = (coverage?.agents?.total ?? props.agents.length) > 0;
-  const hasAnyKey = (coverage?.apiKeys?.total ?? 0) > 0;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Getting Started</h1>
+          <h1 className="text-3xl font-bold text-white">Get To First Value</h1>
           <p className="text-slate-400 mt-1 max-w-2xl">
-            Connect the runtime path, generate a temporary key, send one tracked request, and verify coverage.
+            Connect one agent, connect one app, run one tracked test, and confirm that SyntheticHR is giving you usable visibility.
           </p>
         </div>
         <div className="flex gap-2">
@@ -416,12 +415,11 @@ export default function GettingStartedPage(props: {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-3">
-          <StepPill id="workspace" label="Workspace status" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
-          <StepPill id="key" label="Create temporary key" icon={Key} done={Boolean(apiKeySecret) || hasAnyKey} />
-          <StepPill id="agent" label="Create or select agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
+          <StepPill id="workspace" label="Know your setup" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
+          <StepPill id="agent" label="Choose first agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
           <StepPill id="apps" label="Connect an app" icon={ShoppingBag} done={installedAppCount > 0} />
-          <StepPill id="test" label="Send test request" icon={Rocket} done={Boolean(testResult)} />
-          <StepPill id="verify" label="Verify coverage" icon={CheckCircle2} done={hasGatewayTraffic} />
+          <StepPill id="test" label="Run one test" icon={Rocket} done={Boolean(testResult)} />
+          <StepPill id="verify" label="See first insight" icon={CheckCircle2} done={hasGatewayTraffic} />
         </div>
 
         <div className="lg:col-span-8">
@@ -429,7 +427,7 @@ export default function GettingStartedPage(props: {
             {step === 'workspace' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-white">Workspace status</h2>
+                  <h2 className="text-xl font-bold text-white">Know your setup</h2>
                   <button
                     type="button"
                     onClick={loadCoverage}
@@ -452,21 +450,21 @@ export default function GettingStartedPage(props: {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">Agents</div>
+                      <div className="text-xs text-slate-400">What is running?</div>
                       <div className="text-2xl font-bold text-white">{coverage?.agents?.total ?? props.agents.length}</div>
-                      <div className="text-xs text-slate-400 mt-1">Active: {coverage?.agents?.active ?? 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Active agents: {coverage?.agents?.active ?? 0}</div>
                     </div>
                     <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">Gateway observed</div>
+                      <div className="text-xs text-slate-400">What is visible?</div>
                       <div className={`text-2xl font-bold ${hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}`}>
                         {hasGatewayTraffic ? 'Yes' : 'No'}
                       </div>
-                      <div className="text-xs text-slate-400 mt-1">Score: {coverage?.telemetry?.coverageScore ?? 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Coverage score: {coverage?.telemetry?.coverageScore ?? 0}</div>
                     </div>
                     <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">API keys</div>
+                      <div className="text-xs text-slate-400">What needs setup?</div>
                       <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.active ?? 0}</div>
-                      <div className="text-xs text-slate-400 mt-1">Total: {coverage?.apiKeys?.total ?? 0} · Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Active runtime keys · Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
                     </div>
                   </div>
                 )}
@@ -474,7 +472,7 @@ export default function GettingStartedPage(props: {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setStep('key')}
+                    onClick={() => setStep('agent')}
                     className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
                   >
                     Continue
@@ -483,96 +481,10 @@ export default function GettingStartedPage(props: {
               </div>
             )}
 
-            {step === 'key' && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">Create a temporary key</h2>
-                <p className="text-slate-400">
-                  This wizard creates a short-lived key to send one tracked request through the gateway. It will be revoked at the end.
-                </p>
-
-                {apiKeySecret ? (
-                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs text-slate-400">Temporary key</div>
-                        <div className="font-mono text-slate-100">{maskKey(apiKeySecret)}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(apiKeySecret, 'Key')}
-                        className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm border border-slate-700 flex items-center gap-2"
-                      >
-                        <Copy className="w-4 h-4" />
-                        Copy
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setStep('agent')}
-                        className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
-                      >
-                        Continue
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => loadGatewayModels(apiKeySecret)}
-                        disabled={gatewayModelsLoading}
-                        className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
-                      >
-                        {gatewayModelsLoading ? 'Checking gateway…' : 'Check /v1/models'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={revokeTempKey}
-                        disabled={isBusy}
-                        className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700 flex items-center gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Revoke
-                      </button>
-                    </div>
-
-                    {gatewayModelsOk !== null ? (
-                      <div className={`rounded-xl border p-3 text-sm ${
-                        gatewayModelsOk
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-                          : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                      }`}>
-                        {gatewayModelsOk ? (
-                          <div className="space-y-1">
-                            <div className="font-semibold">Gateway reachable</div>
-                            <div className="text-emerald-100/90">
-                              Sample models: <span className="font-mono">{gatewayModelSample.join(', ') || 'n/a'}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <div className="font-semibold">Gateway check failed</div>
-                            <div className="text-rose-100/90">{explainGatewayError(gatewayModelsError || 'Unable to reach /v1/models')}</div>
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={createTempKey}
-                    disabled={isBusy}
-                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
-                  >
-                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                    Create temporary key
-                  </button>
-                )}
-              </div>
-            )}
-
             {step === 'agent' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">Create or select an agent</h2>
-                <p className="text-slate-400">Associate the test request with an agent so costs and coverage link correctly.</p>
+                <h2 className="text-xl font-bold text-white">Choose your first agent</h2>
+                <p className="text-slate-400">Pick an existing agent or create one quickly so your first test has a clear owner.</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
@@ -638,7 +550,7 @@ export default function GettingStartedPage(props: {
                       </select>
                     </div>
                     <div className="text-xs text-slate-400">
-                      Model is chosen below and will be attached to the agent record.
+                      Keep this simple. You can fine-tune the model and controls later.
                     </div>
                   </div>
                 </div>
@@ -677,7 +589,7 @@ export default function GettingStartedPage(props: {
                     onClick={() => setStep('apps')}
                     className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm"
                   >
-                    Continue
+                    Continue to apps
                   </button>
                 </div>
               </div>
@@ -754,10 +666,109 @@ export default function GettingStartedPage(props: {
 
             {step === 'test' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">Send a test request</h2>
+                <h2 className="text-xl font-bold text-white">Run one tracked test</h2>
                 <p className="text-slate-400">
-                  This sends a single tracked request via `POST /v1/chat/completions` using the temporary key. It should populate Costs, Usage, and Coverage.
+                  Send one safe test message through the runtime so SyntheticHR can prove it is capturing real visibility.
                 </p>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Secure test connection</div>
+                      <div className="text-xs text-slate-400 mt-1">
+                        We use a short-lived key for this test and revoke it when setup is complete.
+                      </div>
+                    </div>
+                    {apiKeySecret ? (
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                        Ready
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={createTempKey}
+                        disabled={isBusy}
+                        className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
+                      >
+                        {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                        Prepare test connection
+                      </button>
+                    )}
+                  </div>
+
+                  {apiKeySecret ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span className="font-mono text-slate-100">{maskKey(apiKeySecret)}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(apiKeySecret, 'Key')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 flex items-center gap-1.5"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedSetup((value) => !value)}
+                    className="text-sm text-cyan-300 hover:text-cyan-200 transition-colors"
+                  >
+                    {showAdvancedSetup ? 'Hide advanced setup' : 'Show advanced setup'}
+                  </button>
+
+                  {showAdvancedSetup ? (
+                    <div className="rounded-xl border border-slate-700/80 bg-black/20 p-4 space-y-3">
+                      <p className="text-sm text-slate-300">
+                        Advanced setup lets you inspect the temporary key and manually test the gateway before sending a tracked request.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => apiKeySecret ? loadGatewayModels(apiKeySecret) : createTempKey()}
+                          disabled={gatewayModelsLoading || isBusy}
+                          className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                        >
+                          {gatewayModelsLoading ? 'Checking gateway…' : 'Check /v1/models'}
+                        </button>
+                        {apiKeySecret ? (
+                          <button
+                            type="button"
+                            onClick={revokeTempKey}
+                            disabled={isBusy}
+                            className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Revoke key
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {gatewayModelsOk !== null ? (
+                        <div className={`rounded-xl border p-3 text-sm ${
+                          gatewayModelsOk
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                        }`}>
+                          {gatewayModelsOk ? (
+                            <div className="space-y-1">
+                              <div className="font-semibold">Gateway reachable</div>
+                              <div className="text-emerald-100/90">
+                                Sample models: <span className="font-mono">{gatewayModelSample.join(', ') || 'n/a'}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="font-semibold">Gateway check failed</div>
+                              <div className="text-rose-100/90">{explainGatewayError(gatewayModelsError || 'Unable to reach /v1/models')}</div>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
 
                 <textarea
                   id="getting_started_test_prompt"
@@ -775,7 +786,7 @@ export default function GettingStartedPage(props: {
                     disabled={isBusy || !canRunGatewayTest}
                   >
                     {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
-                    Run gateway test
+                    Run tracked test
                   </button>
                   <button
                     type="button"
@@ -796,7 +807,7 @@ export default function GettingStartedPage(props: {
 
             {step === 'verify' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">Verify coverage</h2>
+                <h2 className="text-xl font-bold text-white">See your first insight</h2>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-2">
                   <div className="flex items-center justify-between">
@@ -811,13 +822,13 @@ export default function GettingStartedPage(props: {
                     </button>
                   </div>
                   <div className="text-sm text-slate-300">
-                    Gateway observed: <span className={hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}>{hasGatewayTraffic ? 'Yes' : 'No'}</span>
+                    Visibility confirmed: <span className={hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}>{hasGatewayTraffic ? 'Yes' : 'No'}</span>
                   </div>
                   <div className="text-sm text-slate-300">
-                    Last tracked: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedAt ? new Date(coverage.telemetry.lastTrackedAt).toLocaleString() : 'Not yet'}</span>
+                    Last tracked request: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedAt ? new Date(coverage.telemetry.lastTrackedAt).toLocaleString() : 'Not yet'}</span>
                   </div>
                   <div className="text-sm text-slate-300">
-                    Last model: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedModel || 'Unknown'}</span>
+                    Last model observed: <span className="text-slate-200">{coverage?.telemetry?.lastTrackedModel || 'Unknown'}</span>
                   </div>
                 </div>
 
@@ -836,21 +847,21 @@ export default function GettingStartedPage(props: {
                     onClick={() => props.onNavigate('costs')}
                     className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
                   >
-                    Open Costs
+                    Open costs
                   </button>
                   <button
                     type="button"
-                    onClick={() => props.onNavigate('usage')}
+                    onClick={() => props.onNavigate('overview')}
                     className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
                   >
-                    Open Usage
+                    Open overview
                   </button>
                   <button
                     type="button"
-                    onClick={() => props.onNavigate('fleet')}
+                    onClick={() => props.onNavigate('agents')}
                     className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
                   >
-                    Open Fleet
+                    Open agents
                   </button>
                 </div>
 

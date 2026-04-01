@@ -270,8 +270,9 @@ function areAgentWritableFieldsEqual(left: AIAgent, right: AIAgent) {
 export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  // Derive current page from URL path: /dashboard/fleet → 'fleet'
-  const currentPage = location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || 'overview';
+  // Derive current page from URL path and normalize old route names.
+  const rawCurrentPage = location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || 'overview';
+  const currentPage = rawCurrentPage === 'fleet' ? 'agents' : rawCurrentPage;
   const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
 
@@ -412,10 +413,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
   const navigateTo = useCallback((page: string, options?: { userInitiated?: boolean }) => {
     const userInitiated = options?.userInitiated ?? true;
+    const normalizedPage = page === 'fleet' ? 'agents' : page;
     if (userInitiated) {
       hasUserNavigatedRef.current = true;
     }
-    navigate(`/dashboard/${page}`);
+    navigate(`/dashboard/${normalizedPage}`);
   }, [navigate]);
 
   const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
@@ -683,6 +685,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   }, [agentConnections, isDemoMode, mounted, user?.organizationName]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const hasPriorityOverlay = Boolean(caughtSomethingData || agentAliveData);
+  const showSetupProgress = Boolean(needsOnboarding && !setupBarDismissed && !isDemoMode && !hasPriorityOverlay);
+  const showWhatsNewBanner = Boolean(whatsNewData && !whatsNewDismissed && !showSetupProgress && !hasPriorityOverlay);
 
   const markAsRead = async (id: string) => {
     const updated = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
@@ -1066,10 +1071,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 )}
                 {([
                   { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
-                  { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
+                  { id: 'agents', icon: Users, label: 'Agents', badge: null },
                   { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
-                  { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
-                  { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
                   { id: 'apps', icon: Layers, label: 'Apps', badge: null },
                   { id: 'settings', icon: Settings, label: 'Settings', badge: null },
                 ] as const).map((item) => (
@@ -1081,9 +1084,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 ))}
 
                 <div className="my-2 border-t border-white/[0.06]" />
-                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Build</p>
-                {(['templates', 'agent-library', 'playbooks', 'action-policies'] as const).map((id) => {
-                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', playbooks: 'Playbooks', 'action-policies': 'Action Policies' };
+                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Advanced</p>
+                {(['templates', 'agent-library', 'playbooks', 'action-policies', 'conversations', 'costs'] as const).map((id) => {
+                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', playbooks: 'Playbooks', 'action-policies': 'Action Policies', conversations: 'Conversations', costs: 'Costs' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -1092,9 +1095,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   );
                 })}
 
-                <p className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Observe</p>
-                {(['approvals', 'audit-log', 'api-access'] as const).map((id) => {
-                  const labels: Record<string, string> = { approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access' };
+                {(['approvals', 'audit-log', 'api-access', 'developer', 'jobs', 'blackbox', 'runtime-workers'] as const).map((id) => {
+                  const labels: Record<string, string> = { approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access', developer: 'Developer', jobs: 'Run History', blackbox: 'Black Box', 'runtime-workers': 'Runtime Workers' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -1232,7 +1234,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         )}
 
         {/* "Your Agent is Alive" overlay — fires once per agent on first real conversation */}
-        {agentAliveData && (
+        {agentAliveData && !caughtSomethingData && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
             <div className="relative mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-8 text-center shadow-2xl">
               {/* Pulsing alive dot */}
@@ -1314,7 +1316,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         {/* Main Content */}
         <main className="flex-1 overflow-auto pt-[52px] md:pt-0">
           {/* Setup progress bar — slim sticky bar shown during onboarding */}
-          {needsOnboarding && !setupBarDismissed && !isDemoMode && (() => {
+          {showSetupProgress && (() => {
             const steps = [
               true,                                                                                          // workspace ready
               (coverageStatus?.apiKeys?.total ?? 0) > 0,                                                   // api key created
@@ -1348,7 +1350,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             );
           })()}
           {/* "What changed since you left" banner */}
-          {whatsNewData && !whatsNewDismissed && (
+          {showWhatsNewBanner && whatsNewData && (
             <div className="flex items-start gap-4 border-b border-white/[0.06] bg-slate-900/60 px-6 py-3">
               <div className="mt-0.5 shrink-0 text-slate-400">
                 <Bell className="w-4 h-4" />
@@ -1416,7 +1418,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       agents={enrichedAgents}
                       incidents={incidents}
                       costData={costData}
-                      onAddAgent={() => navigateTo('fleet')}
+                      onAddAgent={() => navigateTo('agents')}
                       onNavigate={(page) => navigateTo(page)}
                     />
                   } />
@@ -1435,7 +1437,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       onRefresh={refreshData}
                     />
                   } />
-                  <Route path="fleet" element={
+                  <Route path="agents" element={
                     <FleetPage
                       agents={enrichedAgents}
                       setAgents={saveAgents}
@@ -1449,6 +1451,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       }}
                     />
                   } />
+                  <Route path="fleet" element={<Navigate to="/dashboard/agents" replace />} />
                   <Route path="templates" element={
                     <AgentTemplatesPage
                       onDeploy={async (template) => {
@@ -1527,7 +1530,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                               void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
                             }
                             addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
-                            navigateTo('fleet', { userInitiated: false });
+                            navigateTo('agents', { userInitiated: false });
                           }
                         } else {
                           throw new Error('Agent creation rejected by server');
@@ -1583,7 +1586,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                             }
                             addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
                             setDomainAgentPreselect(null);
-                            navigateTo('fleet', { userInitiated: false });
+                            navigateTo('agents', { userInitiated: false });
                           } else {
                             throw new Error('Agent creation rejected by server');
                           }
@@ -1612,7 +1615,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
                   <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" onNavigate={navigateTo} />} />
-                  <Route path="settings" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
+                  <Route path="settings/*" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
                   <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
                   <Route path="playbooks" element={<PlaybooksPage agents={enrichedAgents} onNavigate={(page) => navigateTo(page)} />} />
                   <Route path="blackbox" element={<BlackBoxPage incidents={incidents} onNavigate={navigateTo} />} />

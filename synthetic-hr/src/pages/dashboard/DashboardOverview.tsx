@@ -276,7 +276,7 @@ const hasData = agents.length > 0;
       ...agents.slice(0, 6).map((agent): ActivityItem => ({
         id: `agent-${agent.id}`,
         at: agent.created_at,
-        title: `${agent.name} added to fleet`,
+        title: `${agent.name} added to agents`,
         detail: `${agent.platform} · ${agent.model_name}`,
         tone: agent.status === 'terminated' ? 'warn' : 'info',
       })),
@@ -300,7 +300,7 @@ const hasData = agents.length > 0;
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Overview</h1>
-          <p className="mt-2 text-slate-400">Your command center wakes up after the first governed agent is added to fleet.</p>
+          <p className="mt-2 text-slate-400">Your command center wakes up after the first governed agent is added.</p>
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.25)]">
@@ -395,7 +395,7 @@ const hasData = agents.length > 0;
     {
       label: 'Governed agents',
       value: `${animatedAgents}/${animatedTotalAgents}`,
-      note: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
+      note: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Agents mostly active',
       tone: 'text-slate-100',
     },
     {
@@ -440,7 +440,7 @@ const hasData = agents.length > 0;
     {
       label: 'Active agents',
       value: `${activeAgents.length}`,
-      delta: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
+      delta: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Agents mostly active',
       tone: terminatedAgents.length > 0 ? 'warn' : 'good',
       trend: [],
       stroke: terminatedAgents.length > 0 ? 'text-amber-300' : 'text-emerald-300',
@@ -463,7 +463,7 @@ const hasData = agents.length > 0;
         title: 'Add budget caps to unguarded agents',
         description: `${agentsWithoutBudget.length} agent(s) still run without a budget limit.`,
         tone: 'warn' as const,
-        action: () => onNavigate?.('fleet'),
+        action: () => onNavigate?.('agents'),
       }
       : null,
     totalConversations === 0
@@ -472,7 +472,7 @@ const hasData = agents.length > 0;
         title: 'Generate live traffic',
         description: 'No governed conversations have been recorded yet, so reliability and cost baselines are still cold.',
         tone: 'info' as const,
-        action: () => onNavigate?.('fleet'),
+        action: () => onNavigate?.('agents'),
       }
       : null,
   ].filter(Boolean) as Array<{ id: string; title: string; description: string; tone: 'warn' | 'risk' | 'info'; action: () => void }>;
@@ -586,7 +586,7 @@ const hasData = agents.length > 0;
       {agents.length > 0 && (
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Fleet · {agents.length} agent{agents.length !== 1 ? 's' : ''}
+            Agents · {agents.length} agent{agents.length !== 1 ? 's' : ''}
           </p>
           <div className="flex flex-wrap gap-2">
             {agents.map((agent) => {
@@ -598,7 +598,7 @@ const hasData = agents.length > 0;
                 <motion.button
                   key={agent.id}
                   title={`${agent.name} · ${agent.status}`}
-                  onClick={() => onNavigate?.('fleet')}
+                  onClick={() => onNavigate?.('agents')}
                   initial={{ opacity: 0, scale: 0.7 }}
                   animate={{ opacity: isTerminated ? 0.45 : 1, scale: 1 }}
                   whileHover={{ scale: 1.15 }}
@@ -663,14 +663,14 @@ const hasData = agents.length > 0;
             label: `${todayNearBudget.length} agent${todayNearBudget.length !== 1 ? 's' : ''} near budget limit`,
             sub: todayNearBudget[0]?.name || '',
             tone: 'amber' as const,
-            action: () => onNavigate?.('fleet'),
+            action: () => onNavigate?.('agents'),
             cta: 'Adjust →',
           },
           todayCritical.length === 0 && todayNewIncidents.length === 0 && todayNearBudget.length === 0 && {
             id: 'all-good',
             icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
             label: 'No urgent items today',
-            sub: 'Fleet and incidents look healthy',
+            sub: 'Agents and incidents look healthy',
             tone: 'emerald' as const,
             action: null,
             cta: null,
@@ -743,7 +743,7 @@ const hasData = agents.length > 0;
             </div>
             <h1 className="mt-3 text-2xl font-bold text-white">Overview</h1>
             <p className="mt-1 max-w-xl text-sm text-slate-400">
-              Live command center for fleet health, open risk, spend, and governance readiness.
+              Know what is running, what needs attention, and what to do next across your governed agents.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
               <div className="inline-flex items-center gap-1.5">
@@ -763,16 +763,16 @@ const hasData = agents.length > 0;
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
-                onClick={() => onNavigate?.('blackbox')}
+                onClick={() => onNavigate?.('incidents')}
                 className="btn-primary px-4 py-2.5 text-sm"
               >
-                Review incident evidence
+                Review incidents
               </button>
               <button
-                onClick={() => onNavigate?.('fleet')}
+                onClick={() => onNavigate?.('agents')}
                 className="btn-secondary px-4 py-2.5 text-sm"
               >
-                Open fleet
+                Open agents
               </button>
             </div>
           </div>
@@ -904,7 +904,7 @@ const hasData = agents.length > 0;
               <div className="rounded-2xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_45%),rgba(16,185,129,0.08)] p-5">
                 <p className="font-semibold text-emerald-200">No urgent queue items right now</p>
                 <p className="mt-2 text-sm leading-6 text-emerald-100/80">
-                  Fleet and incidents are not currently surfacing any high-priority setup or response gaps.
+                  Agents and incidents are not currently surfacing any high-priority setup or response gaps.
                 </p>
               </div>
             )}
@@ -1135,7 +1135,7 @@ const hasData = agents.length > 0;
                 <Bot className="h-4 w-4 text-blue-300 shrink-0" />
                 <h2 className="text-base font-semibold text-white">AI Workforce</h2>
               </div>
-              <p className="mt-1 text-sm text-slate-400">Fleet posture and risk by governed agent.</p>
+              <p className="mt-1 text-sm text-slate-400">Agent posture and risk by governed agent.</p>
             </div>
             <ActionPill label={`${activeAgents.length} active`} tone={activeAgents.length === agents.length ? 'good' : 'warn'} />
           </div>

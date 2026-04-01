@@ -11,9 +11,9 @@ Rasi-Synthetic-HR is an **AI Agent control plane**: define **Playbooks**, route 
 
 ## Key docs
 
-- Documentation index: `./DOCUMENTATION_INDEX.md`
-- Org rollout (agents): `./ORGANIZATION_AGENT_ROLLOUT.md`
-- Internal connectors (Support/Sales/IT): `./INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md`
+- Documentation index: [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
+- Org rollout (agents): [`docs/ORGANIZATION_AGENT_ROLLOUT.md`](docs/ORGANIZATION_AGENT_ROLLOUT.md)
+- Internal connectors (Support/Sales/IT): [`docs/INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md`](docs/INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md)
 
 ## Quick start (local)
 
@@ -22,10 +22,11 @@ Rasi-Synthetic-HR is an **AI Agent control plane**: define **Playbooks**, route 
 
 ## Self-host / enterprise
 
-- Checklist: `./ENTERPRISE_DEPLOYMENT_CHECKLIST.md`
-- Docker Compose (API + frontend): `./deploy/compose/control-plane.yml`
+- Deployment guide: [`docs/DEPLOYMENT_QUICK_REFERENCE.md`](docs/DEPLOYMENT_QUICK_REFERENCE.md)
+- Enterprise checklist: [`docs/ENTERPRISE_DEPLOYMENT_CHECKLIST.md`](docs/ENTERPRISE_DEPLOYMENT_CHECKLIST.md)
+- Docker Compose (all services): `docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env up -d`
 - Note: deployments still require a Supabase instance (cloud or self-hosted) for auth + PostgREST.
 
 ## Archive
 
-Older planning/status docs were moved to `./docs/archive/` to keep the repo root clean.
+Older planning/status docs are in [`docs/archive/`](docs/archive/).

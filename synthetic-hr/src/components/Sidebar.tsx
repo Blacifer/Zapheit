@@ -50,35 +50,25 @@ type NavGroup = {
 
 const CORE_ITEMS: NavItem[] = [
   { id: 'overview', icon: BarChart3, label: 'Overview' },
-  { id: 'fleet', icon: Users, label: 'Fleet' },
+  { id: 'agents', icon: Users, label: 'Agents' },
   { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-  { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
-  { id: 'costs', icon: DollarSign, label: 'Costs' },
   { id: 'apps', icon: Layers, label: 'Apps' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
 const GROUPS: NavGroup[] = [
   {
-    label: 'Build',
+    label: 'Advanced',
     items: [
       { id: 'templates', icon: Zap, label: 'Templates' },
       { id: 'agent-library', icon: Bot, label: 'Agent Library' },
       { id: 'playbooks', icon: FileText, label: 'Playbooks' },
       { id: 'action-policies', icon: Shield, label: 'Action Policies' },
-    ],
-  },
-  {
-    label: 'Observe',
-    items: [
+      { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
+      { id: 'costs', icon: DollarSign, label: 'Costs' },
       { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
       { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
       { id: 'api-access', icon: Key, label: 'API Access' },
-    ],
-  },
-  {
-    label: 'Advanced',
-    items: [
       { id: 'developer', icon: PlugZap, label: 'Developer' },
       { id: 'jobs', icon: ClipboardList, label: 'Run History' },
       { id: 'blackbox', icon: Database, label: 'Black Box' },

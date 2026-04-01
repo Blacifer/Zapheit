@@ -696,19 +696,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md">
             <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">AI Agent Governance Platform — Built for India</span>
+            <span className="text-sm text-slate-200">AI control plane for teams running live agents</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
             Your AI agents are live.
             <br />
-            <span className="gradient-text">Who's watching them?</span>
+            <span className="gradient-text">Make them easy to watch, trust, and control.</span>
           </h1>
 
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Rasi is the governance control plane that <span className="text-slate-100 font-semibold">monitors, secures, and ensures compliance</span> of every AI agent in your organization —
+            Rasi gives your team one place to <span className="text-slate-100 font-semibold">see what agents are doing, catch risky behavior, and stay in control</span> without slowing down delivery —
             <br className="hidden md:block" />
-            no matter who built them.
+            no matter who built the agents or where they run.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
@@ -716,7 +716,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               onClick={onSignUp}
               className="btn-primary group w-full sm:w-auto"
             >
-              Start Free — No Credit Card
+              Start Free
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
             {onDemo ? (
@@ -725,7 +725,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 className="btn-secondary group w-full sm:w-auto"
               >
                 <Play className="w-5 h-5" />
-                Watch Demo
+                Try Demo
               </button>
             ) : null}
           </div>
@@ -733,10 +733,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           {/* Floating stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { value: '340+', label: 'AI Models Supported' },
-              { value: 'Any Agent', label: 'OpenAI · Anthropic · Custom' },
-              { value: '-47%', label: 'Avg Cost Reduction' },
-              { value: 'DPDPA', label: 'India Compliance Ready' }
+              { value: '1 View', label: 'for agents, incidents, apps, and spend' },
+              { value: 'Fast', label: 'time to first tracked request' },
+              { value: '-47%', label: 'average cost reduction' },
+              { value: 'DPDPA', label: 'India-ready controls' }
             ].map((stat, i) => (
               <div
                 key={i}
@@ -778,9 +778,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See the Control Plane in Action</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what a simpler control plane feels like</h2>
             <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
-              Browse a live demo of the dashboard — real interface, sample data.
+              Browse the product the way an operator would: what is running, what needs attention, and what to do next.
             </p>
           </div>
 
@@ -800,7 +800,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               onClick={onSignUp}
               className="flex items-center gap-2 px-7 py-3.5 rounded-xl border border-white/15 bg-white/[0.05] text-white font-semibold hover:bg-white/[0.09] transition-all backdrop-blur-md"
             >
-              Start Free — No Credit Card
+              Start Free
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
@@ -813,10 +813,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center mb-12 md:mb-16 lg:mb-20">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">The Solution</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">One Gateway. Any Agent. Complete Governance.</h2>
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">How it works</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Connect once. Get visibility, protection, and control.</h2>
             <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
-              Route your AI traffic through Rasi once — get instant visibility, security, and compliance across every agent you run.
+              The default path is simple: connect an agent, connect an app, run one test, and see exactly what is happening.
             </p>
           </div>
 
@@ -826,25 +826,25 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 step: 1,
                 icon: FileText,
                 title: 'Connect',
-                desc: 'Point any AI agent at the Rasi gateway — OpenAI, Anthropic, custom-built, or third-party. No lock-in.'
+                desc: 'Point any AI agent at the Rasi gateway so traffic, cost, and risk all have one home.'
               },
               {
                 step: 2,
                 icon: BarChart3,
-                title: 'Monitor',
-                desc: 'Every request, response, token, and cost tracked in real-time. PII, hallucinations, and policy violations caught instantly.'
+                title: 'See',
+                desc: 'Know what agents are doing, what they cost, and where behavior is starting to drift.'
               },
               {
                 step: 3,
                 icon: ZapOff,
-                title: 'Enforce',
-                desc: 'Action policies, approval workflows, kill switches, and budget caps. Define what agents can do — and what needs a human.'
+                title: 'Protect',
+                desc: 'Catch risky output, require approvals where needed, and intervene before bad behavior reaches customers.'
               },
               {
                 step: 4,
                 icon: Shield,
-                title: 'Prove',
-                desc: 'Black Box forensics, audit trails, and compliance evidence. When regulators ask, you\'ll have a defensible answer.'
+                title: 'Control',
+                desc: 'Use evidence, audit trails, and operational controls when the stakes or complexity increase.'
               }
             ].map((item, i) => (
               <div
@@ -873,9 +873,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section id="pillars" className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 md:mb-16 lg:mb-20">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">What Makes Rasi Different</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">6 Things No Other Platform Does Together</h2>
-            <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">Works with any AI agent — OpenAI, Anthropic, LangChain, custom-built, or third-party. No vendor lock-in.</p>
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Core outcomes</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Built to give you visibility, protection, and control</h2>
+            <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">The product stays simple first, then reveals deeper governance and operator tooling when you need it.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">

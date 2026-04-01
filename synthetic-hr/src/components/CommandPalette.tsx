@@ -14,33 +14,33 @@ interface CommandPaletteProps {
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
-  { id: 'fleet', label: 'Fleet', icon: Users },
+  { id: 'agents', label: 'Agents', icon: Users },
   { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
-  { id: 'action-policies', label: 'Action Policies', icon: Shield },
-  { id: 'approvals', label: 'Approvals', icon: CheckSquare },
+  { id: 'apps', label: 'Apps', icon: Building2 },
+  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'getting-started', label: 'Getting Started', icon: Sparkles },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'costs', label: 'Costs', icon: DollarSign },
+  { id: 'action-policies', label: 'Action Policies', icon: Shield },
+  { id: 'approvals', label: 'Approvals', icon: CheckSquare },
   { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
-  { id: 'connectors', label: 'Marketplace', icon: Building2 },
   { id: 'playbooks', label: 'Playbooks', icon: FileText },
   { id: 'jobs', label: 'Run History', icon: ClipboardList },
   { id: 'blackbox', label: 'Black Box', icon: Database },
   { id: 'api-access', label: 'API Access', icon: Key },
   { id: 'developer', label: 'Developer', icon: PlugZap },
-  { id: 'model-comparison', label: 'Model Comparison', icon: TrendingUp },
   { id: 'runtime-workers', label: 'Runtime Workers', icon: Server },
   { id: 'safe-harbor', label: 'Safe Harbor', icon: ShieldCheck },
-  { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'getting-started', label: 'Getting Started', icon: Sparkles },
+  { id: 'model-comparison', label: 'Model Comparison', icon: TrendingUp },
   { id: 'agent-library', label: 'Agent Library', icon: Bot },
   { id: 'templates', label: 'Agent Templates', icon: Zap },
 ];
 
 const QUICK_ACTIONS = [
-  { id: 'fleet', label: 'Add New Agent', icon: Plus, hint: 'Fleet' },
-  { id: 'api-access', label: 'Create API Key', icon: Key, hint: 'API Access' },
-  { id: 'playbooks', label: 'New Playbook', icon: FileText, hint: 'Playbooks' },
-  { id: 'action-policies', label: 'New Action Policy', icon: Shield, hint: 'Governance' },
+  { id: 'agents', label: 'Add New Agent', icon: Plus, hint: 'Agents' },
+  { id: 'apps', label: 'Connect an App', icon: Building2, hint: 'Apps' },
+  { id: 'incidents', label: 'Review Incidents', icon: AlertTriangle, hint: 'Trust' },
+  { id: 'getting-started', label: 'Finish Setup', icon: Sparkles, hint: 'Simple' },
 ];
 
 function statusDot(status?: string) {
@@ -163,7 +163,7 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
                 <Command.Item
                   key={agent.id}
                   value={`agent ${agent.name}`}
-                  onSelect={() => handleSelect(`fleet`)}
+                  onSelect={() => handleSelect(`agents`)}
                   className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer text-sm text-slate-400 data-[selected=true]:bg-slate-800/60 data-[selected=true]:text-white transition-colors group"
                 >
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${statusDot(agent.status)}`} />

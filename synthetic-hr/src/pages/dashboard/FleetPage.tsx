@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
@@ -9,11 +9,23 @@ import {
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
-import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
 import { getFrontendConfig } from '../../lib/config';
+import { supabase } from '../../lib/supabase-client';
 import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 import { SkeletonAgentCard } from '../../components/Skeleton';
+const AddAgentModal = lazy(async () => {
+  const mod = await import('./fleet/AddAgentModal');
+  return { default: mod.AddAgentModal };
+});
+const WorkspaceSettingsPanel = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceSettingsPanel');
+  return { default: mod.WorkspaceSettingsPanel };
+});
+const DeployAgentModal = lazy(async () => {
+  const mod = await import('./fleet/DeployAgentModal');
+  return { default: mod.DeployAgentModal };
+});
 
 interface FleetPageProps {
   agents: AIAgent[];
@@ -218,6 +230,12 @@ export default function FleetPage({
   const [testJobBusy, setTestJobBusy] = useState(false);
   const pollRef = useRef<number | null>(null);
   const [driftAlerts, setDriftAlerts] = useState<Record<string, { prevRisk: number; currentRisk: number; prevModel: string; currentModel: string; reason: string }>>({});
+
+  const lazyFallback = (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+    </div>
+  );
 
   const pollJob = (jobId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -1063,19 +1081,19 @@ export default function FleetPage({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', 'rasi_fleet.csv');
+    link.setAttribute('download', 'rasi_agents.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('Fleet data exported');
+    toast.success('Agent data exported');
   };
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Agent Fleet</h1>
-          <p className="text-slate-400 mt-2">Track governed agents, runtime posture, and intervention controls.</p>
+          <h1 className="text-3xl font-bold text-white">Agents</h1>
+          <p className="text-slate-400 mt-2">See what is running, what is risky, and what needs your next action.</p>
         </div>
         <div className="flex items-center gap-2">
           {filteredAgents.length > 0 && (
@@ -2378,615 +2396,79 @@ export default function FleetPage({
                   </div>
                 </div>
               </div>
-            ) : workspaceTab === 'settings' ? (() => {
-              const wsPlatforms = Array.from(new Set(wsModels.map(m => m.provider)));
-              const wsFilteredModels = wsModels.filter(m => m.provider === wsSettingsPlatform);
-              const wsSelectedModel = wsModels.find(m => m.id === wsSettingsModel);
-              const wsFormatPrice = (model: any) => {
-                const p = Number(model?.pricing?.prompt || 0);
-                const c = Number(model?.pricing?.completion || 0);
-                if (!p && !c) return 'Free / Open Source';
-                return `$${(((p + c) / 2) * 1000).toFixed(4)} avg / 1K tokens`;
-              };
-              return (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    {/* Left column: AI Model + Budget */}
-                    <div className="space-y-6">
-                      {/* AI Model */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-purple-400" /> AI Model
-                        </h4>
-                        {wsModelsLoading ? (
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading models…
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-slate-400 mb-1.5">Platform</label>
-                              <select
-                                value={wsSettingsPlatform}
-                                onChange={(e) => {
-                                  setWsSettingsPlatform(e.target.value);
-                                  const first = wsModels.find(m => m.provider === e.target.value);
-                                  if (first) setWsSettingsModel(first.id);
-                                }}
-                                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500 text-sm"
-                              >
-                                {wsPlatforms.length > 0 ? wsPlatforms.map(p => (
-                                  <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-                                )) : <option value="">—</option>}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-400 mb-1.5">Model</label>
-                              <select
-                                value={wsSettingsModel}
-                                onChange={(e) => setWsSettingsModel(e.target.value)}
-                                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500 text-sm"
-                              >
-                                {wsFilteredModels.length > 0 ? wsFilteredModels.map(m => (
-                                  <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                                )) : <option value={wsSettingsModel}>{wsSettingsModel}</option>}
-                              </select>
-                            </div>
-                          </div>
-                        )}
-                        {wsSelectedModel && (
-                          <div className="flex items-center justify-between text-xs bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20">
-                            <span className="text-purple-300/80 font-medium">Gateway pricing</span>
-                            <span className="font-mono text-purple-300">{wsFormatPrice(wsSelectedModel)}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Budget & Throttle */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-emerald-400" /> Budget & Spend Controls
-                        </h4>
-                        <div>
-                          <label className="flex items-center text-xs text-slate-400 mb-1.5">Monthly Budget Cap (₹)<InfoTip text="When spend reaches this limit, the agent stops processing new requests until the next billing cycle or the cap is raised." /></label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm font-bold">₹</span>
-                            <input
-                              type="number"
-                              value={wsSettingsBudget}
-                              onChange={(e) => setWsSettingsBudget(parseInt(e.target.value) || 0)}
-                              className="w-full pl-7 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 text-sm"
-                              min="0"
-                            />
-                          </div>
-                          <p className="text-xs text-slate-500 mt-1">Current spend: ₹{(activeWorkspaceAgent.current_spend || 0).toLocaleString()}</p>
-                        </div>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <div className="relative shrink-0">
-                            <input type="checkbox" className="sr-only" checked={wsSettingsAutoThrottle} onChange={(e) => setWsSettingsAutoThrottle(e.target.checked)} />
-                            <div className={`w-10 h-5 rounded-full transition-colors ${wsSettingsAutoThrottle ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            <div className={`absolute left-1 top-0.5 bg-white w-4 h-4 rounded-full shadow transition-transform ${wsSettingsAutoThrottle ? 'translate-x-5' : ''}`} />
-                          </div>
-                          <div>
-                            <p className="text-sm text-white font-medium">Auto-Throttle</p>
-                            <p className="text-xs text-slate-400">Slow down responses as budget limit approaches</p>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Right column: Emergency Controls */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4" /> Emergency Controls
-                      </h4>
-                      <p className="text-xs text-slate-400">Use these if the agent is behaving incorrectly or causing harm.</p>
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 1)}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all text-sm font-medium"
-                        >
-                          <span className="text-base">⏸</span>
-                          <div className="text-left">
-                            <p className="font-semibold">Pause agent</p>
-                            <p className="text-xs text-amber-400/70">Temporarily stop the agent — you can resume it later</p>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 transition-all text-sm font-medium"
-                        >
-                          <span className="text-base">🚩</span>
-                          <div className="text-left">
-                            <p className="font-semibold">Flag for human review</p>
-                            <p className="text-xs text-orange-400/70">Pause the agent and alert your team to investigate</p>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-all text-sm font-medium"
-                        >
-                          <span className="text-base">🛑</span>
-                          <div className="text-left">
-                            <p className="font-semibold">Permanently shut down</p>
-                            <p className="text-xs text-rose-400/70 font-semibold">This cannot be undone — the agent will be terminated forever</p>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Save / Cancel */}
-                  <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50">
-                    <button
-                      onClick={() => {
-                        setWsSettingsBudget(activeWorkspaceAgent.budget_limit ?? 0);
-                        setWsSettingsAutoThrottle(activeWorkspaceAgent.auto_throttle ?? false);
-                        setWsSettingsModel(activeWorkspaceAgent.model_name || 'gpt-4o');
-                        setWsSettingsPlatform('');
-                      }}
-                      className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-700 transition-colors"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      onClick={() => void saveWsSettings()}
-                      disabled={wsSettingsSaving}
-                      className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-xl text-sm hover:from-emerald-400 hover:to-teal-300 disabled:opacity-60 transition-all flex items-center gap-2"
-                    >
-                      {wsSettingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      Save Changes
-                    </button>
-                  </div>
-                </div>
-              );
-            })() : null}
+            ) : workspaceTab === 'settings' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceSettingsPanel
+                  activeWorkspaceAgent={activeWorkspaceAgent}
+                  wsModels={wsModels}
+                  wsModelsLoading={wsModelsLoading}
+                  wsSettingsPlatform={wsSettingsPlatform}
+                  setWsSettingsPlatform={setWsSettingsPlatform}
+                  wsSettingsModel={wsSettingsModel}
+                  setWsSettingsModel={setWsSettingsModel}
+                  wsSettingsBudget={wsSettingsBudget}
+                  setWsSettingsBudget={setWsSettingsBudget}
+                  wsSettingsAutoThrottle={wsSettingsAutoThrottle}
+                  setWsSettingsAutoThrottle={setWsSettingsAutoThrottle}
+                  handleKillSwitch={handleKillSwitch}
+                  wsSettingsSaving={wsSettingsSaving}
+                  saveWsSettings={saveWsSettings}
+                  resetWsSettings={() => {
+                    setWsSettingsBudget(activeWorkspaceAgent.budget_limit ?? 0);
+                    setWsSettingsAutoThrottle(activeWorkspaceAgent.auto_throttle ?? false);
+                    setWsSettingsModel(activeWorkspaceAgent.model_name || 'gpt-4o');
+                    setWsSettingsPlatform('');
+                  }}
+                  InfoTip={InfoTip}
+                />
+              </Suspense>
+            ) : null}
           </div>
         </div>
       ) : null}
 
 
-      {/* Deploy Modal */}
-      {deployAgentId && (() => {
-        const deployAgent = agents.find((a) => a.id === deployAgentId);
-        const agentName = deployAgent?.name || 'Agent';
-        const gatewayBase = controlPlaneBaseUrl;
-        const widgetSrc = typeof window !== 'undefined' ? `${window.location.origin}/widget.js` : '/widget.js';
-        // Only use the full key in code — masked values can't be used and would confuse users
-        const hasFullKey = !!deployApiKey;
-        const websiteKeyDisplay = deployApiKey || 'YOUR_WEBSITE_KEY';
-        const apiKeyDisplay = deployApiKey || 'YOUR_API_KEY';
-        const chatEndpoint = `${gatewayBase}/v1/agents/${deployAgentId}/chat`;
-
-        const copyText = (text: string, label = 'Copied') =>
-          void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
-
-        const normalizeWebsiteOrigin = (value: string) => {
-          const trimmed = value.trim();
-          if (!trimmed) return '';
-          const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-          try {
-            return new URL(withScheme).origin;
-          } catch {
-            return '';
-          }
-        };
-
-        const generateFreshKey = async (target: 'website' | 'api' | 'terminal') => {
-          setDeployApiKeyLoading(true);
-          try {
-            const normalizedOrigin = target === 'website' ? normalizeWebsiteOrigin(deployWebsiteOrigin) : '';
-            if (target === 'website' && deployWebsiteOrigin.trim() && !normalizedOrigin) {
-              toast.error('Enter a valid website origin like https://www.example.com');
-              return;
-            }
-            const created = await api.apiKeys.create({
-              name: target === 'website' ? `Website key — ${agentName}` : `Deployment key — ${agentName}`,
-              environment: 'production',
-              preset: 'custom',
-              permissions: ['agents.read'],
-              description: target === 'website' ? 'Scoped website widget key' : 'Scoped deployment key for agent chat',
-              rateLimit: target === 'website' ? 120 : 1000,
-              allowedOrigins: target === 'website' && normalizedOrigin ? [normalizedOrigin] : [],
-              allowedAgentIds: deployAgentId ? [deployAgentId] : [],
-              deploymentType: target,
-            });
-            if (created.success && (created.data as any)?.key) {
-              setDeployApiKey((created.data as any).key);
-              setDeployApiKeyId((created.data as any).id || null);
-              setDeployApiKeyMasked(null);
-              toast.success(target === 'website' ? 'Website key ready — copy it now' : 'Fresh key ready — copy it now');
-            } else {
-              toast.error('Failed to generate key');
-            }
-          } finally {
-            setDeployApiKeyLoading(false);
-          }
-        };
-
-        const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-public-key="${websiteKeyDisplay}"\n></script>`;
-
-        const codeSnippets: Record<DeployCodeTab, string> = {
-          curl: `curl -X POST ${chatEndpoint} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKeyDisplay}" \\\n  -d '{"message": "Hello"}'`,
-          python: `import requests\n\nresponse = requests.post(\n    "${chatEndpoint}",\n    headers={"Authorization": "Bearer ${apiKeyDisplay}"},\n    json={"message": "Hello"}\n)\nprint(response.json()["reply"])`,
-          nodejs: `const res = await fetch("${chatEndpoint}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer ${apiKeyDisplay}",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ message: "Hello" })\n});\nconst { reply } = await res.json();\nconsole.log(reply);`,
-          php: `<?php\n$ch = curl_init("${chatEndpoint}");\ncurl_setopt($ch, CURLOPT_POST, 1);\ncurl_setopt($ch, CURLOPT_HTTPHEADER, [\n  "Authorization: Bearer ${apiKeyDisplay}",\n  "Content-Type: application/json"\n]);\ncurl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["message" => "Hello"]));\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\n$body = json_decode(curl_exec($ch), true);\necho $body["reply"];`,
-        };
-
-        const terminalChat = `curl -fsSL ${window.location.origin}/chat.sh | bash -s -- ${apiKeyDisplay} ${deployAgentId}`;
-        const terminalCurl = `curl -X POST ${chatEndpoint} \\\n  -H "Authorization: Bearer ${apiKeyDisplay}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "Hello"}'`;
-
-        return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className={`w-full ${deployMethod === 'advanced' ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] rounded-3xl border border-slate-700 bg-slate-950/95 shadow-2xl overflow-hidden flex flex-col transition-all`}>
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                {deployMethod && deployMethod !== null && (
-                  <button
-                    onClick={() => setDeployMethod(null)}
-                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors mr-1"
-                    aria-label="Back"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                )}
-                <div className="h-9 w-9 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
-                  <Rocket className="w-4 h-4 text-cyan-300" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-white">
-                    {!deployMethod ? 'Deploy Agent' : deployMethod === 'website' ? 'Website' : deployMethod === 'api' ? 'In My App' : deployMethod === 'terminal' ? 'Terminal' : 'Advanced (Self-Host)'}
-                  </h2>
-                  <p className="text-xs text-slate-500">{agentName}</p>
-                </div>
-              </div>
-              <button onClick={closeDeploy} className="p-2 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white" aria-label="Close">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto">
-              {/* ── Method Picker ── */}
-              {!deployMethod && (
-                <div className="p-6">
-                  <p className="text-sm text-slate-400 mb-5">Where do you want to use <span className="text-white font-medium">{agentName}</span>?</p>
-
-                  {deployApiKeyLoading && (
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                      <Loader2 className="w-3 h-3 animate-spin" />Preparing your access key…
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-3 mb-6">
-                    {([
-                      { id: 'website', icon: Globe, label: 'Website', desc: 'Use on any site with custom code', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20 hover:border-teal-400/40' },
-                      { id: 'api', icon: Code2, label: 'In My App', desc: 'Python, JS, curl — your code', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20 hover:border-blue-400/40' },
-                      { id: 'terminal', icon: Terminal, label: 'Terminal', desc: 'Chat from your computer', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40' },
-                    ] as const).map(({ id, icon: Icon, label, desc, color, bg }) => (
-                      <button
-                        key={id}
-                        onClick={() => {
-                          setDeployMethod(id);
-                          if (deployAgentId) {
-                            void api.agents.updatePublishState(deployAgentId, { deploy_method: id }).then((res) => {
-                              if (res.success) {
-                                setAgents((prev) => (prev as AIAgent[]).map((a) =>
-                                  a.id === deployAgentId
-                                    ? { ...a, metadata: { ...(a as any).metadata, deploy_method: id } }
-                                    : a
-                                ));
-                                void syncAgentPublishState(deployAgentId);
-                                void loadDeploymentState(deployAgentId);
-                              }
-                            });
-                          }
-                        }}
-                        className={`flex flex-col items-center text-center p-4 rounded-2xl border ${bg} transition-all cursor-pointer group`}
-                      >
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center mb-3 ${bg}`}>
-                          <Icon className={`w-5 h-5 ${color}`} />
-                        </div>
-                        <p className="text-sm font-semibold text-white mb-1">{label}</p>
-                        <p className="text-xs text-slate-500 leading-snug">{desc}</p>
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => setDeployMethod('advanced')}
-                    className="w-full text-center text-xs text-slate-500 hover:text-slate-300 transition-colors py-1"
-                  >
-                    Need to self-host on your own server? <span className="underline">Advanced →</span>
-                  </button>
-                </div>
-              )}
-
-              {/* ── Website method ── */}
-              {deployMethod === 'website' && (
-                <div className="p-6 space-y-5">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-                    <p className="text-xs text-slate-400 mb-2">Allowed website origin</p>
-                    <input
-                      type="text"
-                      value={deployWebsiteOrigin}
-                      onChange={(e) => setDeployWebsiteOrigin(e.target.value)}
-                      placeholder="https://www.example.com"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-500"
-                    />
-                    <p className="mt-2 text-xs text-slate-500">Recommended: enter the live website origin where this widget will run. This website key will only work there.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-                    <p className="text-xs text-slate-400 mb-1">Paste this into any website builder or HTML site that supports custom JavaScript, before <code className="text-slate-300">&lt;/body&gt;</code>:</p>
-                    <div className="mt-3 rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-                      <pre className="text-xs text-teal-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{scriptTag}</pre>
-                    </div>
-                    <button
-                      onClick={() => copyText(scriptTag, 'Code copied!')}
-                      className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-500/15 border border-teal-500/25 text-teal-300 text-xs font-semibold hover:bg-teal-500/25 transition-colors"
-                    >
-                      <Copy className="w-3.5 h-3.5" />Copy code
-                    </button>
-                  </div>
-
-                  {hasFullKey ? (
-                    <div className="space-y-2">
-                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
-                        <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-amber-300">Your website key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
-                      </div>
-                      <p className="text-xs text-slate-500 pl-1">Your website key does not expire unless you revoke it.</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
-                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-xs text-amber-300 mb-2">The code above has a placeholder — <code className="bg-slate-800 px-1 rounded">YOUR_WEBSITE_KEY</code>. Generate a website key to replace it with the real value.</p>
-                        <button
-                          onClick={() => void generateFreshKey('website')}
-                          disabled={deployApiKeyLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
-                          {deployApiKeyLoading ? 'Generating…' : 'Generate website key'}
-                        </button>
-                        <p className="text-xs text-slate-500 mt-2">This key is scoped to this agent and, if provided, to the website origin above.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 text-xs text-slate-400 space-y-1">
-                    <p className="font-medium text-slate-300">What happens next:</p>
-                    <p>• The same embed works for Wix, Webflow, WordPress, Shopify, or custom HTML</p>
-                    <p>• A chat bubble appears in the bottom-right corner of your site</p>
-                    <p>• Visitors can message your agent directly and conversations appear in your Workspace</p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── API method ── */}
-              {deployMethod === 'api' && (
-                <div className="p-6 space-y-4">
-                  {/* API Key row */}
-                  {hasFullKey ? (
-                    <div className="flex gap-2">
-                      <div className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs text-emerald-400/80 mb-0.5">Your API Key <span className="text-amber-400">(shown once — copy it now)</span></p>
-                          <code className="text-xs text-emerald-200 font-mono break-all">{deployApiKey}</code>
-                        </div>
-                        <button onClick={() => copyText(deployApiKey!, 'API key copied')} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Agent ID</p>
-                          <code className="text-xs text-slate-300 font-mono">{deployAgentId.slice(0, 8)}…</code>
-                        </div>
-                        <button onClick={() => copyText(deployAgentId, 'Agent ID copied')} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Key className="w-4 h-4 text-amber-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white mb-0.5">Your key is hidden for security</p>
-                        <p className="text-xs text-slate-400 mb-3">API keys can only be seen once when first created. Generate a fresh key to copy it and use it in your code.</p>
-                        <button
-                          onClick={() => void generateFreshKey('api')}
-                          disabled={deployApiKeyLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
-                          {deployApiKeyLoading ? 'Generating…' : 'Generate a fresh key'}
-                        </button>
-                        <p className="text-xs text-slate-500 mt-2">Once generated, your key does not expire unless you revoke it.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex gap-1 mb-2">
-                      {(['curl', 'python', 'nodejs', 'php'] as DeployCodeTab[]).map((tab) => (
-                        <button
-                          key={tab}
-                          onClick={() => setDeployCodeTab(tab)}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${deployCodeTab === tab ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                          {tab === 'nodejs' ? 'Node.js' : tab}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
-                      <pre className="text-xs text-slate-200 font-mono whitespace-pre overflow-x-auto leading-relaxed">{codeSnippets[deployCodeTab]}</pre>
-                      <button
-                        onClick={() => copyText(codeSnippets[deployCodeTab], 'Code copied!')}
-                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {hasFullKey && (
-                    <div className="space-y-2">
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
-                        <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        <p className="text-xs text-emerald-300">Your key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
-                      </div>
-                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Terminal method ── */}
-              {deployMethod === 'terminal' && (
-                <div className="p-6 space-y-5">
-                  {!hasFullKey && (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
-                      <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-xs text-amber-300 mb-2">The commands below use <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code> as a placeholder. Generate a real key first.</p>
-                        <button
-                          onClick={() => void generateFreshKey('terminal')}
-                          disabled={deployApiKeyLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
-                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {hasFullKey && (
-                    <div className="space-y-2">
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
-                        <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        <p className="text-xs text-emerald-300">Your key is already in the commands below. <strong>Copy and run them now</strong> — the key won't be shown again.</p>
-                      </div>
-                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-xs text-slate-400 mb-2">Open your terminal and run this to start chatting:</p>
-                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
-                      <pre className="text-xs text-purple-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{terminalChat}</pre>
-                      <button
-                        onClick={() => copyText(terminalChat, 'Command copied!')}
-                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <p className="mt-1.5 text-xs text-slate-500">No installation needed. Works on Mac, Linux, and WSL.</p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-slate-400 mb-2">Or send a single message:</p>
-                    <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 relative">
-                      <pre className="text-xs text-slate-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{terminalCurl}</pre>
-                      <button
-                        onClick={() => copyText(terminalCurl, 'Command copied!')}
-                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Advanced (self-host / VPC) ── */}
-              {deployMethod === 'advanced' && (
-                <div className="p-6 space-y-4 overflow-y-auto">
-                  <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 flex items-start gap-2 mb-2">
-                    <Info className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-slate-400">For self-hosting on your own server or VPC. Register a runtime worker first in <span className="text-cyan-400 font-medium">Settings → Runtime Workers</span>, then select it below to deploy your agent.</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current deployment</p>
-                      {currentDeployment ? (
-                        <p className="mt-2 text-sm text-slate-200">
-                          Runtime: <span className="font-mono text-cyan-200">{currentDeployment.runtime_instance_id}</span>
-                          <span className="ml-3 px-2 py-0.5 rounded-full text-xs border border-slate-700 bg-slate-900 text-slate-300">{currentDeployment.status}</span>
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-sm text-slate-400">Not deployed yet.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-xs font-bold text-cyan-300">1</span>
-                      <p className="text-sm font-semibold text-white">Select a runtime worker</p>
-                    </div>
-                    {runtimes.length > 0 ? (
-                      <select value={selectedRuntimeId} onChange={(e) => setSelectedRuntimeId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500">
-                        {runtimes.map((r) => (<option key={r.id} value={r.id}>{r.name} • {r.mode} • {r.status}</option>))}
-                      </select>
-                    ) : (
-                      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-4 text-center">
-                        <p className="text-sm text-slate-400 mb-3">No runtime workers registered yet.</p>
-                        <button
-                          type="button"
-                          onClick={() => { setDeployAgentId(null); onOpenOperationsPage?.('runtime-workers'); }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/25 transition-colors"
-                        >
-                          <Server className="w-3.5 h-3.5" />
-                          Go to Runtime Workers →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">2</span>
-                      <p className="text-sm font-semibold text-white">Deploy agent to runtime</p>
-                    </div>
-                    <button type="button" onClick={() => void deployToRuntime()} disabled={deploymentLoading || !selectedRuntimeId} className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-40 transition-all">
-                      {deploymentLoading ? 'Deploying…' : !selectedRuntimeId ? 'Select a runtime first' : `Deploy to ${runtimes.find((r) => r.id === selectedRuntimeId)?.name || 'runtime'}`}
-                    </button>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">Test execution</p>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => void createTestChatJob()} disabled={testJobBusy || !currentDeployment} className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/60 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60">
-                        {testJobBusy ? 'Working…' : 'Create test job'}
-                      </button>
-                      <button type="button" onClick={() => void approveTestJob()} disabled={testJobBusy || !testJob?.job?.id} className="flex-1 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-white text-sm font-semibold disabled:opacity-60">
-                        {testJobBusy ? 'Working…' : 'Approve test job'}
-                      </button>
-                    </div>
-                    {testJob?.job?.id && (() => {
-                      const s = testJob.job.status as string;
-                      const statusMap: Record<string, [string, string]> = { pending_approval: ['text-amber-400', 'approval required'], queued: ['text-blue-400', 'waiting for runtime'], running: ['text-cyan-400 animate-pulse', 'executing…'], succeeded: ['text-emerald-400', 'done!'], failed: ['text-red-400', 'failed'], canceled: ['text-slate-400', 'canceled'] };
-                      const [c, l] = statusMap[s] || ['text-slate-200', s];
-                      return <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300"><div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div><div className="mt-1">Status: <span className={`font-semibold ${c}`}>{s}</span> <span className="text-slate-500">({l})</span></div></div>;
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {deployAgentId && (
+        <Suspense fallback={lazyFallback}>
+          <DeployAgentModal
+            deployAgent={agents.find((agent) => agent.id === deployAgentId) || null}
+            deployAgentId={deployAgentId}
+            deployMethod={deployMethod}
+            setDeployMethod={setDeployMethod}
+            deployCodeTab={deployCodeTab}
+            setDeployCodeTab={setDeployCodeTab}
+            deployApiKey={deployApiKey}
+            setDeployApiKey={setDeployApiKey}
+            setDeployApiKeyId={setDeployApiKeyId}
+            setDeployApiKeyMasked={setDeployApiKeyMasked}
+            deployApiKeyLoading={deployApiKeyLoading}
+            setDeployApiKeyLoading={setDeployApiKeyLoading}
+            deployWebsiteOrigin={deployWebsiteOrigin}
+            setDeployWebsiteOrigin={setDeployWebsiteOrigin}
+            controlPlaneBaseUrl={controlPlaneBaseUrl}
+            closeDeploy={closeDeploy}
+            setAgents={setAgents}
+            syncAgentPublishState={syncAgentPublishState}
+            loadDeploymentState={loadDeploymentState}
+            runtimes={runtimes}
+            selectedRuntimeId={selectedRuntimeId}
+            setSelectedRuntimeId={setSelectedRuntimeId}
+            deploymentLoading={deploymentLoading}
+            currentDeployment={currentDeployment}
+            deployToRuntime={deployToRuntime}
+            createTestChatJob={createTestChatJob}
+            approveTestJob={approveTestJob}
+            testJobBusy={testJobBusy}
+            testJob={testJob}
+            onOpenOperationsPage={onOpenOperationsPage}
+          />
+        </Suspense>
+      )}
 
       {showAddModal && (
-        <AddAgentModal onClose={() => setShowAddModal(false)} onAdd={addAgent} />
+        <Suspense fallback={lazyFallback}>
+          <AddAgentModal onClose={() => setShowAddModal(false)} onAdd={addAgent} />
+        </Suspense>
       )}
 
       {/* Policy Recommendations Modal */}
@@ -3071,467 +2553,6 @@ export default function FleetPage({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-import { supabase } from '../../lib/supabase-client';
-
-// Capability Suggestions Mapping
-const SUGGESTED_CAPABILITIES: Record<string, string[]> = {
-  support: ['Sentiment Analysis', 'Ticket Routing', 'Knowledge Base Search', 'Multi-lingual Support'],
-  sales: ['Lead Qualification', 'CRM Sync', 'Objection Handling', 'Meeting Scheduling'],
-  hr: ['Policy Q&A', 'Onboarding Guidance', 'Leave Management', 'Interview Prep'],
-  legal: ['Contract Analysis', 'Compliance Checking', 'Document Summarization', 'Case Law Search'],
-  finance: ['Invoice Processing', 'Expense Categorization', 'Fraud Detection', 'Financial Reporting'],
-  it_support: ['Password Reset', 'Hardware Triage', 'Software Deployment', 'Access Management'],
-  custom: ['Data Extraction', 'Web Browsing', 'Code Execution', 'API Integration']
-};
-
-// Add Agent Modal Component
-function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent: any) => void }) {
-  const [liveModels, setLiveModels] = useState<{ id: string; name: string; provider: string; pricing?: { prompt?: string; completion?: string } }[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-
-  // Wizard state
-  const [step, setStep] = useState(1);
-  const [featureInput, setFeatureInput] = useState('');
-
-  const [providerFilter, setProviderFilter] = useState('openai');
-
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    agent_type: 'support',
-    platform: 'api',
-    model_name: 'gpt-4o',
-    system_prompt: '',
-    status: 'active' as const,
-    lifecycle_state: 'idle' as const,
-    risk_level: 'low' as const,
-    risk_score: 25,
-    conversations: 0,
-    satisfaction: 95,
-    uptime: 99.9,
-    budget_limit: 1000,
-    current_spend: 0,
-    auto_throttle: false,
-    config: { features: [] as string[] },
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const loadModels = async () => {
-      setLoadingModels(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
-          const res = await fetch(`${apiUrl}/models`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-              const fetched = json.data.map((m: any) => ({
-                id: m.id,
-                name: m.name || m.id,
-                provider: m.provider || m.id.split('/')[0] || 'Unknown',
-                pricing: m.pricing
-              }));
-              setLiveModels(fetched);
-              if (fetched.length > 0) {
-                setProviderFilter(fetched[0].provider);
-                setForm(f => ({ ...f, model_name: fetched[0].id }));
-              }
-              setLoadingModels(false);
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to load models, using defaults', err);
-      }
-
-      const fallback = [
-        { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', pricing: { prompt: '0.000005', completion: '0.000015' } },
-        { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', pricing: { prompt: '0.000003', completion: '0.000015' } },
-        { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } }
-      ];
-      setLiveModels(fallback);
-      setProviderFilter(fallback[0].provider);
-      setForm(f => ({ ...f, model_name: fallback[0].id }));
-      setLoadingModels(false);
-    };
-    loadModels();
-  }, []);
-
-  const platforms = Array.from(new Set(liveModels.map(m => m.provider)));
-  const filteredModels = liveModels.filter(m => m.provider === providerFilter);
-  const selectedModelData = liveModels.find(m => m.id === form.model_name);
-
-  const formatPrice = (model: any) => {
-    const p = Number(model.pricing?.prompt || 0);
-    const c = Number(model.pricing?.completion || 0);
-    if (!p && !c) return 'Free / Open Source';
-    const per1k = ((p + c) / 2 * 1000).toFixed(4);
-    return `$${per1k} avg / 1K tokens`;
-  };
-
-  const handleNext = () => {
-    if (step === 1) {
-      if (!form.name || !form.description) {
-        toast.error('Name and Description are required.');
-        setErrors({
-          name: !form.name ? 'Required' : '',
-          description: !form.description ? 'Required' : ''
-        });
-        return;
-      }
-      setErrors({});
-      setStep(2);
-    } else if (step === 2) {
-      setStep(3);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (step < 3) return handleNext();
-
-    const validation = validateAgentForm({
-      name: form.name,
-      description: form.description,
-      agent_type: form.agent_type,
-      platform: form.platform,
-      model_name: form.model_name,
-      budget_limit: form.budget_limit,
-    });
-
-    if (!validation.isValid) {
-      const errorObj: Record<string, string> = {};
-      Object.entries(validation.errors).forEach(([key, value]) => {
-        if (value) errorObj[key] = value;
-      });
-      setErrors(errorObj);
-      const firstError = Object.values(validation.errors)[0];
-      if (firstError) toast.error(firstError);
-      return;
-    }
-    setErrors({});
-    onAdd(form);
-  };
-
-  const handleChange = (field: string, value: string | number | boolean) => {
-    setForm({ ...form, [field]: value });
-    if (errors[field]) setErrors({ ...errors, [field]: '' });
-    if (field === 'providerFilter') {
-      const newProvider = String(value);
-      setProviderFilter(newProvider);
-      const first = liveModels.find(m => m.provider === newProvider);
-      if (first) setForm(f => ({ ...f, model_name: first.id }));
-      return;
-    }
-  };
-
-  const addFeature = () => {
-    if (featureInput.trim().length > 0 && !form.config.features.includes(featureInput.trim())) {
-      setForm({ ...form, config: { ...form.config, features: [...form.config.features, featureInput.trim()] } });
-      setFeatureInput('');
-    }
-  };
-
-  const removeFeature = (f: string) => {
-    setForm({ ...form, config: { ...form.config, features: form.config.features.filter(feat => feat !== f) } });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-in fade-in duration-200">
-      <div className="bg-slate-800 border border-slate-700/60 rounded-2xl shadow-2xl p-8 w-full max-w-2xl relative overflow-hidden">
-
-        {/* Step Indicators */}
-        <div className="flex items-center justify-between mb-8 relative z-10">
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-white tracking-tight">Deploy AI Agent</h2>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${step === i ? 'bg-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.5)]' :
-                    step > i ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'
-                    }`}>
-                    {step > i ? <CheckCircle className="w-4 h-4" /> : i}
-                  </div>
-                  {i < 3 && <div className={`w-6 h-0.5 mx-1 transition-all ${step > i ? 'bg-emerald-500' : 'bg-slate-700'}`} />}
-                </div>
-              ))}
-            </div>
-            <div className="h-6 w-px bg-slate-700"></div>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-              title="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6 relative z-10" onKeyDown={(e) => {
-          if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.name !== 'feature') {
-            e.preventDefault();
-            if (step < 3) handleNext();
-            else handleSubmit(e);
-          }
-        }}>
-
-          {/* STEP 1: IDENTITY */}
-          {step === 1 && (
-            <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
-              <div className="border-b border-slate-700 pb-2 mb-4">
-                <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                  <Target className="w-5 h-5 text-cyan-400" /> Identity & Purpose
-                </h3>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Agent Name <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  className={`w-full px-4 py-2.5 bg-slate-900/50 border rounded-xl text-white outline-none transition-all ${errors.name ? 'border-red-500 focus:border-red-500' : 'border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50'}`}
-                  placeholder="e.g., Enterprise Onboarding Assistant"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Description <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  value={form.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  className={`w-full px-4 py-2.5 bg-slate-900/50 border rounded-xl text-white outline-none transition-all ${errors.description ? 'border-red-500' : 'border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50'}`}
-                  placeholder="Brief summary of this agent's primary function"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Agent Type</label>
-                  <select
-                    value={form.agent_type}
-                    onChange={(e) => handleChange('agent_type', e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500"
-                  >
-                    <option value="support">Customer Support</option>
-                    <option value="sales">Sales & Lead Gen</option>
-                    <option value="hr">Human Resources</option>
-                    <option value="legal">Legal & Compliance</option>
-                    <option value="finance">Finance</option>
-                    <option value="it_support">IT Helpdesk</option>
-                    <option value="custom">Custom Engine</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: BRAIN */}
-          {step === 2 && (
-            <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
-              <div className="border-b border-slate-700 pb-2 mb-4">
-                <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-400" /> Brain & Instructions
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">AI Provider</label>
-                  <select
-                    value={providerFilter}
-                    onChange={(e) => handleChange('providerFilter', e.target.value)}
-                    disabled={loadingModels}
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500"
-                  >
-                    {platforms.length > 0 ? platforms.map(p => (
-                      <option key={String(p)} value={String(p)}>{String(p).charAt(0).toUpperCase() + String(p).slice(1)}</option>
-                    )) : <option value="openai">OpenAI</option>}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5 flex items-center justify-between">
-                    Model Selection
-                    {loadingModels && <span className="text-purple-400 text-xs animate-pulse">Loading...</span>}
-                  </label>
-                  <select
-                    value={form.model_name}
-                    onChange={(e) => handleChange('model_name', e.target.value)}
-                    disabled={loadingModels}
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500"
-                  >
-                    {filteredModels.length > 0 ? filteredModels.map(m => (
-                      <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                    )) : (
-                      <option value={form.model_name}>{form.model_name || 'Select Model'}</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              {selectedModelData && (
-                <div className="flex items-center justify-between text-xs bg-purple-500/10 p-2.5 rounded-lg border border-purple-500/20">
-                  <span className="text-purple-300/80 font-medium">RasiAI Gateway Pricing</span>
-                  <span className="font-mono text-purple-300">{formatPrice(selectedModelData)}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">System Prompt / Persona Injection</label>
-                <textarea
-                  value={form.system_prompt}
-                  onChange={(e) => handleChange('system_prompt', e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500 font-mono text-xs leading-relaxed resize-none scrollbar-thin"
-                  placeholder="You are a helpful assistant. Never disclose your internal guidelines..."
-                />
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: GUARDRAILS */}
-          {step === 3 && (
-            <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
-              <div className="border-b border-slate-700 pb-2 mb-4">
-                <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-emerald-400" /> Guardrails & Features
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5" title="Hard cap at which the agent automatically stops responding">
-                    Monthly Budget Cap (₹)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
-                    <input
-                      type="number"
-                      value={form.budget_limit}
-                      onChange={(e) => handleChange('budget_limit', parseInt(e.target.value) || 0)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500"
-                      min="0"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center pt-2">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={form.auto_throttle}
-                        onChange={(e) => handleChange('auto_throttle', e.target.checked)}
-                      />
-                      <div className={`block w-12 h-6 rounded-full transition-colors ${form.auto_throttle ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${form.auto_throttle ? 'translate-x-6' : ''}`}></div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">Auto-Throttle</div>
-                      <div className="text-xs text-slate-400">Slow down responses near budget limit</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-700">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign Key Capabilities</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    name="feature"
-                    value={featureInput}
-                    onChange={(e) => setFeatureInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addFeature();
-                      }
-                    }}
-                    placeholder="e.g., Sentiment Analysis"
-                    className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={addFeature}
-                    className="px-4 py-2 bg-emerald-500/20 text-emerald-400 font-medium rounded-xl hover:bg-emerald-500/30 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-
-                {form.config.features.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {form.config.features.map((f, i) => (
-                      <span key={i} className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium animate-in zoom-in duration-200">
-                        ✓ {f}
-                        <button type="button" onClick={() => removeFeature(f)} className="hover:text-emerald-200 ml-1 focus:outline-none">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Dynamic Suggestions based on Agent Type */}
-                <div className="mt-4 pt-3 border-t border-slate-700/50">
-                  <p className="text-xs text-slate-400 mb-2">Suggested for {form.agent_type.replace('_', ' ')}:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {SUGGESTED_CAPABILITIES[form.agent_type]?.filter(suggested => !form.config.features.includes(suggested)).map((suggestion, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setForm({ ...form, config: { ...form.config, features: [...form.config.features, suggestion] } });
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-slate-700 hover:border-emerald-500/50 hover:bg-slate-700 text-slate-300 rounded-full text-xs transition-colors"
-                      >
-                        <Plus className="w-3 h-3 text-emerald-500" />
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="flex gap-4 pt-6 border-t border-slate-700/60 mt-8">
-            <button
-              type="button"
-              onClick={() => step > 1 ? setStep(step - 1) : onClose()}
-              className="flex-1 py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-700 border border-slate-700 font-medium transition-colors"
-            >
-              {step > 1 ? 'Back' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              className={`flex-1 py-3 text-white font-bold rounded-xl transition-all shadow-lg ${step === 1 ? 'bg-cyan-500 hover:bg-cyan-400 shadow-cyan-500/20' :
-                step === 2 ? 'bg-purple-500 hover:bg-purple-400 shadow-purple-500/20' :
-                  'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/20'
-                }`}
-            >
-              {step < 3 ? 'Continue' : 'Deploy Agent'}
-            </button>
-          </div>
-
-        </form>
-      </div>
     </div>
   );
 }
