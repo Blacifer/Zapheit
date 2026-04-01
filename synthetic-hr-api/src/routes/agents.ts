@@ -86,6 +86,7 @@ const readAgentPublishMetadata = (agent: any): AgentPublishMetadata => {
     publish_status: publish.publish_status,
     primary_pack: publish.primary_pack ?? null,
     integration_ids: sanitizeIntegrationIds(publish.integration_ids),
+    deploy_method: metadata.deploy_method ?? null,
   };
 };
 
@@ -117,7 +118,7 @@ const normalizeWorkspaceConversation = (raw: any): AgentWorkspaceConversation =>
   const topic = metadata.topic || trimmed.split(/[.!?]/)[0] || 'Conversation';
   return {
     id: raw.id,
-    user: metadata.user_email || metadata.customer_email || raw.user_id || 'Unknown user',
+    user: metadata.user_email || metadata.customer_email || metadata.user_label || metadata.api_key_name || metadata.platform_label || raw.user_id || 'Unknown user',
     topic: String(topic).slice(0, 64),
     preview: trimmed,
     status: raw.status || 'unknown',
@@ -183,8 +184,9 @@ const enrichAgentRecords = async (
       }));
 
     const hasActiveDeployment = deployedAgentIds.has(agent.id);
+    const hasDirectDeploymentMethod = ['website', 'api', 'terminal'].includes(String(publish.deploy_method || ''));
     const publishStatus = publish.publish_status
-      || (hasActiveDeployment ? 'live'
+      || ((hasActiveDeployment || hasDirectDeploymentMethod) ? 'live'
         : connectedTargets.length === 0 ? 'not_live'
         : connectedTargets.some((t) => t.status === 'connected') ? 'live' : 'ready');
 

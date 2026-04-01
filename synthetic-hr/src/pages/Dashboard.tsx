@@ -251,6 +251,22 @@ function buildCoverageNotifications(
     .slice(0, 50);
 }
 
+function areAgentWritableFieldsEqual(left: AIAgent, right: AIAgent) {
+  const leftPrompt = String((left as any).system_prompt || '');
+  const rightPrompt = String((right as any).system_prompt || '');
+  const leftConfig = JSON.stringify((left as any).config || {});
+  const rightConfig = JSON.stringify((right as any).config || {});
+
+  return (
+    left.name === right.name &&
+    (left.description || '') === (right.description || '') &&
+    left.status === right.status &&
+    left.model_name === right.model_name &&
+    leftPrompt === rightPrompt &&
+    leftConfig === rightConfig
+  );
+}
+
 export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -764,6 +780,10 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         const existing = prevMap.get(agent.id);
 
         if (existing) {
+          if (areAgentWritableFieldsEqual(existing, agent)) {
+            continue;
+          }
+
           const updated = await api.agents.update(agent.id, {
             name: agent.name,
             description: agent.description,

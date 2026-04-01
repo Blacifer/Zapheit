@@ -2825,6 +2825,8 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
             metadata: {
               last_user_message: message.trim().slice(0, 200),
               platform_label: 'Terminal API',
+              user_label: req.apiKey?.name ? `API key: ${req.apiKey.name}` : 'API caller',
+              api_key_name: req.apiKey?.name || null,
             },
           },
         })) as any[];

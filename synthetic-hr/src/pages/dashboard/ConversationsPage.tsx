@@ -89,7 +89,7 @@ function normalizeConversation(raw: any, agents: AIAgent[]): ConversationRecord 
     id: raw.id,
     agentId: raw.agent_id || '',
     agentName: getAgentName(agents, raw.agent_id),
-    user: metadata.user_email || metadata.customer_email || raw.user_id || 'Unknown user',
+    user: metadata.user_email || metadata.customer_email || metadata.user_label || metadata.api_key_name || metadata.platform_label || raw.user_id || 'Unknown user',
     topic: metadata.topic || summarizeTopic(preview),
     sentiment: deriveSentiment(raw.status, metadata.messages || []),
     timestamp: raw.started_at || raw.created_at || new Date().toISOString(),
