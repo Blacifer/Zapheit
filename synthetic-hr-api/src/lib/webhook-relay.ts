@@ -18,7 +18,8 @@ export type WebhookEventId =
   | 'approval.completed'
   | 'agent.suspended'
   | 'quota.warning'
-  | 'policy.violated';
+  | 'policy.violated'
+  | 'rule_synthesis.proposed';
 
 type StoredWebhook = {
   id: string;

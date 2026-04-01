@@ -11,9 +11,10 @@ interface ConnectedAppRowProps {
   onClick: (app: UnifiedApp) => void;
   onConfigure: (app: UnifiedApp) => void;
   onDisconnect: (app: UnifiedApp) => void;
+  healthResult?: 'ok' | 'error' | null;
 }
 
-export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisconnect }: ConnectedAppRowProps) {
+export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisconnect, healthResult }: ConnectedAppRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useOutsideClick(menuRef, () => setShowMenu(false));
@@ -48,6 +49,15 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(app.maturity))}>
               {app.maturity}
             </span>
+          )}
+          {healthResult === 'ok' && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Health check passed" />
+          )}
+          {healthResult === 'error' && (
+            <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" title="Health check failed" />
+          )}
+          {healthResult == null && app.source === 'integration' && (
+            <span className="w-2 h-2 rounded-full bg-amber-400/50 shrink-0" title="Not yet tested" />
           )}
         </div>
         {agentNames.length > 0 && (

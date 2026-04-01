@@ -168,7 +168,29 @@ export async function runPreflightGate(
   }
 
   // -------------------------------------------------------------------
-  // 4. Request-side DLP: scan outbound param values for PII
+  // 4. Capability enforcement: check enabled_capabilities for this connector.
+  //    Empty array (the default) means all capabilities are allowed.
+  // -------------------------------------------------------------------
+  try {
+    const capQ = new URLSearchParams();
+    capQ.set('organization_id', eq(orgId));
+    capQ.set('service_type', eq(connectorId));
+    capQ.set('select', 'enabled_capabilities');
+    capQ.set('limit', '1');
+    const capRows = (await supabaseRest('integrations', capQ)) as any[];
+    const enabledCaps: string[] = capRows?.[0]?.enabled_capabilities ?? [];
+    if (enabledCaps.length > 0 && !enabledCaps.includes(action)) {
+      return {
+        allowed: false,
+        blockReason: `Capability "${action}" is not enabled for ${connectorId}. Enable it in Apps → Permissions.`,
+      };
+    }
+  } catch (err: any) {
+    logger.warn('[preflight] Capability check failed, allowing through', { orgId, connectorId, action, error: err?.message });
+  }
+
+  // -------------------------------------------------------------------
+  // 5. Request-side DLP: scan outbound param values for PII
   // -------------------------------------------------------------------
   const flatText = flattenParamValues(params);
   if (flatText.trim()) {

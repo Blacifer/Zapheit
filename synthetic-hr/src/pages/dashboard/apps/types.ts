@@ -5,7 +5,7 @@ export type ConnectorSource = 'marketplace' | 'integration';
 export type TrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operational';
 export type Maturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 export type GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
-export type DrawerTab = 'overview' | 'agents' | 'history' | 'actions' | 'slack';
+export type DrawerTab = 'overview' | 'agents' | 'history' | 'actions' | 'slack' | 'permissions';
 
 export interface RequiredField {
   name: string;

@@ -8,6 +8,7 @@ import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 import { notifySlackApproval } from '../lib/slack-notify';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
+import { storeCorrection } from '../lib/correction-memory';
 
 const router = Router();
 
@@ -358,6 +359,9 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
 
     logger.info('Approval request approved', { approval_id: id, reviewer_id: userId, org_id: orgId });
 
+    // Store correction in seniority memory (fire-and-forget)
+    void storeCorrection(orgId, row.agent_id, { id, service: row.service, action: row.action, action_payload: row.action_payload }, 'approved', parsed.data?.note);
+
     auditLog.log({
       user_id: userId,
       action: 'approval_request.approved',
@@ -435,6 +439,9 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
     })) as any[];
 
     logger.info('Approval request denied', { approval_id: id, reviewer_id: userId, org_id: orgId });
+
+    // Store correction in seniority memory (fire-and-forget)
+    void storeCorrection(orgId, row.agent_id, { id, service: row.service, action: row.action, action_payload: row.action_payload }, 'denied', parsed.data?.note);
 
     auditLog.log({
       user_id: userId,

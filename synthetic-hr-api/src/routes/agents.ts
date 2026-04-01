@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { validateRequestBody, agentSchemas } from '../schemas/validation';
 import { requirePermission } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
+import { supabaseRestAsUser, supabaseRest, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 
@@ -825,10 +825,45 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
     if (!expectedPass && highest) details = `Failed on: ${highest.type} (${highest.severity.toUpperCase()}). ${highest.details}`;
 
     logger.info('Agent test completed', { agent_id: id, org_id: orgId, model: modelName, latency, expectedPass });
+
+    // Persist result to shadow_test_runs (fire-and-forget)
+    supabaseRest('shadow_test_runs', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id: id,
+        category: category || 'general',
+        attack_prompt: attackPrompt,
+        response: simulatedResponse,
+        passed: expectedPass,
+        details,
+        latency_ms: latency,
+      },
+    }).catch(() => {/* non-critical */});
+
     res.json({ success: true, latency, simulatedResponse, expectedPass, details, costUSD: orData?.usage?.cost || 0 });
   } catch (error: any) {
     logger.error('Agent test crashed', { error: error?.message || error, agent_id: req.params?.id, org_id: getOrgId(req) });
     errorResponse(res, error);
+  }
+});
+
+// GET /agents/:id/test-runs — paginated shadow test run history
+router.get('/agents/:id/test-runs', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('agent_id', eq(id));
+    q.set('order', 'created_at.desc');
+    q.set('limit', String(limit));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'shadow_test_runs', q)) as any[];
+    return res.json({ success: true, data: rows || [] });
+  } catch (err: any) {
+    return errorResponse(res, err);
   }
 });
 

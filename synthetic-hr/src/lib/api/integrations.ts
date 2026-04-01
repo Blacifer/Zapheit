@@ -241,6 +241,23 @@ export const integrationsApi = {
     });
   },
 
+  async updateCapabilities(service: string, enabled: string[]): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/integrations/${encodeURIComponent(service)}/capabilities`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    });
+  },
+
+  async getHealthSummary(): Promise<ApiResponse<Array<{
+    service: string;
+    status: string;
+    last_error_msg: string | null;
+    last_tested_at: string | null;
+    last_test_result: string | null;
+  }>>> {
+    return authenticatedFetch('/integrations/health-summary', { method: 'GET' });
+  },
+
   getOAuthAuthorizeUrl(service: string, returnTo: string): string {
     const base = API_BASE_URL.replace(/\/+$/, '');
     const params = new URLSearchParams();

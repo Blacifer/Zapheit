@@ -16,6 +16,7 @@ import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
 import { computeEntropy } from '../services/policy-engine';
 import { runPreflightGate } from '../lib/preflight-gate';
+import { fetchRelevantCorrections } from '../lib/correction-memory';
 
 const router = express.Router();
 
@@ -1746,6 +1747,26 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       }
       // Request interception: redact PII, replace patterns, inject system instructions
       normalizedMessages = await applyRequestInterceptors(orgId, normalizedMessages);
+
+      // Seniority Engine: inject relevant past human corrections into the system prompt
+      if (agentId) {
+        try {
+          const lastUserMsg = [...normalizedMessages].reverse().find((m) => m.role === 'user');
+          const corrections = await fetchRelevantCorrections(orgId, agentId, lastUserMsg?.content || '', 5);
+          if (corrections.length > 0) {
+            const correctionBlock = `\n\n<past_corrections>\nThe following human corrections from your organisation's review history are relevant to this request. Learn from them and avoid repeating these mistakes:\n${corrections.map((c) => `- ${c}`).join('\n')}\n</past_corrections>`;
+            const sysIdx = normalizedMessages.findIndex((m) => m.role === 'system');
+            if (sysIdx >= 0) {
+              normalizedMessages[sysIdx] = {
+                ...normalizedMessages[sysIdx],
+                content: normalizedMessages[sysIdx].content + correctionBlock,
+              };
+            }
+          }
+        } catch {
+          // Fail-open: correction injection is best-effort, never block the request
+        }
+      }
     }
     // ───────────────────────────────────────────────────────────────────────
 

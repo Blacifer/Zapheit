@@ -12,6 +12,7 @@ import { AgentsTab } from './AgentsTab';
 import { HistoryTab } from './HistoryTab';
 import { ActionsTab } from './ActionsTab';
 import { SlackTab } from './SlackTab';
+import { PermissionsTab } from './PermissionsTab';
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -159,6 +160,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect }
     ...(app.connected ? [{ id: 'history' as DrawerTab, label: 'Execution History' }] : []),
     ...(rawConnectorId ? [{ id: 'actions' as DrawerTab, label: 'Actions' }] : []),
     ...(isSlack && app.connected ? [{ id: 'slack' as DrawerTab, label: 'Slack Inbox' }] : []),
+    ...(app.connected && app.actionsUnlocked && app.actionsUnlocked.length > 0 ? [{ id: 'permissions' as DrawerTab, label: 'Permissions' }] : []),
   ];
 
   return (
@@ -314,6 +316,9 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect }
           )}
           {tab === 'slack' && rawConnectorId && (
             <SlackTab serviceId={rawConnectorId} />
+          )}
+          {tab === 'permissions' && (
+            <PermissionsTab app={app} />
           )}
         </div>
       </div>

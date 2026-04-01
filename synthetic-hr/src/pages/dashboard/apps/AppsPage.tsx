@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Activity, Loader2, RefreshCw } from 'lucide-react';
+import { api } from '../../../lib/api-client';
 import { toast } from '../../../lib/toast';
 import { cn } from '../../../lib/utils';
 import type { AIAgent } from '../../../types';
@@ -50,6 +51,40 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   // Overlay state
   const [drawerApp, setDrawerApp] = useState<UnifiedApp | null>(null);
   const [connectTarget, setConnectTarget] = useState<UnifiedApp | null>(null);
+
+  // Health summary: maps appId → 'ok' | 'error' | null
+  const [healthMap, setHealthMap] = useState<Map<string, 'ok' | 'error'>>(new Map());
+  const [testingAll, setTestingAll] = useState(false);
+
+  const loadHealthSummary = useCallback(async () => {
+    const res = await api.integrations.getHealthSummary();
+    if (res.success && res.data) {
+      const m = new Map<string, 'ok' | 'error'>();
+      for (const entry of res.data) {
+        if (entry.last_test_result === 'ok' || entry.last_test_result === 'error') {
+          m.set(entry.service, entry.last_test_result as 'ok' | 'error');
+        }
+      }
+      setHealthMap(m);
+    }
+  }, []);
+
+  useEffect(() => { void loadHealthSummary(); }, [loadHealthSummary]);
+
+  const testAll = async () => {
+    const integrationApps = connectedList.filter((a) => a.source === 'integration' && a.integrationData?.id);
+    if (integrationApps.length === 0) { toast.info('No integration apps to test'); return; }
+    setTestingAll(true);
+    let ok = 0; let fail = 0;
+    for (const app of integrationApps) {
+      const res = await api.integrations.test(app.integrationData!.id);
+      const result: 'ok' | 'error' = res.success ? 'ok' : 'error';
+      if (res.success) ok++; else fail++;
+      setHealthMap((prev) => new Map(prev).set(app.appId, result));
+    }
+    toast.success(`Health check done — ${ok} healthy, ${fail} failed`);
+    setTestingAll(false);
+  };
 
   const linkedAgent = agentIdParam ? agents.find((a) => a.id === agentIdParam) : null;
 
@@ -133,13 +168,26 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               Connect external apps to your agents with governed access, approvals, and evidence.
             </p>
           </div>
-          <button
-            onClick={() => void reload()}
-            className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {activeTab === 'my' && connectedList.some((a) => a.source === 'integration') && (
+              <button
+                onClick={() => void testAll()}
+                disabled={testingAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 text-xs font-medium disabled:opacity-50"
+                title="Test all integrations"
+              >
+                {testingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                Test All
+              </button>
+            )}
+            <button
+              onClick={() => void reload()}
+              className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Agent context banner */}
@@ -206,6 +254,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                     onClick={(_a) => setDrawerApp(app)}
                     onConfigure={(_a) => setConnectTarget(app)}
                     onDisconnect={(_a) => void handleDisconnect(app)}
+                    healthResult={healthMap.get(app.appId) ?? null}
                   />
                 ))
               )}

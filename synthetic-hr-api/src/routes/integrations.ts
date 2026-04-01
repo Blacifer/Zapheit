@@ -2016,6 +2016,8 @@ router.post('/test/:service', requirePermission('connectors.read'), async (req, 
       status: result.success ? 'connected' : 'error',
       last_error_at: result.success ? null : new Date().toISOString(),
       last_error_msg: result.success ? null : result.message,
+      last_tested_at: new Date().toISOString(),
+      last_test_result: result.success ? 'ok' : 'error',
       updated_at: new Date().toISOString(),
     },
   });
@@ -2208,6 +2210,79 @@ router.post('/slack/messages/:id/status', requirePermission('connectors.read'), 
   );
 
   return res.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/integrations/:service/capabilities
+// Toggle which capabilities are enabled for a connected integration.
+// Body: { enabled: string[] } — list of capability IDs to enable.
+// An empty array means all capabilities are permitted (backwards-compatible default).
+// ---------------------------------------------------------------------------
+router.patch('/:service/capabilities', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const { service } = req.params;
+  const { enabled } = req.body as { enabled?: unknown };
+
+  if (!Array.isArray(enabled) || enabled.some((c) => typeof c !== 'string')) {
+    return res.status(400).json({ success: false, error: 'enabled must be an array of capability ID strings' });
+  }
+
+  try {
+    const rest = restAsUser(req);
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('service_type', eq(service));
+    const rows = await safeQuery<{ id: string }>(rest, 'integrations', q);
+    if (!rows?.length) return res.status(404).json({ success: false, error: 'Integration not connected' });
+
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(rows[0].id));
+    await rest('integrations', patchQ, {
+      method: 'PATCH',
+      body: { enabled_capabilities: enabled, updated_at: new Date().toISOString() },
+    });
+
+    logger.info('Integration capabilities updated', { orgId, service, enabled });
+    return res.json({ success: true, data: { service, enabled_capabilities: enabled } });
+  } catch (err: any) {
+    logger.error('Failed to update integration capabilities', { orgId, service, error: err?.message });
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/integrations/health-summary
+// Returns status + last test result for all integrations in the org.
+// Used by the App Hub health dashboard.
+// ---------------------------------------------------------------------------
+router.get('/health-summary', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  try {
+    const rest = restAsUser(req);
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('select', 'service_type,status,last_error_msg,last_error_at,last_tested_at,last_test_result');
+    q.set('order', 'service_type.asc');
+    const rows = (await safeQuery<any>(rest, 'integrations', q)) ?? [];
+
+    const summary = rows.map((r: any) => ({
+      service: r.service_type,
+      status: r.status,
+      last_error_msg: r.last_error_msg ?? null,
+      last_error_at: r.last_error_at ?? null,
+      last_tested_at: r.last_tested_at ?? null,
+      last_test_result: r.last_test_result ?? null,
+    }));
+
+    return res.json({ success: true, data: summary });
+  } catch (err: any) {
+    logger.error('Failed to fetch integration health summary', { orgId, error: err?.message });
+    return res.status(500).json({ success: false, error: err?.message });
+  }
 });
 
 export default router;
