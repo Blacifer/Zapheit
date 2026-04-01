@@ -13,6 +13,9 @@ declare global {
         name: string;
         permissions: string[];
         rate_limit: number;
+        allowed_origins?: string[];
+        allowed_agent_ids?: string[];
+        deployment_type?: 'website' | 'api' | 'terminal' | 'internal' | null;
       };
     }
   }
@@ -25,14 +28,17 @@ const API_KEY_CACHE = new Map<string, {
   name: string;
   permissions: string[];
   rateLimit: number;
+  allowedOrigins: string[];
+  allowedAgentIds: string[];
+  deploymentType: 'website' | 'api' | 'terminal' | 'internal' | null;
   cachedAt: number;
 }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
 /**
  * API Key Validation Middleware
- * Supports: Authorization: Bearer sk_...
- * Or query param: ?api_key=sk_...
+ * Supports: Authorization: Bearer sk_... or wk_...
+ * Or query param: ?api_key=sk_... / wk_...
  */
 export const validateApiKey = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -56,7 +62,8 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
     }
 
     // Only accept properly formatted keys
-    if (!apiKeyPlaintext.startsWith('sk_') || apiKeyPlaintext.length < 50) {
+    const hasSupportedPrefix = apiKeyPlaintext.startsWith('sk_') || apiKeyPlaintext.startsWith('wk_');
+    if (!hasSupportedPrefix || apiKeyPlaintext.length < 50) {
       return res.status(401).json({ success: false, error: 'Invalid API key format' });
     }
 
@@ -74,6 +81,9 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
           name: cached.name,
           permissions: cached.permissions,
           rate_limit: cached.rateLimit,
+          allowed_origins: cached.allowedOrigins,
+          allowed_agent_ids: cached.allowedAgentIds,
+          deployment_type: cached.deploymentType,
         };
 
         const usedAt = new Date().toISOString();
@@ -127,6 +137,15 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
 
     const metadata = (apiKey.metadata || {}) as Record<string, any>;
     const permissions = Array.isArray(metadata.permissions) ? metadata.permissions : [];
+    const allowedOrigins = Array.isArray(metadata.allowed_origins)
+      ? metadata.allowed_origins.filter((value) => typeof value === 'string' && value.trim())
+      : [];
+    const allowedAgentIds = Array.isArray(metadata.allowed_agent_ids)
+      ? metadata.allowed_agent_ids.filter((value) => typeof value === 'string' && value.trim())
+      : [];
+    const deploymentType = ['website', 'api', 'terminal', 'internal'].includes(String(metadata.deployment_type || ''))
+      ? metadata.deployment_type as 'website' | 'api' | 'terminal' | 'internal'
+      : null;
     const rateLimit = apiKey.rate_limit_per_minute || apiKey.rate_limit || 1000;
 
     // Cache by hash so the raw key is not stored in memory
@@ -137,6 +156,9 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
       name: apiKey.name,
       permissions,
       rateLimit,
+      allowedOrigins,
+      allowedAgentIds,
+      deploymentType,
       cachedAt: Date.now(),
     });
 
@@ -147,6 +169,9 @@ export const validateApiKey = async (req: Request, res: Response, next: NextFunc
       name: apiKey.name,
       permissions,
       rate_limit: rateLimit,
+      allowed_origins: allowedOrigins,
+      allowed_agent_ids: allowedAgentIds,
+      deployment_type: deploymentType,
     };
 
     const usedAt = new Date().toISOString();

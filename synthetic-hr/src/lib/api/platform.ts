@@ -37,6 +37,9 @@ export type ApiKeyRecord = {
   description?: string | null;
   expires_at?: string | null;
   rate_limit?: number | null;
+  allowed_origins?: string[];
+  allowed_agent_ids?: string[];
+  deployment_type?: 'website' | 'api' | 'terminal' | 'internal' | null;
   usage_7d: ApiKeyUsageRecord[];
   usage_30d: ApiKeyUsageRecord[];
   requests_30d: number;
@@ -217,6 +220,9 @@ export const apiKeysApi = {
     expiresAt?: string;
     manager_ids?: string[];
     rateLimit?: number;
+    allowedOrigins?: string[];
+    allowedAgentIds?: string[];
+    deploymentType?: 'website' | 'api' | 'terminal' | 'internal' | null;
   }): Promise<ApiResponse<ApiKeyRecord & { key: string }>> {
     return authenticatedFetch('/api-keys', {
       method: 'POST',
@@ -234,6 +240,9 @@ export const apiKeysApi = {
     expiresAt?: string | null;
     description?: string | null;
     rateLimit?: number;
+    allowedOrigins?: string[];
+    allowedAgentIds?: string[];
+    deploymentType?: 'website' | 'api' | 'terminal' | 'internal' | null;
   }): Promise<ApiResponse<any>> {
     return authenticatedFetch(`/api-keys/${id}`, {
       method: 'PATCH',

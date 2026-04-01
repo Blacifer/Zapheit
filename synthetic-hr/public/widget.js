@@ -6,7 +6,7 @@
  *   <script
  *     src="https://rasi-synthetic-hr.vercel.app/widget.js"
  *     data-agent-id="YOUR_AGENT_ID"
- *     data-api-key="sk_YOUR_KEY"
+ *     data-public-key="wk_YOUR_WEBSITE_KEY"
  *     data-title="Ask me anything"
  *     data-theme="dark"
  *     data-api-url="https://rasi-synthetic-hr-production.up.railway.app"
@@ -22,13 +22,13 @@
   })();
 
   var agentId  = script.getAttribute('data-agent-id') || '';
-  var apiKey   = script.getAttribute('data-api-key') || '';
+  var apiKey   = script.getAttribute('data-public-key') || script.getAttribute('data-api-key') || '';
   var title    = script.getAttribute('data-title') || 'Chat with us';
   var theme    = script.getAttribute('data-theme') || 'dark';
   var apiBase  = (script.getAttribute('data-api-url') || 'https://rasi-synthetic-hr-production.up.railway.app').replace(/\/$/, '');
 
   if (!agentId || !apiKey) {
-    console.warn('[RASI Widget] data-agent-id and data-api-key are required.');
+    console.warn('[RASI Widget] data-agent-id and data-public-key are required.');
     return;
   }
 

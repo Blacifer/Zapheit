@@ -26,6 +26,9 @@ const createApiKeySchema = z.object({
   expiresAt: z.string().optional(),
   manager_ids: z.array(z.string().uuid()).optional(),
   rateLimit: z.number().int().min(10).max(100000).optional().default(1000),
+  allowedOrigins: z.array(z.string().url()).optional().default([]),
+  allowedAgentIds: z.array(z.string().uuid()).optional().default([]),
+  deploymentType: z.enum(['website', 'api', 'terminal', 'internal']).optional().nullable(),
 });
 
 const updateApiKeySchema = z.object({
@@ -38,14 +41,22 @@ const updateApiKeySchema = z.object({
   expiresAt: z.string().nullable().optional(),
   description: z.string().max(500).nullable().optional(),
   rateLimit: z.number().int().min(10).max(100000).optional(),
+  allowedOrigins: z.array(z.string().url()).optional(),
+  allowedAgentIds: z.array(z.string().uuid()).optional(),
+  deploymentType: z.enum(['website', 'api', 'terminal', 'internal']).nullable().optional(),
 });
 
-const generateApiKey = (): { key: string; keyHash: string; lastFour: string } => {
-  const key = `sk_${crypto.randomBytes(32).toString('hex')}`;
+const generateApiKey = (prefix: 'sk' | 'wk' = 'sk'): { key: string; keyHash: string; lastFour: string } => {
+  const key = `${prefix}_${crypto.randomBytes(32).toString('hex')}`;
   const keyHash = crypto.createHash('sha256').update(key).digest('hex');
   const lastFour = key.slice(-4);
   return { key, keyHash, lastFour };
 };
+
+function getKeyPrefix(record: any) {
+  const metadata = getMetadata(record);
+  return metadata.deployment_type === 'website' ? 'wk' : 'sk';
+}
 
 const getOrgId = (req: Request): string | null => req.user?.organization_id || null;
 
@@ -83,7 +94,7 @@ function getMetadata(record: any): Record<string, any> {
 }
 
 function buildMaskedKey(record: any) {
-  return `sk_••••••••••••••••${record.last_four || '••••'}`;
+  return `${getKeyPrefix(record)}_••••••••••••••••${record.last_four || '••••'}`;
 }
 
 async function enrichApiKeyRecord(record: any, orgUsers: any[], usageState?: Awaited<ReturnType<typeof getApiKeyUsageState>>) {
@@ -106,7 +117,7 @@ async function enrichApiKeyRecord(record: any, orgUsers: any[], usageState?: Awa
     status: record.status || 'active',
     environment: metadata.environment || 'production',
     masked_key: buildMaskedKey(record),
-    key_prefix: `sk_...${record.last_four || '••••'}`,
+    key_prefix: `${getKeyPrefix(record)}_...${record.last_four || '••••'}`,
     created_at: record.created_at,
     created_by: createdBy,
     created_by_user: createdByUser
@@ -124,6 +135,9 @@ async function enrichApiKeyRecord(record: any, orgUsers: any[], usageState?: Awa
     description: metadata.description || null,
     expires_at: metadata.expires_at || null,
     rate_limit: record.rate_limit_per_minute || null,
+    allowed_origins: Array.isArray(metadata.allowed_origins) ? metadata.allowed_origins : [],
+    allowed_agent_ids: Array.isArray(metadata.allowed_agent_ids) ? metadata.allowed_agent_ids : [],
+    deployment_type: metadata.deployment_type || null,
     usage_7d: usage7d.series,
     usage_30d: usage.series,
     requests_30d: usage.totalRequests,
@@ -166,13 +180,13 @@ router.post('/api-keys', requirePermission('settings.update'), async (req: Reque
     }
 
     const userJwt = getUserJwt(req);
-    const { name, environment, preset, permissions, description, expiresAt, rateLimit } = parsed.data;
+    const { name, environment, preset, permissions, description, expiresAt, rateLimit, allowedOrigins, allowedAgentIds, deploymentType } = parsed.data;
     const managerIds = parsed.data.manager_ids && parsed.data.manager_ids.length > 0
       ? parsed.data.manager_ids
       : await getDefaultManagerIds(orgId, userJwt);
 
     const resolvedPermissions = resolvePermissions(preset, permissions);
-    const { key, keyHash, lastFour } = generateApiKey();
+    const { key, keyHash, lastFour } = generateApiKey(deploymentType === 'website' ? 'wk' : 'sk');
 
     const apiKeyData = {
       organization_id: orgId,
@@ -191,6 +205,9 @@ router.post('/api-keys', requirePermission('settings.update'), async (req: Reque
         created_by: req.user?.id || null,
         description: description || null,
         expires_at: expiresAt || null,
+        allowed_origins: allowedOrigins,
+        allowed_agent_ids: allowedAgentIds,
+        deployment_type: deploymentType || null,
       },
     };
 
@@ -350,6 +367,9 @@ router.patch('/api-keys/:id', requirePermission('settings.update'), async (req: 
       manager_ids: parsed.data.manager_ids || currentMetadata.manager_ids || [],
       expires_at: parsed.data.expiresAt !== undefined ? parsed.data.expiresAt : (currentMetadata.expires_at || null),
       description: parsed.data.description !== undefined ? parsed.data.description : (currentMetadata.description || null),
+      allowed_origins: parsed.data.allowedOrigins !== undefined ? parsed.data.allowedOrigins : (currentMetadata.allowed_origins || []),
+      allowed_agent_ids: parsed.data.allowedAgentIds !== undefined ? parsed.data.allowedAgentIds : (currentMetadata.allowed_agent_ids || []),
+      deployment_type: parsed.data.deploymentType !== undefined ? parsed.data.deploymentType : (currentMetadata.deployment_type || null),
       created_by: currentMetadata.created_by || null,
     };
 
@@ -435,7 +455,8 @@ router.post('/api-keys/:id/refresh', requirePermission('settings.update'), async
       return res.status(404).json({ success: false, error: 'API key not found' });
     }
 
-    const { key, keyHash, lastFour } = generateApiKey();
+    const deploymentType = getMetadata(current).deployment_type === 'website' ? 'wk' : 'sk';
+    const { key, keyHash, lastFour } = generateApiKey(deploymentType);
     const updated = await writeApiKeyRecord(req.params.id, orgId, {
       key_hash: keyHash,
       last_four: lastFour,

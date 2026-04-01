@@ -203,6 +203,7 @@ export default function FleetPage({
   const [deployApiKeyId, setDeployApiKeyId] = useState<string | null>(null);
   const [deployApiKeyMasked, setDeployApiKeyMasked] = useState<string | null>(null);
   const [deployApiKeyLoading, setDeployApiKeyLoading] = useState(false);
+  const [deployWebsiteOrigin, setDeployWebsiteOrigin] = useState('');
   const [wsKeyRegenerating, setWsKeyRegenerating] = useState(false);
   const [wsKeyNew, setWsKeyNew] = useState<string | null>(null);
   const [runtimesLoading, setRuntimesLoading] = useState(false);
@@ -837,33 +838,8 @@ export default function FleetPage({
     setDeployApiKey(null);
     setDeployApiKeyId(null);
     setDeployApiKeyMasked(null);
-    setDeployApiKeyLoading(true);
-    try {
-      const res = await api.apiKeys.list();
-      if (res.success && res.data && res.data.length > 0) {
-        const active = res.data.find((k) => k.status === 'active');
-        if (active) {
-          setDeployApiKeyId(active.id);
-          setDeployApiKeyMasked(active.masked_key || null);
-        }
-      }
-      if (!res.data || res.data.filter((k) => k.status === 'active').length === 0) {
-        // No active keys — create one silently
-        const created = await api.apiKeys.create({
-          name: `Deployment key — ${agent.name}`,
-          environment: 'production',
-          preset: 'full_access',
-        });
-        if (created.success && created.data) {
-          setDeployApiKey((created.data as any).key || null);
-          setDeployApiKeyId(created.data.id);
-        }
-      }
-    } catch {
-      // Non-fatal — user can still see code snippets with placeholder
-    } finally {
-      setDeployApiKeyLoading(false);
-    }
+    setDeployApiKeyLoading(false);
+    setDeployWebsiteOrigin('');
   };
 
   const closeDeploy = () => {
@@ -873,6 +849,7 @@ export default function FleetPage({
     setDeployApiKey(null);
     setDeployApiKeyId(null);
     setDeployApiKeyMasked(null);
+    setDeployWebsiteOrigin('');
     setCreatedEnrollment(null);
     setCurrentDeployment(null);
     setSelectedRuntimeId('');
@@ -1507,6 +1484,38 @@ export default function FleetPage({
               const chatEndpoint = `${gatewayBase}/v1/agents/${activeWorkspaceAgent.id}/chat`;
               const copyText = (text: string, label = 'Copied') =>
                 void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
+              const createScopedWorkspaceKey = async () => {
+                if (deployMethod === 'website') {
+                  await openDeploy(activeWorkspaceAgent);
+                  toast('Use the Website deploy flow to generate a website key with an allowed origin.');
+                  return;
+                }
+                const target: 'api' | 'terminal' = deployMethod === 'terminal' ? 'terminal' : 'api';
+                setWsKeyRegenerating(true);
+                setWsKeyNew(null);
+                try {
+                  const created = await api.apiKeys.create({
+                    name: target === 'terminal' ? `Terminal key — ${activeWorkspaceAgent.name}` : `API key — ${activeWorkspaceAgent.name}`,
+                    environment: 'production',
+                    preset: 'custom',
+                    permissions: ['agents.read'],
+                    description: target === 'terminal' ? 'Scoped terminal deployment key' : 'Scoped API deployment key',
+                    rateLimit: target === 'terminal' ? 1000 : 1000,
+                    allowedAgentIds: [activeWorkspaceAgent.id],
+                    deploymentType: target,
+                  });
+                  if (created.success && (created.data as any)?.key) {
+                    setWsKeyNew((created.data as any).key);
+                    toast.success(target === 'terminal' ? 'New terminal key generated' : 'New API key generated');
+                  } else {
+                    toast.error('Failed to generate new key');
+                  }
+                } catch {
+                  toast.error('Something went wrong');
+                } finally {
+                  setWsKeyRegenerating(false);
+                }
+              };
 
               return (
                 <div className="space-y-4">
@@ -1578,27 +1587,7 @@ export default function FleetPage({
                       </div>
                       <button
                         disabled={wsKeyRegenerating}
-                        onClick={() => void (async () => {
-                          if (!window.confirm('This will revoke your current API key and create a new one. Any code using the old key will stop working. Continue?')) return;
-                          setWsKeyRegenerating(true);
-                          setWsKeyNew(null);
-                          try {
-                            const listRes = await api.apiKeys.list();
-                            const active = listRes.data?.find((k: any) => k.status === 'active');
-                            if (active) await api.apiKeys.revoke(active.id);
-                            const created = await api.apiKeys.create({ name: `Deployment key — ${activeWorkspaceAgent.name}`, environment: 'production', preset: 'full_access' });
-                            if (created.success && (created.data as any)?.key) {
-                              setWsKeyNew((created.data as any).key);
-                              toast.success('New API key generated');
-                            } else {
-                              toast.error('Failed to generate new key');
-                            }
-                          } catch {
-                            toast.error('Something went wrong');
-                          } finally {
-                            setWsKeyRegenerating(false);
-                          }
-                        })()}
+                        onClick={() => void createScopedWorkspaceKey()}
                         className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 text-xs font-medium hover:text-white hover:border-slate-600 disabled:opacity-50 transition-colors"
                       >
                         <RefreshCw className={`w-3 h-3 ${wsKeyRegenerating ? 'animate-spin' : ''}`} />
@@ -2566,22 +2555,48 @@ export default function FleetPage({
         const widgetSrc = typeof window !== 'undefined' ? `${window.location.origin}/widget.js` : '/widget.js';
         // Only use the full key in code — masked values can't be used and would confuse users
         const hasFullKey = !!deployApiKey;
+        const websiteKeyDisplay = deployApiKey || 'YOUR_WEBSITE_KEY';
         const apiKeyDisplay = deployApiKey || 'YOUR_API_KEY';
         const chatEndpoint = `${gatewayBase}/v1/agents/${deployAgentId}/chat`;
 
         const copyText = (text: string, label = 'Copied') =>
           void navigator.clipboard.writeText(text).then(() => toast.success(label)).catch(() => toast.error('Copy failed'));
 
-        const generateFreshKey = async () => {
+        const normalizeWebsiteOrigin = (value: string) => {
+          const trimmed = value.trim();
+          if (!trimmed) return '';
+          const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+          try {
+            return new URL(withScheme).origin;
+          } catch {
+            return '';
+          }
+        };
+
+        const generateFreshKey = async (target: 'website' | 'api' | 'terminal') => {
           setDeployApiKeyLoading(true);
           try {
-            if (deployApiKeyId) await api.apiKeys.revoke(deployApiKeyId);
-            const created = await api.apiKeys.create({ name: `Deployment key — ${agentName}`, environment: 'production', preset: 'full_access' });
+            const normalizedOrigin = target === 'website' ? normalizeWebsiteOrigin(deployWebsiteOrigin) : '';
+            if (target === 'website' && deployWebsiteOrigin.trim() && !normalizedOrigin) {
+              toast.error('Enter a valid website origin like https://www.example.com');
+              return;
+            }
+            const created = await api.apiKeys.create({
+              name: target === 'website' ? `Website key — ${agentName}` : `Deployment key — ${agentName}`,
+              environment: 'production',
+              preset: 'custom',
+              permissions: ['agents.read'],
+              description: target === 'website' ? 'Scoped website widget key' : 'Scoped deployment key for agent chat',
+              rateLimit: target === 'website' ? 120 : 1000,
+              allowedOrigins: target === 'website' && normalizedOrigin ? [normalizedOrigin] : [],
+              allowedAgentIds: deployAgentId ? [deployAgentId] : [],
+              deploymentType: target,
+            });
             if (created.success && (created.data as any)?.key) {
               setDeployApiKey((created.data as any).key);
               setDeployApiKeyId((created.data as any).id || null);
               setDeployApiKeyMasked(null);
-              toast.success('Fresh key ready — copy it now');
+              toast.success(target === 'website' ? 'Website key ready — copy it now' : 'Fresh key ready — copy it now');
             } else {
               toast.error('Failed to generate key');
             }
@@ -2590,7 +2605,7 @@ export default function FleetPage({
           }
         };
 
-        const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-api-key="${apiKeyDisplay}"\n></script>`;
+        const scriptTag = `<script\n  src="${widgetSrc}"\n  data-agent-id="${deployAgentId}"\n  data-public-key="${websiteKeyDisplay}"\n></script>`;
 
         const codeSnippets: Record<DeployCodeTab, string> = {
           curl: `curl -X POST ${chatEndpoint} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKeyDisplay}" \\\n  -d '{"message": "Hello"}'`,
@@ -2622,7 +2637,7 @@ export default function FleetPage({
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-white">
-                    {!deployMethod ? 'Deploy Agent' : deployMethod === 'website' ? 'My Website' : deployMethod === 'api' ? 'In My App' : deployMethod === 'terminal' ? 'Terminal' : 'Advanced (Self-Host)'}
+                    {!deployMethod ? 'Deploy Agent' : deployMethod === 'website' ? 'Website' : deployMethod === 'api' ? 'In My App' : deployMethod === 'terminal' ? 'Terminal' : 'Advanced (Self-Host)'}
                   </h2>
                   <p className="text-xs text-slate-500">{agentName}</p>
                 </div>
@@ -2647,7 +2662,7 @@ export default function FleetPage({
 
                   <div className="grid grid-cols-3 gap-3 mb-6">
                     {([
-                      { id: 'website', icon: Globe, label: 'My Website', desc: 'Paste one line into any site', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20 hover:border-teal-400/40' },
+                      { id: 'website', icon: Globe, label: 'Website', desc: 'Use on any site with custom code', color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20 hover:border-teal-400/40' },
                       { id: 'api', icon: Code2, label: 'In My App', desc: 'Python, JS, curl — your code', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20 hover:border-blue-400/40' },
                       { id: 'terminal', icon: Terminal, label: 'Terminal', desc: 'Chat from your computer', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40' },
                     ] as const).map(({ id, icon: Icon, label, desc, color, bg }) => (
@@ -2692,8 +2707,19 @@ export default function FleetPage({
               {/* ── Website method ── */}
               {deployMethod === 'website' && (
                 <div className="p-6 space-y-5">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
+                    <p className="text-xs text-slate-400 mb-2">Allowed website origin</p>
+                    <input
+                      type="text"
+                      value={deployWebsiteOrigin}
+                      onChange={(e) => setDeployWebsiteOrigin(e.target.value)}
+                      placeholder="https://www.example.com"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-500"
+                    />
+                    <p className="mt-2 text-xs text-slate-500">Recommended: enter the live website origin where this widget will run. This website key will only work there.</p>
+                  </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-                    <p className="text-xs text-slate-400 mb-1">Paste this inside your website's HTML, before <code className="text-slate-300">&lt;/body&gt;</code>:</p>
+                    <p className="text-xs text-slate-400 mb-1">Paste this into any website builder or HTML site that supports custom JavaScript, before <code className="text-slate-300">&lt;/body&gt;</code>:</p>
                     <div className="mt-3 rounded-xl border border-slate-700 bg-slate-950/60 p-3">
                       <pre className="text-xs text-teal-200 font-mono whitespace-pre-wrap break-all leading-relaxed">{scriptTag}</pre>
                     </div>
@@ -2709,33 +2735,33 @@ export default function FleetPage({
                     <div className="space-y-2">
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
                         <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-amber-300">Your API key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                        <p className="text-xs text-amber-300">Your website key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
                       </div>
-                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
+                      <p className="text-xs text-slate-500 pl-1">Your website key does not expire unless you revoke it.</p>
                     </div>
                   ) : (
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
                       <Key className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-xs text-amber-300 mb-2">The code above has a placeholder — <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code>. Generate a key to replace it with the real value.</p>
+                        <p className="text-xs text-amber-300 mb-2">The code above has a placeholder — <code className="bg-slate-800 px-1 rounded">YOUR_WEBSITE_KEY</code>. Generate a website key to replace it with the real value.</p>
                         <button
-                          onClick={() => void generateFreshKey()}
+                          onClick={() => void generateFreshKey('website')}
                           disabled={deployApiKeyLoading}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
                         >
                           <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
-                          {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
+                          {deployApiKeyLoading ? 'Generating…' : 'Generate website key'}
                         </button>
-                        <p className="text-xs text-slate-500 mt-2">Once generated, your key does not expire unless you revoke it.</p>
+                        <p className="text-xs text-slate-500 mt-2">This key is scoped to this agent and, if provided, to the website origin above.</p>
                       </div>
                     </div>
                   )}
 
                   <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 text-xs text-slate-400 space-y-1">
                     <p className="font-medium text-slate-300">What happens next:</p>
+                    <p>• The same embed works for Wix, Webflow, WordPress, Shopify, or custom HTML</p>
                     <p>• A chat bubble appears in the bottom-right corner of your site</p>
-                    <p>• Visitors can click it and message your agent directly</p>
-                    <p>• All conversations appear in your Workspace</p>
+                    <p>• Visitors can message your agent directly and conversations appear in your Workspace</p>
                   </div>
                 </div>
               )}
@@ -2774,7 +2800,7 @@ export default function FleetPage({
                         <p className="text-sm font-semibold text-white mb-0.5">Your key is hidden for security</p>
                         <p className="text-xs text-slate-400 mb-3">API keys can only be seen once when first created. Generate a fresh key to copy it and use it in your code.</p>
                         <button
-                          onClick={() => void generateFreshKey()}
+                          onClick={() => void generateFreshKey('api')}
                           disabled={deployApiKeyLoading}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
                         >
@@ -2830,7 +2856,7 @@ export default function FleetPage({
                       <div className="flex-1">
                         <p className="text-xs text-amber-300 mb-2">The commands below use <code className="bg-slate-800 px-1 rounded">YOUR_API_KEY</code> as a placeholder. Generate a real key first.</p>
                         <button
-                          onClick={() => void generateFreshKey()}
+                          onClick={() => void generateFreshKey('terminal')}
                           disabled={deployApiKeyLoading}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 disabled:opacity-50 transition-colors"
                         >

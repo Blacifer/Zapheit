@@ -2722,7 +2722,7 @@ export const initializeIdempotencyCache = async (): Promise<void> => {
 
 // ─── Simple Agent Chat Endpoint ──────────────────────────────────────────────
 // Public-facing endpoint for widget embeds, API integrations, and terminal use.
-// Auth: API key (sk_...) — no Supabase JWT required.
+// Auth: API key (sk_...) or website widget key (wk_...) — no Supabase JWT required.
 // POST /v1/agents/:agentId/chat
 // Body: { message: string }
 // Response: { success: true, reply: string, agent_id: string, usage: {...} }
@@ -2746,6 +2746,19 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
   try {
     const { agentId } = req.params;
     const { message, conversation_id: existingConversationId } = req.body ?? {};
+    const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+
+    if (req.apiKey?.allowed_origins && req.apiKey.allowed_origins.length > 0 && requestOrigin) {
+      if (!req.apiKey.allowed_origins.includes(requestOrigin)) {
+        return res.status(403).json({ success: false, error: 'Origin not allowed for this website key' });
+      }
+    }
+
+    if (req.apiKey?.allowed_agent_ids && req.apiKey.allowed_agent_ids.length > 0) {
+      if (!req.apiKey.allowed_agent_ids.includes(agentId)) {
+        return res.status(403).json({ success: false, error: 'API key is not allowed to access this agent' });
+      }
+    }
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, error: 'message is required' });

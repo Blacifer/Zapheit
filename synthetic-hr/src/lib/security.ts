@@ -76,8 +76,8 @@ export const validatePassword = (password: string): { valid: boolean; errors: st
 
 // Validate API key format
 export const isValidApiKeyFormat = (key: string): boolean => {
-  // Must start with sk_ and be at least 40 characters
-  return key.startsWith('sk_') && key.length >= 40;
+  // Accept both secret API keys and public website widget keys.
+  return (key.startsWith('sk_') || key.startsWith('wk_')) && key.length >= 40;
 };
 
 // Sanitize object recursively
