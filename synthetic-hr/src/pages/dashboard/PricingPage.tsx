@@ -7,6 +7,7 @@ import {
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
 import { supabase } from '../../lib/supabase-client';
+import { USD_TO_INR } from '../../lib/currency';
 import { getFrontendConfig } from '../../lib/config';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -85,8 +86,6 @@ const SCENARIOS: Array<{
   ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const USD_TO_INR = 93;
 
 function enrichModel(raw: LiveModel): Model {
   const p = Number(raw.pricing?.prompt || 0);    // USD per token

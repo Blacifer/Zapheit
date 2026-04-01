@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
+import { usdToInr } from '../../lib/currency';
 import { useFineTuneJobs, type FineTuneJobRecord } from '../../hooks/useData';
 
 interface TrainingRecord {
@@ -77,8 +78,6 @@ interface FineTuneJob {
 }
 
 const DATASET_STORAGE_KEY = 'rasi.finetunePreparedDataset';
-const INR_PER_USD = 93;
-
 const BASE_MODELS = [
   // ── OpenAI (live fine-tuning supported) ──────────────────────────────────
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', tier: 'Best Value', inputUsdPerMillion: 0.3, outputUsdPerMillion: 1.2, liveProviderSupported: true },
@@ -242,7 +241,7 @@ function estimateProviderCostInr(records: TrainingRecord[], baseModel: string, e
   return {
     provider: model.provider,
     modelId: model.id,
-    estimatedCostInr: Math.max(50, Math.round(usd * INR_PER_USD)),
+    estimatedCostInr: Math.max(50, Math.round(usdToInr(usd))),
     liveProviderSupported: model.liveProviderSupported,
     source: model.source,
   };

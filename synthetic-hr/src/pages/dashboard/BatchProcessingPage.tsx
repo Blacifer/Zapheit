@@ -3,6 +3,7 @@ import { Upload, Play, Download, CheckCircle, AlertCircle, Clock, FileJson, Tras
 import { api } from '../../lib/api-client';
 import type { BatchJob } from '../../lib/api/admin';
 import { toast } from '../../lib/toast';
+import { USD_TO_INR } from '../../lib/currency';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 
@@ -16,8 +17,6 @@ interface Batch extends BatchJob {
   cost: number;      // alias for total_cost_usd
   createdAt: string; // alias for created_at (formatted)
 }
-
-const USD_TO_INR = 93;
 
 function adaptJob(job: BatchJob): Batch {
   return {

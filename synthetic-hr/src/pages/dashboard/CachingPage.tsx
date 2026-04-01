@@ -14,6 +14,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { usdToInr } from '../../lib/currency';
 import type { AIAgent } from '../../types';
 import { toast } from '../../lib/toast';
 
@@ -60,7 +61,6 @@ interface CacheOpportunity {
   badge: string;
 }
 
-const INR_PER_USD = 83;
 const INR_FORMATTER = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
@@ -175,7 +175,7 @@ export default function CachingPage() {
   const projectedSavingsInr = useMemo(() => {
     const monthlyUsd = insights?.totalCost || 0;
     const multiplier = draftPolicy.enabled ? (draftPolicy.matchMode === 'normalized' ? 0.38 : 0.28) : 0;
-    return monthlyUsd * multiplier * INR_PER_USD;
+    return usdToInr(monthlyUsd * multiplier);
   }, [insights, draftPolicy]);
 
   const cacheableOverview = useMemo(() => {
@@ -274,7 +274,7 @@ export default function CachingPage() {
             </div>
             <div className="rounded-2xl border border-green-500/20 bg-gradient-to-br from-green-500/10 to-slate-950/80 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-green-200">Saved This Month</p>
-              <p className="mt-2 text-4xl font-bold text-white">{formatInr(stats.estimatedSavedCostUsd * INR_PER_USD)}</p>
+              <p className="mt-2 text-4xl font-bold text-white">{formatInr(usdToInr(stats.estimatedSavedCostUsd))}</p>
               <p className="mt-2 text-sm text-green-100/80">Observed reusable-prefix savings</p>
             </div>
             <div className="rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-slate-950/80 p-5">
@@ -515,7 +515,7 @@ export default function CachingPage() {
                         </div>
                         <div>
                           <p className="text-xs uppercase tracking-wide text-slate-500">Saved</p>
-                          <p className="mt-1 font-semibold text-green-400">{formatInr(entry.estimatedSavedCostUsd * INR_PER_USD)}</p>
+                          <p className="mt-1 font-semibold text-green-400">{formatInr(usdToInr(entry.estimatedSavedCostUsd))}</p>
                         </div>
                         <div>
                           <p className="text-xs uppercase tracking-wide text-slate-500">First seen</p>

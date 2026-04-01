@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
+import { usdToInr } from '../../lib/currency';
 import { toast } from '../../lib/toast';
 import type { PlaybookPackId, Playbook } from '../../lib/playbooks/types';
 import { PLAYBOOK_PACKS, PLAYBOOKS } from '../../lib/playbooks/registry';
@@ -1163,7 +1164,7 @@ function AnalyticsTab({ schedules, triggers }: { schedules: any[]; triggers: any
             {[
               { label: 'Total runs', value: data.totals.runs },
               { label: 'Succeeded', value: data.totals.succeeded },
-              { label: 'Cost (INR)', value: `₹${Math.round(data.totals.cost_usd * 94)}` },
+              { label: 'Cost (INR)', value: `₹${Math.round(usdToInr(data.totals.cost_usd))}` },
               { label: 'Active schedules', value: schedules.filter((s) => s.enabled).length },
             ].map((stat) => (
               <div key={stat.label} className="bg-slate-800/40 border border-slate-700 rounded-xl p-4">
@@ -1233,7 +1234,7 @@ function AnalyticsTab({ schedules, triggers }: { schedules: any[]; triggers: any
                           <span>{p.runs} runs</span>
                           <span className="text-emerald-400">{p.success_rate}% ok</span>
                           {feedbackScore !== null && <span className="text-amber-400">{feedbackScore}% ▲</span>}
-                          {p.avg_cost_usd > 0 && <span>₹{Math.round(p.avg_cost_usd * 94)}/run</span>}
+                          {p.avg_cost_usd > 0 && <span>₹{Math.round(usdToInr(p.avg_cost_usd))}/run</span>}
                         </div>
                       </div>
                       <div className="h-2 bg-slate-900/60 rounded-full overflow-hidden">

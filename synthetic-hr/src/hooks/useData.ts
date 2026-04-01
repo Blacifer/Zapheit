@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, authHelpers } from '../lib/supabase-client';
 import { api } from '../lib/api-client';
+import { USD_TO_INR } from '../lib/currency';
 import type { AIAgent, Incident, CostData } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -216,9 +217,6 @@ export const useIncidentMutations = () => {
 // ---------------------------------------------------------------------------
 // Cost analytics
 // ---------------------------------------------------------------------------
-// Fixed USD → INR conversion rate
-const USD_TO_INR = 95;
-
 export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', options?: { enabled?: boolean }) => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.costAnalytics(period),

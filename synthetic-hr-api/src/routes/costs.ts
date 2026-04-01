@@ -8,6 +8,7 @@ import { fireAndForgetWebhookEvent, getWebhookRelaySettings } from '../lib/webho
 import { getPromptCachingState, updatePromptCachingPolicy } from '../lib/prompt-caching';
 import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingConfig } from '../lib/pricing';
 import { generateSafeHarborDocument, getSafeHarborState, updateSafeHarborConfig, updateSafeHarborContract } from '../lib/safe-harbor';
+import { usdToInr } from '../lib/currency';
 import { calculateTokenCost } from '../services/ai-service';
 
 const router = express.Router();
@@ -512,15 +513,14 @@ router.post('/costs', requirePermission('costs.create'), async (req: Request, re
         const monthlyCosts = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', monthQuery)) as any[];
         const totalCostUsd = monthlyCosts.reduce((sum, row) => sum + Number(row.cost_usd || 0), 0);
         const previousTotalUsd = Math.max(0, totalCostUsd - costUSD);
-        const toInr = (usd: number) => usd * 83;
         const warnThresholdInr = monthlyLimitInr * (warnAtPercent / 100);
-        if (toInr(previousTotalUsd) < warnThresholdInr && toInr(totalCostUsd) >= warnThresholdInr) {
+        if (usdToInr(previousTotalUsd) < warnThresholdInr && usdToInr(totalCostUsd) >= warnThresholdInr) {
           fireAndForgetWebhookEvent(orgId, 'cost.alert', {
             id: `evt_cost_alert_${data?.[0]?.id || crypto.randomUUID()}`,
             type: 'cost.alert',
             created_at: new Date().toISOString(),
             organization_id: orgId,
-            data: { threshold_percent: warnAtPercent, current_month_spend_inr: Math.round(toInr(totalCostUsd)), configured_limit_inr: monthlyLimitInr, triggered_by_cost_id: data?.[0]?.id, triggered_by_agent_id: agent_id },
+            data: { threshold_percent: warnAtPercent, current_month_spend_inr: Math.round(usdToInr(totalCostUsd)), configured_limit_inr: monthlyLimitInr, triggered_by_cost_id: data?.[0]?.id, triggered_by_agent_id: agent_id },
           });
         }
       }

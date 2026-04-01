@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Zap, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { toast } from '../../lib/toast';
+import { USD_TO_INR } from '../../lib/currency';
 import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
 import { getFrontendConfig } from '../../lib/config';
 
@@ -132,7 +133,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
     // Calculate blended cost for 1M tokens (500k prompt, 500k completion) in INR
     const costUSD = (p * 500_000) + (c * 500_000);
-    const costINR = costUSD * 93;
+    const costINR = costUSD * USD_TO_INR;
 
     return `₹${Math.round(costINR).toLocaleString('en-IN')}/1M blended`;
   };
@@ -150,8 +151,6 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     Math.min(MAX_MONTHLY_TOKENS, Math.max(MIN_MONTHLY_TOKENS, Math.round(tokens)));
 
   // Monthly cost estimator
-  const USD_TO_INR = 93;
-
   const calcMonthlyCost = (model: LiveModel | null, tokens: number): MonthlyCost => {
     if (!model) return { status: 'unknown' };
     const p = Number(model.pricing?.prompt || 0);
