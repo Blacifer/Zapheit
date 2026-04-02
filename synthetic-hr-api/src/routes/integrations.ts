@@ -135,6 +135,9 @@ type StoredConnectorExecutionRow = {
   reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
   reason_message?: string | null;
   recommended_next_action?: string | null;
+  decision?: 'allow' | 'block' | 'require_approval' | 'defer_reliability' | null;
+  delegated_actor?: string | null;
+  audit_ref?: string | null;
 };
 
 type StoredRetryQueueRow = {
@@ -1254,6 +1257,7 @@ const listGovernedActions = async (req: any, res: any) => {
     const reason = (() => {
       if (reliabilityState === 'queued_for_retry') {
         return {
+          decision: 'defer_reliability' as const,
           reason_category: 'reliability_degraded' as const,
           reason_message: 'Action is queued for retry because the connector rail is unstable.',
           recommended_next_action: 'Wait for the scheduled retry or inspect connector health before retrying manually.',
@@ -1261,6 +1265,7 @@ const listGovernedActions = async (req: any, res: any) => {
       }
       if (reliabilityState === 'paused_by_circuit_breaker') {
         return {
+          decision: 'defer_reliability' as const,
           reason_category: 'reliability_degraded' as const,
           reason_message: 'Execution is paused because the connector circuit breaker is open.',
           recommended_next_action: 'Resolve connector/provider errors, then allow the breaker to recover.',
@@ -1268,6 +1273,7 @@ const listGovernedActions = async (req: any, res: any) => {
       }
       if (governed.decision === 'blocked') {
         return {
+          decision: 'block' as const,
           reason_category: 'policy_blocked' as const,
           reason_message: governed.block_reasons?.[0] || row.error_message || 'Action was blocked by governance policy.',
           recommended_next_action: 'Review policy constraints, payload, or connector capabilities before retrying.',
@@ -1275,6 +1281,7 @@ const listGovernedActions = async (req: any, res: any) => {
       }
       if (governed.decision === 'pending_approval' || row.approval_required) {
         return {
+          decision: 'require_approval' as const,
           reason_category: 'approval_required' as const,
           reason_message: governed.approval_reasons?.[0] || 'Human approval is required before this action can execute.',
           recommended_next_action: 'Approve, deny, or escalate the request in the approvals queue.',
@@ -1282,12 +1289,14 @@ const listGovernedActions = async (req: any, res: any) => {
       }
       if (!row.success) {
         return {
+          decision: 'allow' as const,
           reason_category: 'execution_failed' as const,
           reason_message: row.error_message || 'Execution failed after passing governance checks.',
           recommended_next_action: 'Inspect connector logs and provider state, then retry safely.',
         };
       }
       return {
+        decision: 'allow' as const,
         reason_category: null,
         reason_message: null,
         recommended_next_action: null,
@@ -1302,6 +1311,8 @@ const listGovernedActions = async (req: any, res: any) => {
       breaker_open: breakerOpen,
       recovered_at: recoveredAt,
       ...reason,
+      delegated_actor: governed.delegated_actor ?? null,
+      audit_ref: governed.audit_ref ?? null,
       governance: governed,
     };
   });
@@ -1312,6 +1323,77 @@ const listGovernedActions = async (req: any, res: any) => {
 
 router.get('/executions', requirePermission('connectors.read'), listGovernedActions);
 router.get('/governed-actions', requirePermission('connectors.read'), listGovernedActions);
+
+router.post('/governed-actions/:executionId/rollback-request', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+  const rest = restAsUser(req);
+  const executionId = req.params.executionId;
+  const q = new URLSearchParams();
+  q.set('id', eq(executionId));
+  q.set('organization_id', eq(orgId));
+  q.set('select', 'id,connector_id,action,before_state,after_state,remediation,requested_by,policy_snapshot');
+  q.set('limit', '1');
+  const rows = await safeQuery<StoredConnectorExecutionRow>(rest, 'connector_action_executions', q);
+  const row = rows?.[0];
+  if (!row) return res.status(404).json({ success: false, error: 'Governed action not found' });
+  if (!row.after_state || Object.keys(row.after_state).length === 0) {
+    return res.status(400).json({ success: false, error: 'No execution state available for rollback request' });
+  }
+
+  const now = new Date().toISOString();
+  const requiredRole = 'manager';
+  const approvalRows = await rest('approval_requests', '', {
+    method: 'POST',
+    body: {
+      organization_id: orgId,
+      service: row.connector_id,
+      action: `${row.action}.rollback`,
+      action_payload: {
+        target_execution_id: row.id,
+        connector_id: row.connector_id,
+        action: row.action,
+        before_state: row.before_state || {},
+        after_state: row.after_state || {},
+        rollback_mode: 'operator_review',
+      },
+      requested_by: req.user?.id || 'user',
+      required_role: requiredRole,
+      status: 'pending',
+      assigned_to: null,
+      expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      sla_deadline: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+      created_at: now,
+      updated_at: now,
+    },
+  }) as Array<{ id: string }>;
+  const approvalId = approvalRows?.[0]?.id || null;
+
+  const patch = new URLSearchParams();
+  patch.set('id', eq(row.id));
+  patch.set('organization_id', eq(orgId));
+  await rest('connector_action_executions', patch, {
+    method: 'PATCH',
+    body: {
+      remediation: {
+        ...(row.remediation || {}),
+        rollback_requested: true,
+        rollback_requested_at: now,
+        rollback_approval_id: approvalId,
+        rollback_recommended_next_action: 'Review rollback request in approvals and execute only after validation.',
+      },
+    },
+  });
+
+  return res.json({
+    success: true,
+    data: {
+      approval_id: approvalId,
+      required_role: requiredRole,
+      message: 'Rollback request created and routed for approval.',
+    },
+  });
+});
 
 // Upsert action enablement for spec actions (writes only).
 router.post('/actions', requirePermission('connectors.manage'), async (req, res) => {

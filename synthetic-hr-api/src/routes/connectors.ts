@@ -4,7 +4,6 @@ import { supabase, supabaseAdmin } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
 import { decryptSecret } from '../lib/integrations/encryption';
-import { evaluatePolicyConstraints } from '../lib/action-policy-constraints';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 
 const router = Router();
@@ -3709,6 +3708,8 @@ import { PARTNER_APP_CATALOG, getInstalledAppHealth } from './marketplace';
 import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
+import { runPreflightGate } from '../lib/preflight-gate';
+import { appendAuditChainEvent } from '../lib/trust-audit-chain';
 import { eq as eqFilter, supabaseRestAsService } from '../lib/supabase-rest';
 import { authenticateToken } from '../middleware/auth';
 
@@ -3838,117 +3839,33 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
 
     if (!action) return res.status(400).json({ success: false, error: 'action is required' });
 
-    // Check action_policies — is this action enabled for the org?
-    const policies = (await supabaseRestAsService('action_policies', new URLSearchParams({
-      organization_id: eqFilter(orgId),
-      service: eqFilter(connectorId),
-      action: eqFilter(action),
-      select: 'id,enabled,require_approval,required_role,policy_constraints',
-      limit: '1',
-    }))) as Array<{ id?: string; enabled: boolean; require_approval: boolean; required_role?: string; policy_constraints?: Record<string, any> }>;
-    const policy = policies?.[0] || null;
-    const constraintEvaluation = evaluatePolicyConstraints(params, policy?.policy_constraints || {});
-
-    if (policy?.enabled === false) {
-      await supabaseRestAsService('connector_action_executions', '', {
-        method: 'POST',
-        body: {
-          organization_id: orgId,
-          agent_id: agentId || null,
-          integration_id: null,
-          connector_id: connectorId,
-          action,
-          params,
-          result: { blocked: true },
-          success: false,
-          error_message: `Action "${action}" is disabled for this connector`,
-          requested_by: (req as any).user?.id || null,
-          policy_snapshot: buildGovernedActionSnapshot({
-            source: 'connector_console',
-            service: connectorId,
-            action,
-            recordedAt: new Date().toISOString(),
-            decision: 'blocked',
-            result: 'blocked',
-            policyId: policy?.id || null,
-            requiredRole: policy?.required_role || null,
-            approvalRequired: Boolean(policy?.require_approval),
-            constraints: policy?.policy_constraints || {},
-            blockReasons: [`Action "${action}" is disabled for this connector`],
-            requestedBy: (req as any).user?.id || null,
-            agentId: agentId || null,
-          }),
-          remediation: { suggested: 'Enable the action policy or choose a permitted action.' },
-        },
-      }).catch(() => {});
-      return res.status(403).json({ success: false, error: `Action "${action}" is disabled for this connector` });
-    }
-    if (constraintEvaluation.blocked) {
-      await supabaseRestAsService('connector_action_executions', '', {
-        method: 'POST',
-        body: {
-          organization_id: orgId,
-          agent_id: agentId || null,
-          integration_id: null,
-          connector_id: connectorId,
-          action,
-          params,
-          result: { blocked: true },
-          success: false,
-          error_message: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints',
-          requested_by: (req as any).user?.id || null,
-          policy_snapshot: buildGovernedActionSnapshot({
-            source: 'connector_console',
-            service: connectorId,
-            action,
-            recordedAt: new Date().toISOString(),
-            decision: 'blocked',
-            result: 'blocked',
-            policyId: policy?.id || null,
-            requiredRole: constraintEvaluation.requiredRole || policy?.required_role || null,
-            approvalRequired: Boolean(policy?.require_approval),
-            constraints: policy?.policy_constraints || {},
-            constraintEvaluation,
-            blockReasons: constraintEvaluation.blockReasons,
-            requestedBy: (req as any).user?.id || null,
-            agentId: agentId || null,
-          }),
-          remediation: { suggested: 'Adjust the payload or policy constraints, then retry.' },
-        },
-      }).catch(() => {});
-      return res.status(403).json({
-        success: false,
-        error: constraintEvaluation.blockReasons[0] || 'Action blocked by policy constraints',
-        policy_reasons: constraintEvaluation.blockReasons,
-      });
-    }
-
-    if ((policy?.require_approval ?? false) || constraintEvaluation.approvalRequired) {
-      // Create an approval request instead of executing
+    const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId || null);
+    if (!preflight.allowed) {
       const now = new Date().toISOString();
-      const approvalRows = (await supabaseRestAsService('approval_requests', '', {
-        method: 'POST',
-        body: {
-          organization_id: orgId,
-          action_policy_id: policy?.id || null,
-          service: connectorId,
-          action,
-          action_payload: {
-            ...params,
-            __policy: {
-              constraint_evaluation: constraintEvaluation,
-            },
+      let approvalId: string | null = null;
+      if (preflight.approvalRequired && preflight.approvalData) {
+        const ad = preflight.approvalData;
+        const approvalRows = (await supabaseRestAsService('approval_requests', '', {
+          method: 'POST',
+          body: {
+            organization_id: orgId,
+            action_policy_id: ad.action_policy_id || null,
+            service: ad.service,
+            action: ad.action,
+            action_payload: ad.action_payload,
+            requested_by: 'user',
+            required_role: ad.required_role || 'manager',
+            status: 'pending',
+            assigned_to: null,
+            expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+            sla_deadline: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+            updated_at: now,
+            created_at: now,
           },
-          requested_by: 'user',
-          required_role: constraintEvaluation.requiredRole || policy?.required_role || 'manager',
-          status: 'pending',
-          assigned_to: null,
-          expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-          updated_at: now,
-          created_at: now,
-        },
-      })) as any[];
-      const approvalId = approvalRows?.[0]?.id;
+        })) as any[];
+        approvalId = approvalRows?.[0]?.id || null;
+      }
+
       await supabaseRestAsService('connector_action_executions', '', {
         method: 'POST',
         body: {
@@ -3958,34 +3875,79 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           connector_id: connectorId,
           action,
           params,
-          result: { pending: true },
+          result: preflight.approvalRequired ? { pending: true } : { blocked: true },
           success: false,
-          error_message: 'Action requires approval before executing',
-          approval_required: true,
-          approval_id: approvalId || null,
+          error_message: preflight.blockReason,
+          approval_required: Boolean(preflight.approvalRequired),
+          approval_id: approvalId,
           requested_by: (req as any).user?.id || null,
           policy_snapshot: buildGovernedActionSnapshot({
             source: 'connector_console',
             service: connectorId,
             action,
             recordedAt: now,
-            decision: 'pending_approval',
-            result: 'pending',
-            policyId: policy?.id || null,
-            requiredRole: constraintEvaluation.requiredRole || policy?.required_role || 'manager',
-            approvalRequired: true,
-            approvalId: approvalId || null,
-            constraints: policy?.policy_constraints || {},
-            constraintEvaluation,
-            approvalReasons: constraintEvaluation.approvalReasons,
+            decision: preflight.approvalRequired ? 'pending_approval' : 'blocked',
+            result: preflight.approvalRequired ? 'pending' : 'blocked',
+            policyId: preflight.approvalData?.action_policy_id || null,
+            requiredRole: preflight.approvalData?.required_role || null,
+            approvalRequired: Boolean(preflight.approvalRequired),
+            approvalId,
+            blockReasons: preflight.approvalRequired ? [] : [preflight.blockReason],
+            approvalReasons: preflight.approvalRequired ? [preflight.blockReason] : [],
             requestedBy: (req as any).user?.id || null,
+            delegatedActor: (req as any).user?.id || null,
+            auditRef: preflight.auditRef,
             agentId: agentId || null,
+            existingSnapshot: {
+              reason_category: preflight.reasonCategory,
+              reason_message: preflight.reasonMessage,
+              recommended_next_action: preflight.recommendedNextAction,
+              policy_gate: preflight.policySnapshot,
+              budget_gate: preflight.budgetSnapshot,
+              dlp_gate: preflight.dlpSnapshot,
+            },
           }),
-          remediation: { suggested: 'Approve or deny the action from the approvals queue.' },
+          remediation: preflight.approvalRequired
+            ? { suggested: 'Approve, deny, or escalate this request from the approvals queue.' }
+            : { suggested: preflight.recommendedNextAction },
           created_at: now,
         },
       }).catch(() => {});
-      return res.json({ success: true, pending: true, approvalId, message: 'Action requires approval before executing' });
+
+      if (preflight.approvalRequired) {
+        void appendAuditChainEvent({
+          organization_id: orgId,
+          event_type: 'governed_action.pending_approval',
+          entity_type: 'connector_action',
+          entity_id: `${connectorId}:${action}`,
+          payload: {
+            decision: preflight.decision,
+            reason_category: preflight.reasonCategory,
+            reason_message: preflight.reasonMessage,
+            approval_id: approvalId,
+            audit_ref: preflight.auditRef,
+          },
+        });
+        return res.json({
+          success: true,
+          pending: true,
+          decision: preflight.decision,
+          reason_category: preflight.reasonCategory,
+          reason_message: preflight.reasonMessage,
+          recommended_next_action: preflight.recommendedNextAction,
+          approvalId,
+          message: preflight.blockReason,
+        });
+      }
+
+      return res.status(403).json({
+        success: false,
+        decision: preflight.decision,
+        reason_category: preflight.reasonCategory,
+        reason_message: preflight.reasonMessage,
+        recommended_next_action: preflight.recommendedNextAction,
+        error: preflight.blockReason,
+      });
     }
 
     // Load credentials for the org's integration
@@ -4012,7 +3974,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     }
 
     const start = Date.now();
-    const result = await executeConnectorAction(connectorId, action, params, credentials);
+    const result = await executeConnectorAction(connectorId, action, params, credentials, orgId, agentId || null, integrationId);
     const duration = Date.now() - start;
 
     // Log the action execution
@@ -4039,19 +4001,33 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
             recordedAt: new Date().toISOString(),
             decision: 'executed',
             result: result.success ? 'succeeded' : 'failed',
-            policyId: policy?.id || null,
-            approvalRequired: policy?.require_approval ?? false,
-            constraints: policy?.policy_constraints || {},
-            constraintEvaluation,
             requestedBy: (req as any).user?.id || null,
+            delegatedActor: (req as any).user?.id || null,
             agentId: agentId || null,
             durationMs: duration,
             idempotencyKey: result.idempotencyKey || null,
+            auditRef: `exec_${createHash('sha1').update(`${orgId}:${connectorId}:${action}:${Date.now()}`).digest('hex').slice(0, 16)}`,
+            existingSnapshot: {
+              policy_gate: preflight.policySnapshot,
+              budget_gate: preflight.budgetSnapshot,
+              dlp_gate: preflight.dlpSnapshot,
+            },
           }),
           remediation: result.success ? {} : { suggested: 'Check connector credentials, provider state, and retry conditions.' },
         },
       });
     } catch { /* non-critical */ }
+    void appendAuditChainEvent({
+      organization_id: orgId,
+      event_type: result.success ? 'governed_action.executed' : 'governed_action.failed',
+      entity_type: 'connector_action',
+      entity_id: `${connectorId}:${action}`,
+      payload: {
+        success: result.success,
+        status_code: result.statusCode || null,
+        requested_by: (req as any).user?.id || null,
+      },
+    });
 
     return res.json({ success: true, data: result });
   } catch (err: any) {

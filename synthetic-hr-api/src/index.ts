@@ -35,6 +35,7 @@ import approvalsRoutes from './routes/approvals';
 import rulesRoutes from './routes/rules';
 import recruitmentRoutes from './routes/recruitment';
 import hubsRoutes from './routes/hubs';
+import trustRoutes from './routes/trust';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -47,6 +48,7 @@ import { monitoring, setupAlertHandlers } from './lib/monitoring';
 import { setProviderSyncSchedulerNextRun, syncEnabledProviderCostsForAllOrganizations } from './lib/provider-sync';
 import { startIntegrationTokenRefreshScheduler } from './lib/integrations/auto-refresh';
 import { startRetryWorker } from './lib/retry-worker';
+import { startRedTeamScheduler } from './lib/redteam-scheduler';
 import { runSchemaCompatibilityCheck } from './lib/schema-compat';
 
 dotenv.config();
@@ -437,6 +439,7 @@ app.use('/api/approvals', approvalsRoutes);
 app.use('/api/rules', rulesRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/hubs', hubsRoutes);
+app.use('/api/trust', trustRoutes);
 app.use('/api', escalationsRoutes);
 app.use('/api', invitesRoutes);
 if (connectorsEnabled) {
@@ -496,7 +499,8 @@ async function startServer() {
   startIntegrationTokenRefreshScheduler();
 
   // Drain the connector retry queue (circuit-breaker retries).
-  startRetryWorker();
+startRetryWorker();
+startRedTeamScheduler();
 
   const server = app.listen(PORT, () => {
     logger.info('Synthetic HR API server started', {

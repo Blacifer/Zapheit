@@ -19,6 +19,8 @@ import { runPreflightGate } from '../lib/preflight-gate';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { fetchRelevantCorrections } from '../lib/correction-memory';
 import { usdToInr } from '../lib/currency';
+import { appendAuditChainEvent } from '../lib/trust-audit-chain';
+import { applyCrossBorderMasking, reinjectMaskedValues } from '../lib/cross-border-pii';
 
 const router = express.Router();
 
@@ -888,6 +890,16 @@ const executeSingleToolCall = async (
             blockReasons: [preflight.blockReason],
             approvalReasons: preflight.approvalRequired ? [preflight.blockReason] : [],
             agentId,
+            auditRef: preflight.auditRef,
+            requestedBy: 'agent',
+            existingSnapshot: {
+              reason_category: preflight.reasonCategory,
+              reason_message: preflight.reasonMessage,
+              recommended_next_action: preflight.recommendedNextAction,
+              policy_gate: preflight.policySnapshot,
+              budget_gate: preflight.budgetSnapshot,
+              dlp_gate: preflight.dlpSnapshot,
+            },
           }),
           remediation: preflight.approvalRequired
             ? { suggested: 'Review and approve the action before retrying.' }
@@ -895,8 +907,26 @@ const executeSingleToolCall = async (
         },
       }).catch(() => {/* non-critical */});
     }
+    void appendAuditChainEvent({
+      organization_id: orgId,
+      event_type: 'governed_action.blocked',
+      entity_type: 'connector_action',
+      entity_id: `${connectorId}:${action}`,
+      payload: {
+        decision: preflight.decision,
+        reason_category: preflight.reasonCategory,
+        reason_message: preflight.reasonMessage,
+        approval_required: Boolean(preflight.approvalRequired),
+        audit_ref: preflight.auditRef,
+      },
+    });
     return JSON.stringify({
       blocked: true,
+      decision: preflight.decision,
+      reason_category: preflight.reasonCategory,
+      reason_message: preflight.reasonMessage,
+      recommended_next_action: preflight.recommendedNextAction,
+      audit_ref: preflight.auditRef,
       reason: preflight.blockReason,
       approvalRequired: Boolean(preflight.approvalRequired),
       approvalId,
@@ -905,7 +935,7 @@ const executeSingleToolCall = async (
   }
 
   const credentials = credentialsByConnector[connectorId] || {};
-  const result = await executeConnectorAction(connectorId, action, params, credentials, orgId);
+  const result = await executeConnectorAction(connectorId, action, params, credentials, orgId, agentId);
 
   // Log the execution (non-critical)
   if (agentId) {
@@ -930,11 +960,26 @@ const executeSingleToolCall = async (
           result: result.success ? 'succeeded' : 'failed',
           idempotencyKey: result.idempotencyKey || null,
           agentId,
+          requestedBy: 'agent',
+          delegatedActor: 'agent',
+          auditRef: `exec_${crypto.randomUUID()}`,
         }),
         remediation: result.success ? {} : { suggested: 'Check connector state, credentials, and downstream provider health.' },
       },
     }).catch(() => {/* non-critical */});
   }
+  void appendAuditChainEvent({
+    organization_id: orgId,
+    event_type: result.success ? 'governed_action.executed' : 'governed_action.failed',
+    entity_type: 'connector_action',
+    entity_id: `${connectorId}:${action}`,
+    payload: {
+      success: result.success,
+      status_code: result.statusCode || null,
+      idempotency_key: result.idempotencyKey || null,
+      agent_id: agentId,
+    },
+  });
 
   return JSON.stringify(result);
 };
@@ -1821,6 +1866,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
+    let maskingTokenMap: Record<string, string> = {};
 
     // Load agent tools (no-op if agentId is null or agent has no connectors)
     const orgId = req.apiKey?.organization_id || '';
@@ -1835,6 +1881,11 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       }
       // Request interception: redact PII, replace patterns, inject system instructions
       normalizedMessages = await applyRequestInterceptors(orgId, normalizedMessages);
+      if (process.env.CROSS_BORDER_PII_MASKING === 'true' && (modelConfig.provider === 'openai' || modelConfig.provider === 'openrouter')) {
+        const masked = applyCrossBorderMasking(normalizedMessages);
+        normalizedMessages = masked.maskedMessages;
+        maskingTokenMap = masked.tokenMap;
+      }
 
       // Seniority Engine: inject relevant past human corrections into the system prompt
       if (agentId) {
@@ -1957,6 +2008,9 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     // ── 4A: Response interception — redact/replace in LLM output ───────────
     if (orgId) {
       finalContent = await applyResponseInterceptors(orgId, finalContent);
+    }
+    if (Object.keys(maskingTokenMap).length > 0) {
+      finalContent = reinjectMaskedValues(finalContent, maskingTokenMap);
     }
     // ───────────────────────────────────────────────────────────────────────
 

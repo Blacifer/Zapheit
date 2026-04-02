@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import crypto from 'crypto';
 import archiver from 'archiver';
 import PDFDocument from 'pdfkit';
 import { logger } from '../lib/logger';
@@ -6,6 +7,7 @@ import { requirePermission } from '../middleware/rbac';
 import { eq, gte, supabaseRestAsUser } from '../lib/supabase-rest';
 import { generateComplianceExport } from '../services/compliance-export';
 import { supabaseAdmin } from '../lib/supabase';
+import { applyCrossBorderMasking } from '../lib/cross-border-pii';
 
 const router = express.Router();
 
@@ -824,6 +826,18 @@ router.delete('/subject-erasure', requirePermission('compliance.export'), async 
       ip_address: req.ip ?? null,
     });
 
+    const receiptPayload = JSON.stringify({
+      organization_id: orgId,
+      subject_id,
+      subject_type,
+      erased_at: new Date().toISOString(),
+      receipt,
+    });
+    const receipt_signature = crypto
+      .createHash('sha256')
+      .update(`${process.env.ERASURE_SIGNING_SALT || 'synthetic-hr'}:${receiptPayload}`)
+      .digest('hex');
+
     return res.json({
       success: true,
       data: {
@@ -831,12 +845,38 @@ router.delete('/subject-erasure', requirePermission('compliance.export'), async 
         subject_type,
         erased_at: new Date().toISOString(),
         receipt,
+        receipt_signature,
       },
     });
   } catch (err: any) {
     logger.error('Subject erasure error', { error: err?.message });
     return res.status(500).json({ success: false, error: err?.message });
   }
+});
+
+// POST /api/compliance/cross-border-mask-preview
+router.post('/cross-border-mask-preview', requirePermission('compliance.log'), async (req: Request, res: Response) => {
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  const masked = applyCrossBorderMasking(messages);
+  return res.json({
+    success: true,
+    data: {
+      masked_messages: masked.maskedMessages,
+      masked_count: masked.maskedCount,
+    },
+  });
+});
+
+// GET /api/compliance/sovereignty-profile
+router.get('/sovereignty-profile', requirePermission('compliance.log'), async (_req: Request, res: Response) => {
+  const profile = {
+    sovereign_mode: process.env.SOVEREIGN_MODE === 'true',
+    data_region: process.env.DATA_REGION || null,
+    llm_region: process.env.LLM_REGION || null,
+    cross_border_pii_masking: process.env.CROSS_BORDER_PII_MASKING === 'true',
+    preferred_india_cloud: process.env.PREFERRED_INDIA_CLOUD || null,
+  };
+  return res.json({ success: true, data: profile });
 });
 
 export default router;

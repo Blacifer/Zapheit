@@ -96,10 +96,15 @@ export interface ConnectorExecution {
     job_id?: string | null;
     agent_id?: string | null;
     requested_by?: string | null;
+    delegated_actor?: string | null;
+    audit_ref?: string | null;
     duration_ms?: number | null;
   } | null;
+  decision?: 'allow' | 'block' | 'require_approval' | 'defer_reliability' | null;
   reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
   reason_message?: string | null;
   recommended_next_action?: string | null;
+  delegated_actor?: string | null;
+  audit_ref?: string | null;
   created_at: string;
 }

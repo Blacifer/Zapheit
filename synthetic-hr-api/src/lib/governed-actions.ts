@@ -20,6 +20,8 @@ export type GovernedActionSummary = {
   job_id?: string | null;
   agent_id?: string | null;
   requested_by?: string | null;
+  delegated_actor?: string | null;
+  audit_ref?: string | null;
   duration_ms?: number | null;
 };
 
@@ -40,6 +42,8 @@ type SnapshotArgs = {
   jobId?: string | null;
   agentId?: string | null;
   requestedBy?: string | null;
+  delegatedActor?: string | null;
+  auditRef?: string | null;
   durationMs?: number | null;
   blockReasons?: string[];
   approvalReasons?: string[];
@@ -63,6 +67,8 @@ export function buildGovernedActionSnapshot({
   jobId = null,
   agentId = null,
   requestedBy = null,
+  delegatedActor = null,
+  auditRef = null,
   durationMs = null,
   blockReasons = [],
   approvalReasons = [],
@@ -93,6 +99,8 @@ export function buildGovernedActionSnapshot({
       job_id: jobId,
       agent_id: agentId,
       requested_by: requestedBy,
+      delegated_actor: delegatedActor,
+      audit_ref: auditRef,
       duration_ms: durationMs,
     } satisfies GovernedActionSummary,
   };
@@ -131,6 +139,8 @@ export function normalizeGovernedActionSummary(row: {
       job_id: governed.job_id ?? null,
       agent_id: governed.agent_id ?? row.agent_id ?? null,
       requested_by: governed.requested_by ?? row.requested_by ?? null,
+      delegated_actor: governed.delegated_actor ?? null,
+      audit_ref: governed.audit_ref ?? null,
       duration_ms: governed.duration_ms ?? row.duration_ms ?? null,
     };
   }
@@ -153,6 +163,8 @@ export function normalizeGovernedActionSummary(row: {
     job_id: null,
     agent_id: row.agent_id ?? null,
     requested_by: row.requested_by ?? null,
+    delegated_actor: null,
+    audit_ref: null,
     duration_ms: row.duration_ms ?? null,
   };
 }

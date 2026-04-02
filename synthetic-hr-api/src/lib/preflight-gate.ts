@@ -17,8 +17,31 @@ import { supabaseRest, eq, gte } from './supabase-rest';
 import { logger } from './logger';
 
 export type PreflightResult =
-  | { allowed: true }
-  | { allowed: false; blockReason: string; approvalRequired?: boolean; approvalData?: ApprovalData };
+  | {
+    allowed: true;
+    decision: 'allow';
+    reasonCategory: null;
+    reasonMessage: null;
+    recommendedNextAction: null;
+    policySnapshot: Record<string, any>;
+    budgetSnapshot: Record<string, any>;
+    dlpSnapshot: Record<string, any>;
+    auditRef: string;
+  }
+  | {
+    allowed: false;
+    decision: 'block' | 'require_approval' | 'defer_reliability';
+    reasonCategory: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed';
+    reasonMessage: string;
+    recommendedNextAction: string;
+    blockReason: string;
+    approvalRequired?: boolean;
+    approvalData?: ApprovalData;
+    policySnapshot: Record<string, any>;
+    budgetSnapshot: Record<string, any>;
+    dlpSnapshot: Record<string, any>;
+    auditRef: string;
+  };
 
 type ApprovalData = {
   service: string;
@@ -66,6 +89,10 @@ export async function runPreflightGate(
   params: Record<string, any>,
   agentId?: string | null,
 ): Promise<PreflightResult> {
+  const auditRef = `pf_${crypto.randomUUID()}`;
+  const policySnapshot: Record<string, any> = {};
+  const budgetSnapshot: Record<string, any> = {};
+  const dlpSnapshot: Record<string, any> = { scanned: true, detected: false };
   // -------------------------------------------------------------------
   // 1. Look up action policy for this connector + action (or wildcard '*')
   // -------------------------------------------------------------------
@@ -92,6 +119,12 @@ export async function runPreflightGate(
       const rows2 = (await supabaseRest('action_policies', q2)) as any[];
       policy = rows2?.[0] ?? null;
     }
+    if (policy) {
+      policySnapshot.policy_id = policy.id ?? null;
+      policySnapshot.constraints = policy.policy_constraints ?? {};
+      policySnapshot.require_approval = Boolean(policy.require_approval);
+      policySnapshot.required_role = policy.required_role ?? null;
+    }
   } catch (err: any) {
     // Policy lookup failure → fail open (don't block legitimate traffic)
     logger.warn('[preflight] Policy lookup failed, proceeding without policy check', {
@@ -107,7 +140,15 @@ export async function runPreflightGate(
     if (!policy.enabled) {
       return {
         allowed: false,
+        decision: 'block',
+        reasonCategory: 'policy_blocked',
+        reasonMessage: `Action "${connectorId}.${action}" is disabled by policy`,
+        recommendedNextAction: 'Enable the action policy or select an allowed action before retrying.',
         blockReason: `Action "${connectorId}.${action}" is disabled by policy`,
+        policySnapshot,
+        budgetSnapshot,
+        dlpSnapshot,
+        auditRef,
       };
     }
 
@@ -117,7 +158,18 @@ export async function runPreflightGate(
     if (evaluation.blocked) {
       return {
         allowed: false,
+        decision: 'block',
+        reasonCategory: 'policy_blocked',
+        reasonMessage: evaluation.blockReasons.join('; '),
+        recommendedNextAction: 'Adjust policy constraints or update the payload before retrying.',
         blockReason: evaluation.blockReasons.join('; '),
+        policySnapshot: {
+          ...policySnapshot,
+          constraint_evaluation: evaluation,
+        },
+        budgetSnapshot,
+        dlpSnapshot,
+        auditRef,
       };
     }
 
@@ -125,6 +177,10 @@ export async function runPreflightGate(
     if (needsApproval) {
       return {
         allowed: false,
+        decision: 'require_approval',
+        reasonCategory: 'approval_required',
+        reasonMessage: `Action "${connectorId}.${action}" requires human approval before it can execute. ${evaluation.approvalReasons.join('; ')}`.trim(),
+        recommendedNextAction: 'Route this action through approvals, then approve, deny, or escalate.',
         blockReason: `Action "${connectorId}.${action}" requires human approval before it can execute. ${evaluation.approvalReasons.join('; ')}`.trim(),
         approvalRequired: true,
         approvalData: {
@@ -135,6 +191,13 @@ export async function runPreflightGate(
           action_policy_id: policy.id,
           ...(agentId ? { agent_id: agentId } : {}),
         },
+        policySnapshot: {
+          ...policySnapshot,
+          constraint_evaluation: evaluation,
+        },
+        budgetSnapshot,
+        dlpSnapshot,
+        auditRef,
       };
     }
 
@@ -153,10 +216,20 @@ export async function runPreflightGate(
         countQ.set('select', 'id');
         const rows = (await supabaseRest('connector_action_executions', countQ)) as any[];
         const todayCount = rows?.length ?? 0;
+        budgetSnapshot.daily_action_limit = dailyLimit;
+        budgetSnapshot.daily_action_count = todayCount;
         if (todayCount >= dailyLimit) {
           return {
             allowed: false,
+            decision: 'block',
+            reasonCategory: 'policy_blocked',
+            reasonMessage: `Daily action limit of ${dailyLimit} for "${connectorId}" exceeded (${todayCount} actions taken today).`,
+            recommendedNextAction: 'Wait for the next daily window or increase the action limit in policy.',
             blockReason: `Daily action limit of ${dailyLimit} for "${connectorId}" exceeded (${todayCount} actions taken today). Try again tomorrow or raise the limit in Action Policies.`,
+            policySnapshot,
+            budgetSnapshot,
+            dlpSnapshot,
+            auditRef,
           };
         }
       } catch (err: any) {
@@ -182,7 +255,15 @@ export async function runPreflightGate(
     if (enabledCaps.length > 0 && !enabledCaps.includes(action)) {
       return {
         allowed: false,
+        decision: 'block',
+        reasonCategory: 'policy_blocked',
+        reasonMessage: `Capability "${action}" is not enabled for ${connectorId}.`,
+        recommendedNextAction: 'Enable the capability in Apps permissions before retrying this action.',
         blockReason: `Capability "${action}" is not enabled for ${connectorId}. Enable it in Apps → Permissions.`,
+        policySnapshot,
+        budgetSnapshot,
+        dlpSnapshot,
+        auditRef,
       };
     }
   } catch (err: any) {
@@ -198,14 +279,36 @@ export async function runPreflightGate(
     if (piiResult.detected && (piiResult.severity === 'high' || piiResult.severity === 'critical')) {
       const fieldHint = firstPiiField(params);
       const fieldMsg = fieldHint ? ` (detected in field "${fieldHint}")` : '';
+      dlpSnapshot.detected = true;
+      dlpSnapshot.severity = piiResult.severity;
+      dlpSnapshot.details = piiResult.details;
+      dlpSnapshot.field = fieldHint;
       return {
         allowed: false,
+        decision: 'block',
+        reasonCategory: 'policy_blocked',
+        reasonMessage: `Action blocked by DLP policy: outbound params contain ${piiResult.details}${fieldMsg}.`,
+        recommendedNextAction: 'Remove sensitive data from the payload and retry.',
         blockReason: `Action blocked by DLP policy: outbound params contain ${piiResult.details}${fieldMsg}. Remove sensitive data and retry.`,
+        policySnapshot,
+        budgetSnapshot,
+        dlpSnapshot,
+        auditRef,
       };
     }
   }
 
-  return { allowed: true };
+  return {
+    allowed: true,
+    decision: 'allow',
+    reasonCategory: null,
+    reasonMessage: null,
+    recommendedNextAction: null,
+    policySnapshot,
+    budgetSnapshot,
+    dlpSnapshot,
+    auditRef,
+  };
 }
 
 // Generate a SHA-256 idempotency fingerprint for a connector action.
