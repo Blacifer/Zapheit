@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Send,
 } from 'lucide-react';
+import { ReasonCallout } from '../../components/dashboard/ReasonCallout';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AgentJob } from '../../types';
@@ -171,6 +172,89 @@ function approvalProgress(job: AgentJob) {
   };
 }
 
+function deriveJobReason(job: AgentJob): {
+  reasonCategory: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reasonMessage: string | null;
+  recommendedNextAction: string | null;
+} {
+  if (job.reason_category && job.reason_message) {
+    return {
+      reasonCategory: job.reason_category,
+      reasonMessage: job.reason_message,
+      recommendedNextAction: job.recommended_next_action || null,
+    };
+  }
+
+  const status = String(job.status || '').toLowerCase();
+  const errorText = String(job.error || '').toLowerCase();
+  const requiredRole = (job as any).required_role as string | null | undefined;
+  const assignedTo = (job as any).assigned_to as string | null | undefined;
+  const approvalsRemaining = Number(job.approvals_remaining ?? 0);
+
+  if (status === 'pending_approval') {
+    if (job.awaiting_additional_approval) {
+      return {
+        reasonCategory: 'approval_required',
+        reasonMessage: approvalsRemaining > 0
+          ? `${approvalsRemaining} additional approval${approvalsRemaining === 1 ? '' : 's'} required before execution can continue.`
+          : 'A separate approver is still required before execution can continue.',
+        recommendedNextAction: 'Route this request to the remaining approver and record approval notes.',
+      };
+    }
+    if (requiredRole || assignedTo) {
+      return {
+        reasonCategory: 'approval_required',
+        reasonMessage: assignedTo
+          ? `Approval is assigned to ${assignedTo} before this job can execute.`
+          : `Approval from role ${requiredRole} or higher is required before this job can execute.`,
+        recommendedNextAction: 'Review payload and approve, reject, or escalate this request.',
+      };
+    }
+    return {
+      reasonCategory: 'approval_required',
+      reasonMessage: 'Human approval is required before execution can continue.',
+      recommendedNextAction: 'Review payload and decide to approve or reject.',
+    };
+  }
+
+  if (status === 'failed') {
+    if (errorText.includes('policy') || errorText.includes('blocked') || errorText.includes('disabled')) {
+      return {
+        reasonCategory: 'policy_blocked',
+        reasonMessage: job.error || 'Execution was blocked by policy.',
+        recommendedNextAction: 'Adjust policy constraints or payload, then create a new run.',
+      };
+    }
+    return {
+      reasonCategory: 'execution_failed',
+      reasonMessage: job.error || 'Execution failed after dispatch.',
+      recommendedNextAction: 'Inspect run output and connector logs, then retry safely.',
+    };
+  }
+
+  if (status === 'canceled') {
+    return {
+      reasonCategory: 'execution_failed',
+      reasonMessage: 'Run was canceled before completion.',
+      recommendedNextAction: 'Re-run only if the operation is still required.',
+    };
+  }
+
+  if (job.approval?.status === 'rejected') {
+    return {
+      reasonCategory: 'policy_blocked',
+      reasonMessage: 'Approval was rejected and execution did not proceed.',
+      recommendedNextAction: 'Adjust payload or policy and submit a new run.',
+    };
+  }
+
+  return {
+    reasonCategory: null,
+    reasonMessage: null,
+    recommendedNextAction: null,
+  };
+}
+
 // ─── Comments panel ───────────────────────────────────────────────────────────
 
 function CommentsPanel({ jobId }: { jobId: string }) {
@@ -254,6 +338,7 @@ function JobDetail({
   const isPending = status === 'pending_approval';
   const isConnector = job.type === 'connector_action';
   const approvalState = approvalProgress(job);
+  const reason = deriveJobReason(job);
 
   const download = (format: 'txt' | 'html' = 'html') => {
     const slug = `run-${job.id.slice(0, 8)}`;
@@ -370,6 +455,11 @@ function JobDetail({
           {job.error}
         </div>
       ) : null}
+
+      <ReasonCallout
+        reasonMessage={reason.reasonMessage}
+        recommendedNextAction={reason.recommendedNextAction}
+      />
 
       {/* Connector action summary */}
       {isConnector && (
@@ -506,6 +596,7 @@ function JobListItem({
   onClick: () => void;
 }) {
   const status = String(job.status || '');
+  const reason = deriveJobReason(job);
 
   function Icon() {
     if (status === 'pending_approval') return <Clock className="w-4 h-4 text-orange-400" />;
@@ -543,6 +634,11 @@ function JobListItem({
             {(job as any).batch_id ? ' · Batch' : ''}
             {(job as any).parent_job_id ? ' · Chained' : ''}
           </div>
+          {reason.reasonMessage ? (
+            <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
+              {reason.reasonMessage}
+            </div>
+          ) : null}
           {status === 'pending_approval' && (job.approvals_recorded || job.required_approvals) ? (
             <div className="text-[11px] text-amber-300 mt-0.5">
               {job.approvals_recorded || 0} of {job.required_approvals || 1} approvals

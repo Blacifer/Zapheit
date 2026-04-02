@@ -548,6 +548,9 @@ export interface AgentJob {
   approvals_remaining?: number;
   awaiting_additional_approval?: boolean;
   approval?: AgentJobApproval | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
 }
 
 export type AgentJobApprovalStatus = 'pending' | 'approved' | 'rejected' | string;
