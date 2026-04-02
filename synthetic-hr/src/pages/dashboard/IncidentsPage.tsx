@@ -148,6 +148,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const [barAnimated, setBarAnimated] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   // incidentMeta is derived from DB-backed incident fields (owner/priority/source/notes/next_action
   // added by migration_014). No localStorage needed.
   const deriveMetaFromIncident = (incident: Incident): IncidentUiMeta => ({
@@ -322,11 +323,12 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
 
   const selectedIncidents = incidents.filter((incident) => selectedIds.includes(incident.id));
 
-  const bulkUpdateStatus = (status: Incident['status']) => {
+  const bulkUpdateStatus = async (status: Incident['status']) => {
     if (selectedIncidents.length === 0) {
       toast.warning('Select incidents first');
       return;
     }
+    if (bulkBusy) return;
 
     const blockedCritical = selectedIncidents.some((incident) => {
       const meta = incidentMeta[incident.id] || defaultMetaForIncident(incident);
@@ -338,25 +340,58 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       return;
     }
 
+    const previous = incidents;
     const now = new Date().toISOString();
-    setIncidents(
-      incidents.map((incident) =>
-        selectedIds.includes(incident.id)
-          ? { ...incident, status, resolved_at: status === 'resolved' ? now : undefined }
-          : incident
-      )
+    const next = incidents.map((incident) =>
+      selectedIds.includes(incident.id)
+        ? { ...incident, status, resolved_at: status === 'resolved' ? now : undefined }
+        : incident
     );
-    toast.success(`${selectedIncidents.length} incident(s) updated`);
+
+    setIncidents(next);
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => api.incidents.updateMeta(id, { status })),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        setIncidents(previous);
+        toast.error(`Failed to update ${failed} incident(s)`);
+        return;
+      }
+      toast.success(`${selectedIncidents.length} incident(s) updated`);
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
-  const bulkDelete = () => {
+  const bulkDelete = async () => {
     if (selectedIncidents.length === 0) {
       toast.warning('Select incidents first');
       return;
     }
-    setIncidents(incidents.filter((incident) => !selectedIds.includes(incident.id)));
-    setSelectedIds([]);
-    toast.success(`${selectedIncidents.length} incident(s) deleted`);
+    if (bulkBusy) return;
+
+    const previous = incidents;
+    const next = incidents.filter((incident) => !selectedIds.includes(incident.id));
+    setIncidents(next);
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => api.incidents.delete(id)),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        setIncidents(previous);
+        toast.error(`Failed to delete ${failed} incident(s)`);
+        return;
+      }
+      setSelectedIds([]);
+      toast.success(`${selectedIncidents.length} incident(s) deleted`);
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const bulkExport = () => {
@@ -375,12 +410,19 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
     toast.success('Selected incidents exported');
   };
 
-  const deleteIncident = (id: string) => {
-    setIncidents(incidents.filter((incident) => incident.id !== id));
-    if (selectedIncidentId === id) {
-      setSelectedIncidentId(null);
+  const deleteIncident = async (id: string) => {
+    const previous = incidents;
+    const next = incidents.filter((incident) => incident.id !== id);
+    setIncidents(next);
+    if (selectedIncidentId === id) setSelectedIncidentId(null);
+
+    try {
+      await api.incidents.delete(id);
+      toast.success('Incident deleted');
+    } catch {
+      setIncidents(previous);
+      toast.error('Failed to delete incident');
     }
-    toast.success('Incident deleted');
   };
 
   const runDetection = () => {
@@ -737,10 +779,10 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                     <p className="text-sm text-slate-400">{selectedIds.length} selected</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => bulkUpdateStatus('investigating')} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/15">Bulk investigate</button>
-                    <button onClick={() => bulkUpdateStatus('resolved')} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/15">Bulk resolve</button>
-                    <button onClick={bulkExport} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15">Export selected</button>
-                    <button onClick={bulkDelete} className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15">Delete selected</button>
+                    <button disabled={bulkBusy} onClick={() => { void bulkUpdateStatus('investigating'); }} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60">{bulkBusy ? 'Updating…' : 'Bulk investigate'}</button>
+                    <button disabled={bulkBusy} onClick={() => { void bulkUpdateStatus('resolved'); }} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60">{bulkBusy ? 'Updating…' : 'Bulk resolve'}</button>
+                    <button disabled={bulkBusy} onClick={bulkExport} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60">Export selected</button>
+                    <button disabled={bulkBusy} onClick={() => { void bulkDelete(); }} className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-60">{bulkBusy ? 'Deleting…' : 'Delete selected'}</button>
                   </div>
                 </div>
                 <div className="max-h-[860px] space-y-3 overflow-y-auto pr-2">
@@ -852,7 +894,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              deleteIncident(incident.id);
+                              void deleteIncident(incident.id);
                             }}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-rose-500/30 hover:text-rose-300"
                           >
