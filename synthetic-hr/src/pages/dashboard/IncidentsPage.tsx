@@ -279,7 +279,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
     }
   };
 
-  const updateIncidentStatus = (id: string, status: Incident['status']) => {
+  const updateIncidentStatus = async (id: string, status: Incident['status']) => {
     const incident = incidents.find((item) => item.id === id);
     if (!incident) return;
 
@@ -289,18 +289,25 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       return;
     }
 
-    setIncidents(
-      incidents.map((item) =>
-        item.id === id
-          ? {
-            ...item,
-            status,
-            resolved_at: status === 'resolved' ? new Date().toISOString() : undefined,
-          }
-          : item
-      )
+    const nextIncidents = incidents.map((item) =>
+      item.id === id
+        ? {
+          ...item,
+          status,
+          resolved_at: status === 'resolved' ? new Date().toISOString() : undefined,
+        }
+        : item
     );
-    toast.success(`Incident moved to ${normalizeLabel(status)}`);
+
+    setIncidents(nextIncidents);
+    try {
+      await api.incidents.updateMeta(id, { status });
+      setIncidents(nextIncidents);
+      toast.success(`Incident moved to ${normalizeLabel(status)}`);
+    } catch {
+      setIncidents(incidents);
+      toast.error('Failed to update incident status');
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -806,7 +813,8 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
-                                updateIncidentStatus(incident.id, 'investigating');
+                                setSelectedIncidentId(incident.id);
+                                void updateIncidentStatus(incident.id, 'investigating');
                               }}
                               className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-200 transition hover:bg-amber-500/15"
                             >
@@ -975,10 +983,10 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                 <p className="text-sm font-medium text-white">Workflow</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button onClick={() => updateIncidentStatus(selectedIncident.id, 'open')} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500">Reopen</button>
-                  <button onClick={() => updateIncidentStatus(selectedIncident.id, 'investigating')} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 transition hover:bg-amber-500/15">Mark investigating</button>
-                  <button onClick={() => updateIncidentStatus(selectedIncident.id, 'false_positive')} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500">False positive</button>
-                  <button onClick={() => updateIncidentStatus(selectedIncident.id, 'resolved')} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-500/15">Resolve</button>
+                  <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'open'); }} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500">Reopen</button>
+                  <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'investigating'); }} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 transition hover:bg-amber-500/15">Mark investigating</button>
+                  <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'false_positive'); }} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500">False positive</button>
+                  <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'resolved'); }} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-500/15">Resolve</button>
                 </div>
               </div>
 
