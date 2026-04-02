@@ -6,6 +6,7 @@ import {
   Sparkles, DollarSign, Mail, Edit3, Check, ImagePlus, MessageCircle
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
+import { PageHero } from '../../components/dashboard/PageHero';
 import type {
   SettingsTab,
 } from './settings/types';
@@ -529,11 +530,23 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
   // ==================== RENDER ====================
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="border-b border-slate-700/60 pb-4">
-        <h1 className="text-3xl font-bold text-white tracking-tight">Settings</h1>
-        <p className="text-slate-400 mt-1 text-sm">Operate the workspace with confidence: access, alerts, security, billing, and advanced controls.</p>
-      </div>
+      <PageHero
+        eyebrow="Workspace control center"
+        title="Operate access, alerts, security, and billing with confidence"
+        subtitle="Settings should feel calm and decisive. Use this area to understand what is configured, what is missing, and what needs your next action."
+        recommendation={{
+          label: 'Recommended next step',
+          title: activeTab === 'overview' ? 'Start with the highest-risk gap on the overview.' : `Review ${tabItems.find((tab) => tab.id === activeTab)?.label || 'this section'} before moving deeper.`,
+          detail: activeTab === 'overview'
+            ? 'Treat this page like a control center: finish the next most important setup gap, then move on.'
+            : 'Each section is designed to answer what is configured, what needs attention, and what to do next.',
+        }}
+        stats={[
+          { label: '2FA', value: twoFactorEnabled ? 'Enabled' : 'Off', detail: `${sessions.length} active session${sessions.length !== 1 ? 's' : ''}` },
+          { label: 'Alert channels', value: `${[slackWebhook, pagerdutyKey, alertEmail].filter(Boolean).length}/3`, detail: 'Configured routing types' },
+          { label: 'Pending invites', value: `${teamMembers.filter((member) => member.status === 'pending').length}`, detail: 'People waiting for access' },
+        ]}
+      />
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}

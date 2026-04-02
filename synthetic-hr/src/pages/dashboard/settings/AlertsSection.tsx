@@ -184,7 +184,7 @@ export function AlertsSection({
           <p className="text-xs text-slate-500 border-t border-slate-800 pt-3">
             <Slack className="w-3 h-3 inline mr-1 text-[#4A154B]" />
             <strong className="text-slate-400">Incident &amp; approval alerts via Slack bot:</strong> Connect your Slack workspace in{' '}
-            <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => (window as any).__rasNavigate?.('marketplace')}>Marketplace → Slack</button>
+            <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => (window as any).__rasNavigate?.('apps')}>Apps → Slack</button>
             {' '}to enable rich Block Kit notifications. Set the <code className="text-slate-400">alert_channel_id</code> credential to specify the alerts channel.
           </p>
         </div>

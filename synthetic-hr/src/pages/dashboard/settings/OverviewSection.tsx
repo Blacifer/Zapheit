@@ -56,7 +56,7 @@ export function OverviewSection({
         <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-800/40 p-6">
           <h3 className="text-base font-semibold text-white">Recommended next actions</h3>
           <div className="mt-4 space-y-3">
-            {recommendedActions.map((item) => (
+            {recommendedActions.length > 0 ? recommendedActions.map((item) => (
               <button
                 key={item.key}
                 onClick={item.action}
@@ -71,7 +71,14 @@ export function OverviewSection({
                 <p className="text-sm font-semibold text-white">{item.title}</p>
                 <p className="text-xs text-slate-400 mt-1">{item.detail}</p>
               </button>
-            ))}
+            )) : (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5">
+                <p className="text-sm font-semibold text-emerald-200">No urgent settings gaps right now</p>
+                <p className="mt-2 text-sm leading-6 text-emerald-100/80">
+                  Workspace access, alerts, and basic protection are in a good state. Use the sections on the left when you want to refine controls rather than fix blockers.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

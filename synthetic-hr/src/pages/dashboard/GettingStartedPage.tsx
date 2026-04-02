@@ -6,6 +6,7 @@ import { toast } from '../../lib/toast';
 import type { AIAgent } from '../../types';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
+import { PageHero } from '../../components/dashboard/PageHero';
 
 type StepId = 'workspace' | 'agent' | 'apps' | 'test' | 'verify';
 const STEP_ORDER: StepId[] = ['workspace', 'agent', 'apps', 'test', 'verify'];
@@ -337,33 +338,32 @@ export default function GettingStartedPage(props: {
   const hasAnyAgent = (coverage?.agents?.total ?? props.agents.length) > 0;
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Get To First Value</h1>
-          <p className="text-slate-400 mt-1 max-w-2xl">
-            Set up one agent, connect one app, run one safe test, and confirm that SyntheticHR is showing you real activity you can act on.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => props.onNavigate('coverage')}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm border border-slate-700"
-          >
-            Open Coverage
-          </button>
-          <button
-            type="button"
-            onClick={() => {
+      <PageHero
+        eyebrow="Guided setup"
+        title="Get to first useful signal"
+        subtitle="Set up one agent, connect one app, run one safe test, and confirm that SyntheticHR is showing real activity you can act on."
+        recommendation={{
+          label: 'Recommended next step',
+          title: hasAnyAgent ? 'Connect one app, then run the first tracked test.' : 'Pick one agent so the first test has a clear owner.',
+          detail: 'This flow is intentionally short. You do not need to perfect models, keys, or advanced controls before the workspace becomes useful.',
+        }}
+        actions={[
+          { label: 'Open Coverage', onClick: () => props.onNavigate('coverage') },
+          {
+            label: 'Skip for now',
+            onClick: () => {
               localStorage.setItem(`synthetic_hr_onboarding_dismissed:${props.storageScope}`, new Date().toISOString());
               props.onNavigate('overview');
-            }}
-            className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
-          >
-            Skip for now
-          </button>
-        </div>
-      </div>
+            },
+            variant: 'secondary',
+          },
+        ]}
+        stats={[
+          { label: 'Journey', value: '5 steps', detail: 'Workspace, agent, app, test, verify' },
+          { label: 'Goal', value: hasGatewayTraffic ? 'Visible' : 'Warm up signal', detail: hasGatewayTraffic ? 'Tracked request already observed' : 'Need one tracked request' },
+          { label: 'Advanced setup', value: 'Optional', detail: 'Only use when you need deeper diagnostics' },
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded-2xl border border-slate-700 bg-slate-900/30 p-4">
@@ -686,7 +686,7 @@ export default function GettingStartedPage(props: {
                     className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"
                   >
                     <ShoppingBag className="w-4 h-4" />
-                    Browse App Store
+                    Open Apps
                   </button>
                   <button
                     type="button"

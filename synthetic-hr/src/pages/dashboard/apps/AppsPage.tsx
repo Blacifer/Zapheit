@@ -16,6 +16,7 @@ import { ConnectModal } from './components/ConnectModal';
 import { BrowseView } from './components/BrowseView';
 import { MobileBottomSheet } from './components/MobileBottomSheet';
 import { DetailDrawer } from './drawer/DetailDrawer';
+import { PageHero } from '../../../components/dashboard/PageHero';
 
 interface AppsPageProps {
   agents?: AIAgent[];
@@ -139,6 +140,23 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   }, [connectedList, agentIdParam, agentNamesFor]);
 
   const displayList = agentIdParam ? agentFilteredList : connectedList;
+  const recommendedAction = linkedAgent
+    ? {
+      label: 'Recommended next step',
+      title: `Connect one useful capability for ${linkedAgent.name}`,
+      detail: 'Start with one app that makes the agent more useful in a real workflow, then return to Agents to run or supervise it.',
+    }
+    : connectedList.length === 0
+      ? {
+        label: 'Recommended next step',
+        title: 'Connect the first app',
+        detail: 'Pick one app that unlocks a real workflow. You do not need a full stack of integrations before the product becomes useful.',
+      }
+      : {
+        label: 'Recommended next step',
+        title: 'Review unhealthy or underused connections',
+        detail: 'Use My Apps to spot weak routing, test connection health, and keep the most useful capabilities connected.',
+      };
 
   return (
     <div className="flex h-full overflow-hidden bg-[#080f1a]">
@@ -161,33 +179,29 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-3 shrink-0">
-          <div>
-            <h1 className="text-xl font-bold text-white">Apps</h1>
-            <p className="text-slate-400 text-xs mt-0.5">
-              Connect external apps to your agents with governed access, approvals, and evidence.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {activeTab === 'my' && connectedList.some((a) => a.source === 'integration') && (
-              <button
-                onClick={() => void testAll()}
-                disabled={testingAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 text-xs font-medium disabled:opacity-50"
-                title="Test all integrations"
-              >
-                {testingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-                Test All
-              </button>
-            )}
-            <button
-              onClick={() => void reload()}
-              className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              title="Refresh"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="px-6 pt-6 pb-3 shrink-0">
+          <PageHero
+            eyebrow="Connect useful capabilities"
+            title="Apps should feel helpful, not overwhelming"
+            subtitle="Connect external apps to your agents with governed access, approvals, and evidence, then keep the list focused on the capabilities that matter in real work."
+            recommendation={recommendedAction}
+            actions={[
+              ...(activeTab === 'my' && connectedList.some((a) => a.source === 'integration')
+                ? [{
+                  label: testingAll ? 'Testing…' : 'Test All',
+                  onClick: () => void testAll(),
+                  variant: 'secondary' as const,
+                  icon: testingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />,
+                }]
+                : []),
+              { label: 'Refresh', onClick: () => void reload(), variant: 'secondary' as const, icon: <RefreshCw className="w-4 h-4" /> },
+            ]}
+            stats={[
+              { label: 'Connected', value: `${connectedList.length}`, detail: 'Capabilities already wired in' },
+              { label: 'Governed actions', value: `${governedCount}`, detail: 'Apps with governed controls enabled' },
+              { label: 'Health issues', value: `${errorCount}`, detail: 'Connections needing attention' },
+            ]}
+          />
         </div>
 
         {/* Agent context banner */}

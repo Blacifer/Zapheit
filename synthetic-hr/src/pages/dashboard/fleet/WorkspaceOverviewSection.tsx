@@ -325,10 +325,10 @@ export function WorkspaceOverviewSection({
               </span>
             </div>
             <button
-              onClick={() => onOpenOperationsPage?.('marketplace')}
+              onClick={() => onOpenOperationsPage?.('apps')}
               className="text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors inline-flex items-center gap-1"
             >
-              Browse all
+              Browse apps
               <Zap className="w-3 h-3" />
             </button>
           </div>
@@ -350,10 +350,10 @@ export function WorkspaceOverviewSection({
                   <span className="text-[11px] text-slate-500">{app.setupTimeMinutes} min setup</span>
                 ) : null}
                 <button
-                  onClick={() => onOpenOperationsPage?.('marketplace')}
+                  onClick={() => onOpenOperationsPage?.('apps')}
                   className="mt-auto pt-2 text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors text-left inline-flex items-center gap-1"
                 >
-                  Add to workspace
+                  Open in apps
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </div>

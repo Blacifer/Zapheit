@@ -6,6 +6,7 @@ import { toast } from '../../lib/toast';
 import { loadFromStorage, saveToStorage } from '../../utils/storage';
 import { api } from '../../lib/api-client';
 import { SkeletonIncidentRow } from '../../components/Skeleton';
+import { PageHero } from '../../components/dashboard/PageHero';
 
 type IncidentsPageProps = {
   incidents: Incident[];
@@ -414,6 +415,15 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const uniqueIncidentTypes = Array.from(new Set(incidents.map((incident) => incident.incident_type)));
   const allVisibleSelected = filteredIncidents.length > 0 && filteredIncidents.every((incident) => selectedIds.includes(incident.id));
   const orderedIncidents = [...filteredIncidents].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const hasActiveFilters = Boolean(search || filterStatus !== 'all' || filterSeverity !== 'all' || filterAgent !== 'all' || filterType !== 'all' || filterSource !== 'all' || activeView !== 'all');
+  const recommendedIncident = [...incidents].sort((a, b) => {
+    const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+    const statusRank = (value: Incident['status']) => value === 'open' ? 3 : value === 'investigating' ? 2 : value === 'false_positive' ? 1 : 0;
+    const scoreA = severityRank[a.severity] * 10 + statusRank(a.status);
+    const scoreB = severityRank[b.severity] * 10 + statusRank(b.status);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  })[0] || null;
 
   // Keyboard shortcuts — J/K navigate, R resolve, A cycle owner, ? show help
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -482,59 +492,47 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           </div>
         </div>
       )}
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
-            <ShieldAlert className="h-3.5 w-3.5" /> Incident Queue
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Incident operations</h1>
-            <button onClick={() => setShowShortcutsHelp(true)} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-slate-500 hover:text-slate-300 transition-colors" title="Keyboard shortcuts">?</button>
-          </div>
-          <p className="mt-2 max-w-3xl text-sm text-slate-400">Review incidents detected from live agent traffic and enforcement rules, then move each case through a clear workflow with ownership, priority, and resolution notes.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200">Live incidents: {incidentSourceCounts.live}</span>
-            {SIMULATIONS_ENABLED && (
-              <>
-                <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 font-semibold text-amber-200">
-                  Simulated: {incidentSourceCounts.simulated} {includeSimulated ? 'shown' : 'hidden'}
-                </span>
-                <button
-                  onClick={() => setIncludeSimulated((prev) => !prev)}
-                  className="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 font-semibold text-slate-300 transition hover:border-slate-500"
-                >
-                  {includeSimulated ? 'Hide simulated' : 'Show simulated'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-5 py-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-rose-200">Open Incidents</p>
-            <p className="mt-2 text-3xl font-bold text-white">{openCount}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Critical Outstanding</p>
-            <p className="mt-2 text-3xl font-bold text-white">{criticalCount}</p>
-          </div>
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-cyan-200">Needs Review</p>
-            <p className="mt-2 text-3xl font-bold text-white">{needsReviewCount}</p>
-          </div>
-        </div>
-      </div>
+      <PageHero
+        eyebrow="Incident triage"
+        title="Make the next investigation obvious"
+        subtitle="Review incidents from live traffic and enforcement rules, then move each case through ownership, priority, evidence, and resolution without losing context."
+        recommendation={{
+          label: 'Recommended next step',
+          title: recommendedIncident
+            ? `${recommendedIncident.title} on ${recommendedIncident.agent_name}`
+            : 'No incident needs immediate triage',
+          detail: recommendedIncident
+            ? `Start with the highest-priority active case, assign an owner, and decide whether it needs investigation, resolution, or escalation.`
+            : 'The queue is quiet right now. Keep live detections on and use simulations only when you want to test the detector.',
+        }}
+        actions={[
+          ...(recommendedIncident ? [{
+            label: 'Jump to top incident',
+            onClick: () => setSelectedIncidentId(recommendedIncident.id),
+          }] : []),
+          { label: 'Keyboard help', onClick: () => setShowShortcutsHelp(true), variant: 'secondary' },
+          ...(SIMULATIONS_ENABLED ? [{
+            label: includeSimulated ? 'Hide simulated' : 'Show simulated',
+            onClick: () => setIncludeSimulated((prev) => !prev),
+            variant: 'secondary' as const,
+          }] : []),
+        ]}
+        stats={[
+          { label: 'Open incidents', value: `${openCount}`, detail: `${incidentSourceCounts.live} live incident${incidentSourceCounts.live === 1 ? '' : 's'}` },
+          { label: 'Critical outstanding', value: `${criticalCount}`, detail: 'Needs fast review and ownership' },
+          { label: 'Needs review', value: `${needsReviewCount}`, detail: 'Open without a clear owner' },
+        ]}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-700/80 bg-slate-900/60 p-6">
+          <div className="rounded-3xl border border-slate-800/80 bg-slate-950/45 p-6">
             {showSimulationTools ? (
               <>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-xl font-bold text-white">Test incident detection</h2>
-                    <p className="mt-2 text-sm text-slate-400">Simulate incident intake without waiting for a live request.</p>
+                    <h2 className="text-lg font-bold text-white">Simulation tools</h2>
+                    <p className="mt-2 text-sm text-slate-400">Use only when you want to test the detector without waiting for live traffic.</p>
                   </div>
                   <button
                     onClick={() => setShowSimulationTools(false)}
@@ -601,8 +599,9 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
             )}
           </div>
 
-          <div className="rounded-3xl border border-slate-700/80 bg-slate-900/60 p-6">
-            <h2 className="text-xl font-bold text-white">Saved views</h2>
+          <div className="rounded-3xl border border-slate-800/80 bg-slate-950/45 p-6">
+            <h2 className="text-lg font-bold text-white">Saved views</h2>
+            <p className="mt-1 text-sm text-slate-400">Jump to the most useful queue shape without rebuilding filters each time.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {VIEW_OPTIONS.map((view) => (
                 <button
@@ -624,17 +623,27 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                 <h2 className="text-xl font-bold text-white">Incident log</h2>
                 <p className="mt-1 text-sm text-slate-400">{filteredIncidents.length} of {incidents.length} incident records visible</p>
               </div>
-              <label className="relative block lg:w-[320px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input
-                  id="incident-search"
-                  name="incident_search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search title, owner, agent"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 py-3 pl-9 pr-4 text-sm text-white outline-none transition focus:border-cyan-400/40"
-                />
-              </label>
+              <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
+                {hasActiveFilters && (
+                  <button
+                    onClick={() => { setSearch(''); setFilterStatus('all'); setFilterSeverity('all'); setFilterAgent('all'); setFilterType('all'); setFilterSource('all'); setActiveView('all'); }}
+                    className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                  >
+                    Clear filters
+                  </button>
+                )}
+                <label className="relative block lg:w-[320px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    id="incident-search"
+                    name="incident_search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search title, owner, agent"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 py-3 pl-9 pr-4 text-sm text-white outline-none transition focus:border-cyan-400/40"
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-5">
@@ -689,10 +698,10 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                 </p>
                 {onNavigate && (
                   <button
-                    onClick={() => onNavigate('connect-agent')}
+                    onClick={() => onNavigate('getting-started')}
                     className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
                   >
-                    Connect your first agent →
+                    Start guided setup →
                   </button>
                 )}
               </div>

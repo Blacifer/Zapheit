@@ -680,7 +680,7 @@ const hasData = agents.length > 0;
         </div>
       )}
 
-      {/* Today's Focus — 2-3 action cards scoped to today */}
+      {/* Today's Focus — only show when there is something to act on */}
       {(() => {
         const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
         const todayMs = todayMidnight.getTime();
@@ -720,15 +720,6 @@ const hasData = agents.length > 0;
             action: () => onNavigate?.('agents'),
             cta: 'Adjust →',
           },
-          todayCritical.length === 0 && todayNewIncidents.length === 0 && todayNearBudget.length === 0 && {
-            id: 'all-good',
-            icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
-            label: 'No urgent items today',
-            sub: 'Agents and incidents look healthy',
-            tone: 'emerald' as const,
-            action: null,
-            cta: null,
-          },
         ].filter(Boolean) as Array<{ id: string; icon: ReactNode; label: string; sub: string; tone: 'rose' | 'amber' | 'emerald'; action: (() => void) | null; cta: string | null }>;
 
         const toneMap = {
@@ -736,6 +727,8 @@ const hasData = agents.length > 0;
           amber: 'border-amber-500/20 bg-amber-500/[0.06]',
           emerald: 'border-emerald-500/20 bg-emerald-500/[0.06]',
         };
+
+        if (focusItems.length === 0) return null;
 
         return (
           <div>
@@ -842,7 +835,7 @@ const hasData = agents.length > 0;
                 key={card.label}
                 variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                className="rounded-2xl border border-slate-700/60 bg-slate-950/50 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]"
               >
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">{card.label}</p>
                 <p className={`mt-3 text-3xl font-bold font-mono tabular-nums ${card.tone}`}>{card.value}</p>
@@ -853,11 +846,11 @@ const hasData = agents.length > 0;
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-800/80 pt-5 md:grid-cols-2 xl:grid-cols-4">
           {movementCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div key={card.label} className="rounded-2xl border border-slate-800/80 bg-slate-950/35 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.03)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
-                  <p className="mt-2 text-3xl font-bold font-mono tabular-nums text-white">{card.value}</p>
+                  <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-white">{card.value}</p>
                   <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {card.delta}
                   </p>
@@ -1135,11 +1128,11 @@ const hasData = agents.length > 0;
               <p className="mt-1 text-sm text-slate-400">Live status of installed apps powering your agents.</p>
             </div>
             <button
-              onClick={() => onNavigate?.('marketplace')}
+              onClick={() => onNavigate?.('apps')}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 transition hover:text-white"
             >
               <ShoppingBag className="h-4 w-4" />
-              App Store
+              Open apps
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

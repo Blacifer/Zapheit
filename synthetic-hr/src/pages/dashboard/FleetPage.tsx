@@ -14,6 +14,7 @@ import { getFrontendConfig } from '../../lib/config';
 import { supabase } from '../../lib/supabase-client';
 import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 import { SkeletonAgentCard } from '../../components/Skeleton';
+import { PageHero } from '../../components/dashboard/PageHero';
 const AddAgentModal = lazy(async () => {
   const mod = await import('./fleet/AddAgentModal');
   return { default: mod.AddAgentModal };
@@ -1158,41 +1159,37 @@ export default function FleetPage({
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Agents</h1>
-          <p className="text-slate-400 mt-2">See what is running, what is risky, and what needs your next action.</p>
+      <PageHero
+        eyebrow="Operate your agents"
+        title="Know what is running, risky, and ready for action"
+        subtitle="Use Agents as the operating surface for setup, supervision, and go-live decisions without losing track of cost, risk, or channel readiness."
+        recommendation={handoffCard ? {
+          label: handoffCard.eyebrow,
+          title: handoffCard.title,
+          detail: handoffCard.description,
+        } : {
+          label: 'Recommended next step',
+          title: 'Create the first agent',
+          detail: 'Start with one simple agent and one useful channel. The rest of the workspace can stay advanced until it matters.',
+        }}
+        actions={[
+          ...(filteredAgents.length > 0 ? [{ label: 'Export CSV', onClick: exportCSV, variant: 'secondary' as const, icon: <Download className="w-4 h-4" /> }] : []),
+          { label: 'Add Agent', onClick: () => !atAgentLimit && setShowAddModal(true), icon: <Plus className="w-4 h-4" /> },
+        ]}
+        stats={[
+          { label: 'Active agents', value: `${agents.filter((agent) => agent.status === 'active').length}`, detail: 'Currently running right now' },
+          { label: 'Live agents', value: `${liveAgentCount}`, detail: 'Handling traffic on connected channels' },
+          { label: 'Need attention', value: `${attentionAgentCount}`, detail: 'High-risk or elevated governance attention' },
+        ]}
+      />
+
+      {agentLimit !== -1 && (
+        <div className="flex justify-end">
+          <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${atAgentLimit ? 'border-rose-500/20 bg-rose-500/10 text-rose-300' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>
+            {activeAgentCount}/{agentLimit} agents used
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          {filteredAgents.length > 0 && (
-            <button
-              onClick={exportCSV}
-              className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
-              aria-label="Export fleet data as CSV"
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </button>
-          )}
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={() => !atAgentLimit && setShowAddModal(true)}
-              disabled={atAgentLimit}
-              className={`px-4 py-2 text-sm flex items-center gap-2 rounded-xl font-semibold transition-all ${atAgentLimit ? 'bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600/50' : 'btn-primary'}`}
-              aria-label="Add new AI agent"
-              title={atAgentLimit ? `Plan limit reached (${activeAgentCount}/${agentLimit} agents)` : undefined}
-            >
-              <Plus className="w-4 h-4" />
-              Add Agent
-            </button>
-            {agentLimit !== -1 && (
-              <span className={`text-[10px] tabular-nums ${atAgentLimit ? 'text-rose-400' : 'text-slate-500'}`}>
-                {activeAgentCount}/{agentLimit} agents used
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
 
       {agents.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

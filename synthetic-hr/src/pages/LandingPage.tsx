@@ -438,7 +438,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: BarChart3,
       color: 'from-cyan-500 to-blue-600',
       bgColor: 'cyan',
-      title: 'See Everything',
+      title: 'Know What Agents Are Doing',
       subtitle: 'Real-time LLM Gateway',
       problem: 'No visibility into what your agents are actually doing.',
       features: [
@@ -454,7 +454,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: Shield,
       color: 'from-red-500 to-red-600',
       bgColor: 'red',
-      title: 'Catch Everything',
+      title: 'Catch Risk Before Users Do',
       subtitle: 'Real-time Incident Detection',
       problem: 'PII leaks, hallucinations, and policy violations reaching users.',
       features: [
@@ -470,7 +470,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: ZapOff,
       color: 'from-amber-500 to-orange-600',
       bgColor: 'amber',
-      title: 'Control Everything',
+      title: 'Keep Humans In Control',
       subtitle: 'Action Policies & Kill Switch',
       problem: 'Rogue agents with no approval gates or circuit breakers.',
       features: [
@@ -486,7 +486,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: FileText,
       color: 'from-purple-500 to-purple-600',
       bgColor: 'purple',
-      title: 'Prove Everything',
+      title: 'Show Evidence Fast',
       subtitle: 'Black Box & Audit Trails',
       problem: 'No defensible evidence when regulators or customers ask.',
       features: [
@@ -502,7 +502,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: Target,
       color: 'from-violet-500 to-violet-600',
       bgColor: 'violet',
-      title: 'Test Everything',
+      title: 'Test Before You Trust',
       subtitle: 'Shadow Mode Adversarial Testing',
       problem: 'Agents that look safe in dev but fail in production.',
       features: [
@@ -518,7 +518,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       icon: DollarSign,
       color: 'from-emerald-500 to-green-600',
       bgColor: 'emerald',
-      title: 'Save Everything',
+      title: 'Control Spend Early',
       subtitle: 'Multi-provider Cost Optimization',
       problem: 'Token leakage and no visibility into AI spend by agent.',
       features: [
@@ -693,22 +693,23 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950" />
 
-        <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
+        <div className="relative z-10 max-w-6xl mx-auto px-6">
+          <div className="mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md">
             <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">AI control plane for teams running live agents</span>
+            <span className="text-sm text-slate-200">AI control plane for teams running live agents in production</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
-            Your AI agents are live.
+            Your AI agents are already working.
             <br />
-            <span className="gradient-text">Make them easy to watch, trust, and control.</span>
+            <span className="gradient-text">Give your team one place to watch, protect, and control them.</span>
           </h1>
 
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Rasi gives your team one place to <span className="text-slate-100 font-semibold">see what agents are doing, catch risky behavior, and stay in control</span> without slowing down delivery —
+            Rasi gives your team one place to <span className="text-slate-100 font-semibold">see live activity, catch risky behavior, and stay in control</span> without slowing down delivery —
             <br className="hidden md:block" />
-            no matter who built the agents or where they run.
+            whether the agents run in your app, your support stack, or your internal workflows.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
@@ -734,18 +735,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { value: '1 View', label: 'for agents, incidents, apps, and spend' },
-              { value: 'Fast', label: 'time to first tracked request' },
+              { value: '<10 min', label: 'to first useful signal' },
               { value: '-47%', label: 'average cost reduction' },
               { value: 'DPDPA', label: 'India-ready controls' }
             ].map((stat, i) => (
               <div
                 key={i}
-                className="p-4 rounded-lg bg-white/5 backdrop-blur-md border border-white/10 hover:border-cyan-400/30 transition-all"
+                className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 transition-all"
               >
                 <div className="text-2xl font-bold text-cyan-400">{stat.value}</div>
-                <div className="text-sm text-slate-400">{stat.label}</div>
+                <div className="mt-1 text-sm leading-5 text-slate-400">{stat.label}</div>
               </div>
             ))}
+          </div>
           </div>
         </div>
 
@@ -776,12 +778,29 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent" />
 
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-12 md:mb-16 lg:mb-20">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what a simpler control plane feels like</h2>
-            <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
-              Browse the product the way an operator would: what is running, what needs attention, and what to do next.
-            </p>
+          <div className="mb-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end md:mb-16 lg:mb-20">
+            <div>
+              <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what a calmer control plane feels like</h2>
+              <p className="text-slate-400 mt-4 text-lg max-w-2xl">
+                Browse the product the way an operator would: what is running, what needs attention, and what to do next.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">What you should notice</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                {[
+                  { title: 'One recommended next step', detail: 'The interface should tell operators where to act first.' },
+                  { title: 'Clear status without noise', detail: 'Important signals should stand out without turning into a wall of cards.' },
+                  { title: 'Progressive depth', detail: 'Advanced controls should appear when needed, not all at once.' },
+                ].map((item) => (
+                  <div key={item.title} className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
+                    <p className="text-sm font-semibold text-white">{item.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <ProductPreview onDemo={onDemo} onSignUp={onSignUp} />
@@ -851,17 +870,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 key={i}
                 className="group relative p-4 sm:p-6 lg:p-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-cyan-400/50 transition-all overflow-hidden"
               >
-                {/* Glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-blue-500/0 group-hover:from-cyan-500/10 group-hover:to-blue-500/10 transition-all" />
-
                 <div className="relative">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-6 group-hover:shadow-lg group-hover:shadow-cyan-500/30 transition-all">
-                    <item.icon className="w-6 h-6 text-white" />
+                  <div className="mb-5 flex items-center justify-between">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-cyan-500/30 transition-all">
+                      <item.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-3xl font-black text-white/10">0{item.step}</span>
                   </div>
 
-                  <div className="text-sm font-bold text-cyan-400 mb-2">Step {item.step}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-400 mb-2">Step {item.step}</div>
                   <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
-                  <p className="text-slate-400">{item.desc}</p>
+                  <p className="text-slate-400 leading-6">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -886,18 +905,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                   key={pillar.id}
                   className="group relative p-4 sm:p-6 lg:p-8 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
                 >
-                  {/* Background gradient — static class via color map */}
-                  <div className={`absolute inset-0 ${colors.bg} opacity-0 group-hover:opacity-100 transition-opacity`} />
-
-                  {/* Border — static class via color map */}
-                  <div className={`absolute inset-0 rounded-2xl border border-white/10 group-hover:${colors.border} transition-all`} />
-
-                  {/* Backdrop blur */}
+                  <div className={`absolute inset-0 rounded-2xl border border-white/10 transition-all group-hover:${colors.border}`} />
+                  <div className={`absolute inset-0 rounded-2xl ${colors.bg} opacity-0 transition-opacity group-hover:opacity-100`} />
                   <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl rounded-2xl" />
 
                   <div className="relative z-10">
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-6 shadow-lg group-hover:shadow-xl transition-all group-hover:scale-110`}>
-                      <pillar.icon className="w-7 h-7 text-white" />
+                    <div className="mb-6 flex items-start justify-between gap-4">
+                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all group-hover:scale-110`}>
+                        <pillar.icon className="w-7 h-7 text-white" />
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-slate-300">
+                        {pillar.impact}
+                      </span>
                     </div>
 
                     <h3 className="text-2xl font-bold text-white mb-1">{pillar.title}</h3>
@@ -905,18 +924,14 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
                     <p className="text-slate-400 mb-6"><span className="font-semibold text-slate-300">Problem:</span> {pillar.problem}</p>
 
-                    <ul className="space-y-3 mb-6">
-                      {pillar.features.map((feature, j) => (
+                    <ul className="space-y-3">
+                      {pillar.features.slice(0, 3).map((feature, j) => (
                         <li key={j} className="flex items-start gap-3">
                           <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
                           <span className="text-slate-300">{feature}</span>
                         </li>
                       ))}
                     </ul>
-
-                    <div className={`inline-block px-4 py-2 rounded-lg bg-gradient-to-r ${pillar.color} text-white font-semibold text-sm`}>
-                      {pillar.impact}
-                    </div>
                   </div>
                 </div>
               );
