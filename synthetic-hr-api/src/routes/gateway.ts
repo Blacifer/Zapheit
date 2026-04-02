@@ -1881,7 +1881,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       }
       // Request interception: redact PII, replace patterns, inject system instructions
       normalizedMessages = await applyRequestInterceptors(orgId, normalizedMessages);
-      if (process.env.CROSS_BORDER_PII_MASKING === 'true' && (modelConfig.provider === 'openai' || modelConfig.provider === 'openrouter')) {
+      if (process.env.CROSS_BORDER_PII_MASKING === 'true') {
         const masked = applyCrossBorderMasking(normalizedMessages);
         normalizedMessages = masked.maskedMessages;
         maskingTokenMap = masked.tokenMap;
