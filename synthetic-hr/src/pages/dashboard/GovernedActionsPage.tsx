@@ -23,6 +23,9 @@ type GovernedAction = {
     block_reasons?: string[];
     approval_reasons?: string[];
     idempotency_key?: string | null;
+    job_id?: string | null;
+    agent_id?: string | null;
+    requested_by?: string | null;
   } | null;
 };
 
@@ -42,6 +45,11 @@ function toneClasses(result?: string | null) {
   return 'border-rose-400/20 bg-rose-500/10 text-rose-200';
 }
 
+function truncateMiddle(value: string, head = 8, tail = 6) {
+  if (value.length <= head + tail + 1) return value;
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
 function buildAppsHistoryRoute(service: string) {
   const params = new URLSearchParams({ service, drawerTab: 'history' });
   return `apps?${params.toString()}`;
@@ -51,6 +59,12 @@ function buildApprovalRoute(approvalId: string, service?: string | null) {
   const params = new URLSearchParams({ approvalId });
   if (service) params.set('service', service);
   return `approvals?${params.toString()}`;
+}
+
+function buildJobRoute(jobId: string, decision?: GovernedAction['governance'] extends { decision?: infer D } ? D : never) {
+  const params = new URLSearchParams({ jobId });
+  if (decision === 'pending_approval') params.set('tab', 'pending');
+  return `jobs?${params.toString()}`;
 }
 
 export default function GovernedActionsPage({
@@ -244,6 +258,30 @@ export default function GovernedActionsPage({
                       <span>Role: {governance?.required_role || 'n/a'}</span>
                       <span>Duration: {item.duration_ms ? `${item.duration_ms} ms` : 'n/a'}</span>
                     </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Requested by</p>
+                        <p className="mt-1 text-sm text-slate-200">{governance?.requested_by || item.requested_by || 'system'}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Agent</p>
+                        <p className="mt-1 text-sm text-slate-200 font-mono">
+                          {governance?.agent_id ? truncateMiddle(governance.agent_id) : 'n/a'}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Policy</p>
+                        <p className="mt-1 text-sm text-slate-200 font-mono">
+                          {governance?.policy_id ? truncateMiddle(governance.policy_id) : 'default'}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Idempotency</p>
+                        <p className="mt-1 text-sm text-slate-200 font-mono">
+                          {governance?.idempotency_key ? truncateMiddle(governance.idempotency_key) : 'not recorded'}
+                        </p>
+                      </div>
+                    </div>
                     {reasons.length > 0 ? (
                       <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Why</p>
@@ -263,16 +301,28 @@ export default function GovernedActionsPage({
                     >
                       Open app history
                     </button>
-                    <button
-                      onClick={() => onNavigate(
-                        item.approval_required && item.approval_id
-                          ? buildApprovalRoute(item.approval_id, item.connector_id)
-                          : 'jobs',
-                      )}
-                      className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
-                    >
-                      {item.approval_required ? 'Open matching approval' : 'Open run history'}
-                    </button>
+                    {item.approval_required && item.approval_id ? (
+                      <button
+                        onClick={() => onNavigate(buildApprovalRoute(item.approval_id, item.connector_id))}
+                        className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
+                      >
+                        Open matching approval
+                      </button>
+                    ) : governance?.job_id ? (
+                      <button
+                        onClick={() => onNavigate(buildJobRoute(governance.job_id, governance.decision))}
+                        className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
+                      >
+                        Open linked run
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onNavigate('jobs')}
+                        className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
+                      >
+                        Open run history
+                      </button>
+                    )}
                   </div>
                 </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Check,
   X,
@@ -494,11 +495,13 @@ function JobDetail({
 function JobListItem({
   job,
   selected,
+  highlighted,
   agentNameById,
   onClick,
 }: {
   job: AgentJob;
   selected: boolean;
+  highlighted?: boolean;
   agentNameById: Map<string, string>;
   onClick: () => void;
 }) {
@@ -520,8 +523,11 @@ function JobListItem({
   return (
     <button
       onClick={onClick}
+      id={`job-${job.id}`}
       className={`w-full text-left px-4 py-3 border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors ${
-        selected ? 'bg-cyan-500/10 border-l-2 border-l-cyan-500' : ''
+        highlighted
+          ? 'bg-amber-500/10 border-l-2 border-l-amber-400'
+          : selected ? 'bg-cyan-500/10 border-l-2 border-l-cyan-500' : ''
       }`}
     >
       <div className="flex items-start gap-3">
@@ -608,6 +614,9 @@ const TABS = ['History', 'Pending Actions', 'Scheduled'] as const;
 type Tab = typeof TABS[number];
 
 export default function JobsInboxPage({ agents }: { agents: { id: string; name: string }[] }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const jobIdParam = searchParams.get('jobId');
+  const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<Tab>('History');
   const [jobs, setJobs] = useState<AgentJob[]>([]);
   const [pendingJobs, setPendingJobs] = useState<AgentJob[]>([]);
@@ -644,13 +653,45 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!requestedTab) return;
+    if (requestedTab === 'scheduled') {
+      setActiveTab('Scheduled');
+      return;
+    }
+    if (requestedTab === 'pending') {
+      setActiveTab('Pending Actions');
+      return;
+    }
+    if (requestedTab === 'history') {
+      setActiveTab('History');
+    }
+  }, [requestedTab]);
+
   // Auto-select first job when tab or data changes
   useEffect(() => {
     const list = activeTab === 'Pending Actions' ? pendingJobs : jobs;
+    if (jobIdParam && list.find((j) => j.id === jobIdParam)) {
+      setSelectedJobId(jobIdParam);
+      return;
+    }
     if (list.length && !list.find((j) => j.id === selectedJobId)) {
       setSelectedJobId(list[0].id);
     }
-  }, [activeTab, jobs, pendingJobs, selectedJobId]);
+  }, [activeTab, jobIdParam, jobs, pendingJobs, selectedJobId]);
+
+  useEffect(() => {
+    if (!jobIdParam) return;
+    const inPending = pendingJobs.some((job) => job.id === jobIdParam);
+    const inHistory = jobs.some((job) => job.id === jobIdParam);
+    if (inPending) {
+      setActiveTab('Pending Actions');
+      return;
+    }
+    if (inHistory) {
+      setActiveTab('History');
+    }
+  }, [jobIdParam, jobs, pendingJobs]);
 
   const listForTab = activeTab === 'Pending Actions' ? pendingJobs : jobs;
   const selectedJobBase = listForTab.find((j) => j.id === selectedJobId) || null;
@@ -668,6 +709,23 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
   }, [selectedJobId, selectedJobBase]);
 
   const selectedJob = (selectedJobDetail || selectedJobBase) as AgentJob | null;
+
+  useEffect(() => {
+    if (!jobIdParam) return;
+    const node = document.getElementById(`job-${jobIdParam}`);
+    if (!node) return;
+    window.requestAnimationFrame(() => {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [activeTab, jobIdParam, jobs.length, pendingJobs.length]);
+
+  const clearFocusedJob = () => {
+    setSearchParams((params) => {
+      params.delete('jobId');
+      params.delete('tab');
+      return params;
+    }, { replace: true });
+  };
 
   const decide = async (jobId: string, decision: 'approved' | 'rejected') => {
     try {
@@ -725,6 +783,24 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
         </button>
       </div>
 
+      {jobIdParam && selectedJob && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-semibold text-white">Focused run</p>
+            <p className="mt-1 text-amber-100/80">
+              Reviewing <span className="font-medium text-white">{selectedJob.type}</span> for{' '}
+              <span className="font-medium text-white">{agentNameById.get(selectedJob.agent_id || '') || selectedJob.agent_id || 'unknown agent'}</span>.
+            </p>
+          </div>
+          <button
+            onClick={clearFocusedJob}
+            className="rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.09]"
+          >
+            Clear focus
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-800/40 border border-slate-700 rounded-xl p-1 w-fit">
         {TABS.map((tab) => (
@@ -781,6 +857,7 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
                     key={job.id}
                     job={job}
                     selected={job.id === selectedJobId}
+                    highlighted={job.id === jobIdParam}
                     agentNameById={agentNameById}
                     onClick={() => setSelectedJobId(job.id)}
                   />
