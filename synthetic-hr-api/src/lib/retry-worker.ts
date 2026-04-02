@@ -21,7 +21,7 @@ async function fetchDueItems(): Promise<any[]> {
   try {
     // Build this filter manually: PostgREST expects the raw ISO timestamp in the
     // comparator value, and URLSearchParams would re-encode the helper output.
-    const q = `status=${eq('pending')}&next_attempt_at=${lte(new Date().toISOString())}&order=next_attempt_at.asc&limit=20`;
+    const q = `status=in.(pending,queued_for_retry)&next_attempt_at=${lte(new Date().toISOString())}&order=next_attempt_at.asc&limit=20`;
     return ((await supabaseRest('connector_retry_queue', q)) as any[]) ?? [];
   } catch (err: any) {
     logger.warn('[retry-worker] Failed to fetch due items', { error: err?.message });
@@ -78,7 +78,7 @@ async function processItem(item: any): Promise<void> {
 
   if (result.success) {
     await recordSuccess(orgId, connectorId);
-    await updateItem(id, { status: 'succeeded', attempt_count: newAttemptCount, last_error: null });
+    await updateItem(id, { status: 'recovered', attempt_count: newAttemptCount, last_error: null });
     logger.info('[retry-worker] Retry succeeded', { id, orgId, connectorId, action, attempts: newAttemptCount });
   } else {
     await recordFailure(orgId, connectorId);
@@ -89,7 +89,7 @@ async function processItem(item: any): Promise<void> {
       const backoffSecs = RETRY_BACKOFF_SECONDS[newAttemptCount - 1] ?? 900;
       const nextAttempt = new Date(Date.now() + backoffSecs * 1000).toISOString();
       await updateItem(id, {
-        status: 'pending',
+        status: 'queued_for_retry',
         attempt_count: newAttemptCount,
         last_error: result.error,
         next_attempt_at: nextAttempt,
@@ -106,6 +106,10 @@ async function runOnce(): Promise<void> {
   if (items.length === 0) return;
   logger.info('[retry-worker] Processing retry queue', { count: items.length });
   await Promise.allSettled(items.map(processItem));
+}
+
+export async function runRetryWorkerCycleForTests(): Promise<void> {
+  await runOnce();
 }
 
 export function startRetryWorker(): void {
@@ -140,7 +144,7 @@ export async function enqueueRetry(
         ...(agentId ? { agent_id: agentId } : {}),
         max_attempts: MAX_ATTEMPTS,
         next_attempt_at: new Date(Date.now() + 60_000).toISOString(), // retry after 1 minute
-        status: 'pending',
+        status: 'queued_for_retry',
       },
     });
   } catch (err: any) {

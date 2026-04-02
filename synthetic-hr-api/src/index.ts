@@ -47,6 +47,7 @@ import { monitoring, setupAlertHandlers } from './lib/monitoring';
 import { setProviderSyncSchedulerNextRun, syncEnabledProviderCostsForAllOrganizations } from './lib/provider-sync';
 import { startIntegrationTokenRefreshScheduler } from './lib/integrations/auto-refresh';
 import { startRetryWorker } from './lib/retry-worker';
+import { runSchemaCompatibilityCheck } from './lib/schema-compat';
 
 dotenv.config();
 validateEnvironment();
@@ -465,6 +466,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 async function startServer() {
+  await runSchemaCompatibilityCheck();
+
   try {
     // Warm up idempotency cache from database on startup
     // This prevents loss of idempotency deduplication when the process restarts

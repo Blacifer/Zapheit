@@ -127,6 +127,26 @@ type StoredConnectorExecutionRow = {
   after_state?: Record<string, any> | null;
   remediation?: Record<string, any> | null;
   created_at: string;
+  reliability_state?: 'queued_for_retry' | 'paused_by_circuit_breaker' | 'recovered' | 'ok' | null;
+  retry_count?: number | null;
+  next_retry_at?: string | null;
+  breaker_open?: boolean | null;
+  recovered_at?: string | null;
+};
+
+type StoredRetryQueueRow = {
+  connector_id: string;
+  action: string;
+  attempt_count: number | null;
+  next_attempt_at: string | null;
+  status: string;
+  updated_at: string | null;
+};
+
+type StoredCircuitBreakerRow = {
+  connector_id: string;
+  state: 'closed' | 'open' | 'half_open';
+  opened_at: string | null;
 };
 
 type StoredAgentRow = {
@@ -1181,10 +1201,62 @@ const listGovernedActions = async (req: any, res: any) => {
   if (service) query.set('connector_id', eq(service));
 
   const rows = await safeQuery<StoredConnectorExecutionRow>(rest, 'connector_action_executions', query);
-  let data = (rows || []).map((row) => ({
-    ...row,
-    governance: normalizeGovernedActionSummary(row),
-  }));
+  const connectorIds = Array.from(new Set((rows || []).map((row) => row.connector_id).filter(Boolean)));
+
+  const queueByExecution = new Map<string, StoredRetryQueueRow>();
+  const breakerByConnector = new Map<string, StoredCircuitBreakerRow>();
+
+  if (connectorIds.length > 0) {
+    const retryQuery = new URLSearchParams();
+    retryQuery.set('organization_id', eq(orgId));
+    retryQuery.set('status', 'in.(pending,queued_for_retry)');
+    retryQuery.set('connector_id', in_(connectorIds));
+    retryQuery.set('select', 'connector_id,action,attempt_count,next_attempt_at,status,updated_at');
+    retryQuery.set('order', 'updated_at.desc');
+    retryQuery.set('limit', '500');
+    const retryRows = await safeQuery<StoredRetryQueueRow>(rest, 'connector_retry_queue', retryQuery);
+    for (const retryRow of retryRows || []) {
+      const key = `${retryRow.connector_id}:${retryRow.action}`;
+      if (!queueByExecution.has(key)) queueByExecution.set(key, retryRow);
+    }
+
+    const breakerQuery = new URLSearchParams();
+    breakerQuery.set('organization_id', eq(orgId));
+    breakerQuery.set('connector_id', in_(connectorIds));
+    breakerQuery.set('select', 'connector_id,state,opened_at');
+    const breakerRows = await safeQuery<StoredCircuitBreakerRow>(rest, 'connector_circuit_breakers', breakerQuery);
+    for (const breakerRow of breakerRows || []) {
+      breakerByConnector.set(breakerRow.connector_id, breakerRow);
+    }
+  }
+
+  let data = (rows || []).map((row) => {
+    const retry = queueByExecution.get(`${row.connector_id}:${row.action}`);
+    const breaker = breakerByConnector.get(row.connector_id);
+
+    const queuedForRetry = Boolean(retry);
+    const breakerOpen = breaker?.state === 'open';
+    const recoveredAt = row.success && breaker?.opened_at && new Date(row.created_at) > new Date(breaker.opened_at)
+      ? row.created_at
+      : null;
+    const reliabilityState: StoredConnectorExecutionRow['reliability_state'] = queuedForRetry
+      ? 'queued_for_retry'
+      : breakerOpen
+        ? 'paused_by_circuit_breaker'
+        : recoveredAt
+          ? 'recovered'
+          : 'ok';
+
+    return {
+      ...row,
+      reliability_state: reliabilityState,
+      retry_count: retry?.attempt_count ?? null,
+      next_retry_at: retry?.next_attempt_at ?? null,
+      breaker_open: breakerOpen,
+      recovered_at: recoveredAt,
+      governance: normalizeGovernedActionSummary(row),
+    };
+  });
   if (decision) data = data.filter((row) => row.governance?.decision === decision);
   if (source) data = data.filter((row) => row.governance?.source === source);
   return res.json({ success: true, data });

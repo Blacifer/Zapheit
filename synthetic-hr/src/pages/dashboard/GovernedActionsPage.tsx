@@ -14,6 +14,11 @@ type GovernedAction = {
   duration_ms: number | null;
   approval_required: boolean;
   approval_id: string | null;
+  reliability_state?: 'queued_for_retry' | 'paused_by_circuit_breaker' | 'recovered' | 'ok' | null;
+  retry_count?: number | null;
+  next_retry_at?: string | null;
+  breaker_open?: boolean | null;
+  recovered_at?: string | null;
   requested_by?: string | null;
   policy_snapshot?: {
     constraints?: {
@@ -69,6 +74,18 @@ function fmtRelative(value: string) {
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function fmtRelativeOrFuture(value: string) {
+  const date = new Date(value);
+  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
+  if (diffMinutes > 0) {
+    if (diffMinutes < 60) return `in ${diffMinutes}m`;
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `in ${diffHours}h`;
+    return `in ${Math.round(diffHours / 24)}d`;
+  }
+  return fmtRelative(value);
 }
 
 function fmtDeadline(value: string) {
@@ -164,6 +181,13 @@ function toneClasses(result?: string | null) {
   if (result === 'succeeded') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200';
   if (result === 'pending') return 'border-amber-400/20 bg-amber-500/10 text-amber-200';
   return 'border-rose-400/20 bg-rose-500/10 text-rose-200';
+}
+
+function reliabilityToneClasses(state?: GovernedAction['reliability_state']) {
+  if (state === 'recovered') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200';
+  if (state === 'queued_for_retry') return 'border-amber-400/20 bg-amber-500/10 text-amber-200';
+  if (state === 'paused_by_circuit_breaker') return 'border-rose-400/20 bg-rose-500/10 text-rose-200';
+  return 'border-slate-400/20 bg-slate-500/10 text-slate-200';
 }
 
 function truncateMiddle(value: string, head = 8, tail = 6) {
@@ -424,6 +448,7 @@ export default function GovernedActionsPage({
                   : null;
             const degraded = health?.status === 'error' || health?.status === 'expired' || health?.last_test_result === 'error';
             const syncing = health?.status === 'syncing';
+            const reliabilityState = item.reliability_state || 'ok';
             const structuredReasons = buildStructuredReasons({
               item,
               approval,
@@ -465,6 +490,9 @@ export default function GovernedActionsPage({
                       {governance.source === 'connector_console' ? 'console' : governance.source}
                     </span>
                   ) : null}
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${reliabilityToneClasses(reliabilityState)}`}>
+                    {reliabilityState.replace(/_/g, ' ')}
+                  </span>
                   {item.approval_required ? (
                     <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200">
                       approval gated
@@ -521,6 +549,15 @@ export default function GovernedActionsPage({
                           ) : null}
                           {health.last_error_at ? (
                             <p className="text-sm text-slate-300">Last failure: <span className="text-white">{fmtRelative(health.last_error_at)}</span></p>
+                          ) : null}
+                          {item.next_retry_at ? (
+                            <p className="text-sm text-slate-300">Next retry: <span className="text-white">{fmtRelativeOrFuture(item.next_retry_at)}</span></p>
+                          ) : null}
+                          {item.retry_count != null ? (
+                            <p className="text-sm text-slate-300">Retry count: <span className="text-white">{item.retry_count}</span></p>
+                          ) : null}
+                          {item.recovered_at ? (
+                            <p className="text-sm text-slate-300">Recovered: <span className="text-white">{fmtRelative(item.recovered_at)}</span></p>
                           ) : null}
                         </div>
                         {health.last_error_msg ? (
