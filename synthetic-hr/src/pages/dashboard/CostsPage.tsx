@@ -1,25 +1,10 @@
-import { useState, useMemo } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useCostData } from '../../hooks/useData';
 import {
   Plus, DollarSign, Cpu, Activity, AlertOctagon, ShieldCheck,
   AlertTriangle, TrendingDown, AlertCircle, TrendingUp,
   Download, Zap, BarChart2, ArrowUpRight, ArrowDownRight, Minus,
 } from 'lucide-react';
-import {
-  AreaChart, Area as RechartsArea, XAxis as RechartsXAxis, YAxis as RechartsYAxis,
-  CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie as RechartsPie, Cell as RechartsCell,
-  BarChart, Bar as RechartsBar,
-} from 'recharts';
-
-// Bypass React 18 / Recharts 2.x Type Errors
-const Area = RechartsArea as any;
-const XAxis = RechartsXAxis as any;
-const YAxis = RechartsYAxis as any;
-const Tooltip = RechartsTooltip as any;
-const Pie = RechartsPie as any;
-const Cell = RechartsCell as any;
-const Bar = RechartsBar as any;
 
 import { CostData, AIAgent, Incident } from '../../types';
 import { toast } from '../../lib/toast';
@@ -31,22 +16,7 @@ interface CostsPageProps {
   onNavigate: (page: string) => void;
 }
 
-// Custom tooltip for the spending chart
-const SpendingTooltip = ({ active, payload, label, mode }: any) => {
-  if (!active || !payload) return null;
-  const value = payload[0]?.value ?? 0;
-  const formatValue = () => {
-    if (mode === 'cost') return `₹${Number(value).toFixed(2)}`;
-    if (mode === 'tokens') return `${Number(value).toLocaleString()} tokens`;
-    return `${Number(value).toLocaleString()} requests`;
-  };
-  return (
-    <div className="bg-slate-900/95 border border-slate-700/60 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-sm">
-      <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className="text-lg font-bold text-emerald-400">{formatValue()}</p>
-    </div>
-  );
-};
+const CostsChartsSection = lazy(() => import('./costs/CostsChartsSection'));
 
 const formatInr = (value: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -193,10 +163,6 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
 
   const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'];
 
-  const chartKey = chartMode === 'cost' ? 'cost' : chartMode === 'tokens' ? 'tokens' : 'requests';
-  const chartColor = chartMode === 'cost' ? '#10b981' : chartMode === 'tokens' ? '#3b82f6' : '#8b5cf6';
-  const chartLabel = chartMode === 'cost' ? 'Cost (₹)' : chartMode === 'tokens' ? 'Tokens' : 'Requests';
-
   const effColor = efficiencyScore >= 80 ? 'text-emerald-400' : efficiencyScore >= 50 ? 'text-amber-400' : 'text-rose-400';
   const effBg = efficiencyScore >= 80 ? 'from-emerald-500/20 to-emerald-500/5' : efficiencyScore >= 50 ? 'from-amber-500/20 to-amber-500/5' : 'from-rose-500/20 to-rose-500/5';
   const effBorder = efficiencyScore >= 80 ? 'border-emerald-500/30' : efficiencyScore >= 50 ? 'border-amber-500/30' : 'border-rose-500/30';
@@ -314,74 +280,32 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
         ))}
       </div>
 
-      {/* Spending Trend Chart — ALWAYS shows, even at ₹0 */}
-      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-emerald-400" /> Spending Trend
-            {totalCost === 0 && (
-              <span className="text-xs font-normal text-slate-500 ml-1">(baseline — no spend yet)</span>
-            )}
-          </h2>
-          <div className="flex items-center gap-2">
-            {(['cost', 'tokens', 'requests'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setChartMode(m)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${chartMode === m
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-white border border-slate-700 hover:border-slate-600'
-                  }`}
-              >
-                {m}
-              </button>
-            ))}
+      <Suspense
+        fallback={
+          <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+            <div className="h-[24rem] rounded-2xl border border-slate-700/50 bg-slate-800/30 p-6 backdrop-blur-sm">
+              <div className="h-full animate-pulse rounded-xl bg-slate-700/30" />
+            </div>
+            <div className="h-[24rem] rounded-2xl border border-slate-700/50 bg-slate-800/30 p-6 backdrop-blur-sm">
+              <div className="h-full animate-pulse rounded-xl bg-slate-700/30" />
+            </div>
           </div>
+        }
+      >
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+          <CostsChartsSection
+            chartData={chartData}
+            chartMode={chartMode}
+            dateRange={dateRange}
+            modelSpend={modelSpend}
+            modelSpendByTokens={modelSpendByTokens}
+            onChartModeChange={setChartMode}
+            onNavigate={onNavigate}
+            pieColors={PIE_COLORS}
+            totalCost={totalCost}
+          />
         </div>
-
-        <div className="h-72 w-full" style={{ minWidth: 0 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={chartColor} stopOpacity={0.35} />
-                  <stop offset="95%" stopColor={chartColor} stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis
-                dataKey="formattedDate"
-                stroke="#475569"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                dy={8}
-                interval={dateRange === '30d' ? 4 : 0}
-              />
-              <YAxis
-                stroke="#475569"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => chartMode === 'cost' ? `₹${v}` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v)}
-                domain={totalCost === 0 && chartMode === 'cost' ? [0, 10] : undefined}
-              />
-              <Tooltip content={<SpendingTooltip mode={chartMode} />} />
-              <Area
-                type="monotone"
-                dataKey={chartKey}
-                name={chartLabel}
-                stroke={chartColor}
-                strokeWidth={2.5}
-                fillOpacity={1}
-                fill="url(#colorMetric)"
-                dot={false}
-                activeDot={{ r: 5, fill: chartColor, stroke: '#0f172a', strokeWidth: 2 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      </Suspense>
 
       {/* Bottom Row: 3 cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -427,57 +351,6 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
                 </div>
               ));
             })()}
-          </div>
-        </div>
-
-        {/* Cost by Model pie */}
-        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 backdrop-blur-sm flex flex-col">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2 bg-blue-500/10 rounded-lg">
-              <BarChart2 className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white">{modelSpendByTokens ? 'Usage by Model' : 'Cost by Model'}</h2>
-              <p className="text-xs text-slate-400">{modelSpendByTokens ? 'Token distribution (no cost data stored)' : 'Total spending distribution'}</p>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center relative min-h-[220px]">
-            {modelSpend.length === 0 ? (
-              <div className="text-center space-y-2">
-                <BarChart2 className="w-10 h-10 text-slate-600 mx-auto" />
-                <p className="text-slate-500 text-sm">No agent spend to track yet.</p>
-                <button onClick={() => onNavigate('fleet')} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
-                  Configure agents →
-                </button>
-              </div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={modelSpend} cx="50%" cy="45%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value" stroke="none">
-                      {modelSpend.map((_: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) => [modelSpendByTokens ? `${value.toLocaleString()} tokens` : `₹${value.toLocaleString()}`, modelSpendByTokens ? 'Tokens' : 'Spend']}
-                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', color: '#fff' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="w-full space-y-1.5 mt-2">
-                  {modelSpend.map((entry: any, index: number) => (
-                    <div key={entry.name} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
-                        <span className="text-slate-300 truncate max-w-[100px]">{entry.name}</span>
-                      </div>
-                      <span className="text-white font-medium shrink-0">{modelSpendByTokens ? `${(entry.value / 1000).toFixed(1)}K tok` : `₹${entry.value.toLocaleString()}`}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ClipboardList,
   RefreshCw,
@@ -146,7 +146,10 @@ function extractJobResult(job: AgentJob): string {
 type TestCase = { id: string; inputs: Record<string, string>; checklist: string[] };
 type TestResult = { id: string; status: 'running' | 'passed' | 'failed' | 'error'; output: string; scores: Record<string, boolean | null>; score: number };
 
-import { PlaybookBuilder, type WorkflowGraph } from '../../components/PlaybookBuilder/PlaybookBuilder';
+import type { WorkflowGraph } from '../../components/PlaybookBuilder/PlaybookBuilder';
+
+const PlaybookBuilder = lazy(() => import('../../components/PlaybookBuilder/PlaybookBuilder').then((module) => ({ default: module.PlaybookBuilder })));
+const PlaybooksAnalyticsTab = lazy(() => import('./playbooks/PlaybooksAnalyticsTab'));
 
 // ─── Visual ↔ text workflow conversion helpers ─────────────────────────────────
 
@@ -658,19 +661,29 @@ function CustomPlaybookCard({
 
           {/* ── Visual Builder Canvas ─────────────────────────────────────────── */}
           {builderMode === 'visual' && (
-            <div style={{ height: 480 }}>
-              <PlaybookBuilder
-                initialGraph={workflowToGraph(workflow)}
-                onSave={(graph: WorkflowGraph) => {
-                  const updatedWf = graphToWorkflow(graph, workflow);
-                  setWorkflow(updatedWf);
-                  void api.playbooks.updateCustom(cp.id, { workflow: updatedWf } as any).then((r) => {
-                    if (r.success && r.data) { onUpdate(r.data); toast.success('Visual workflow saved'); }
-                    else toast.error(r.error || 'Failed to save');
-                  });
-                }}
-              />
-            </div>
+            <Suspense
+              fallback={
+                <div style={{ height: 480 }} className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
+                  <div className="flex h-full animate-pulse items-center justify-center rounded-lg border border-slate-700 bg-slate-950/40 text-sm text-slate-500">
+                    Loading visual builder…
+                  </div>
+                </div>
+              }
+            >
+              <div style={{ height: 480 }}>
+                <PlaybookBuilder
+                  initialGraph={workflowToGraph(workflow)}
+                  onSave={(graph: WorkflowGraph) => {
+                    const updatedWf = graphToWorkflow(graph, workflow);
+                    setWorkflow(updatedWf);
+                    void api.playbooks.updateCustom(cp.id, { workflow: updatedWf } as any).then((r) => {
+                      if (r.success && r.data) { onUpdate(r.data); toast.success('Visual workflow saved'); }
+                      else toast.error(r.error || 'Failed to save');
+                    });
+                  }}
+                />
+              </div>
+            </Suspense>
           )}
 
           {builderMode === 'text' && (workflow.steps.length === 0 ? (
@@ -1106,169 +1119,6 @@ function CustomPlaybookCard({
 }
 
 // ─── Analytics tab ────────────────────────────────────────────────────────────
-
-type AnalyticsData = {
-  totals: { runs: number; succeeded: number; cost_usd: number; days: number };
-  by_playbook: Array<{ playbook_id: string; runs: number; succeeded: number; failed: number; thumbsUp: number; thumbsDown: number; avg_cost_usd: number; success_rate: number }>;
-  daily_series: Array<{ date: string; runs: number }>;
-};
-
-function AnalyticsTab({ schedules, triggers }: { schedules: any[]; triggers: any[] }) {
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState(30);
-
-  useEffect(() => {
-    setLoading(true);
-    api.playbooks.getAnalytics(days).then((res) => {
-      if (res.success && res.data) setData(res.data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [days]);
-
-  const maxRuns = data ? Math.max(1, ...data.by_playbook.map((p) => p.runs)) : 1;
-  const maxDaily = data ? Math.max(1, ...data.daily_series.map((d) => d.runs)) : 1;
-
-  // SVG line chart for daily series
-  const LINE_W = 560;
-  const LINE_H = 80;
-  const points = data?.daily_series.map((d, i, arr) => {
-    const x = (i / Math.max(1, arr.length - 1)) * LINE_W;
-    const y = LINE_H - (d.runs / maxDaily) * (LINE_H - 8) - 4;
-    return `${x},${y}`;
-  }).join(' ') || '';
-
-  return (
-    <div className="space-y-6">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-bold text-white">Playbook Analytics</h2>
-        <div className="flex gap-1 bg-slate-800/40 border border-slate-700 rounded-lg p-1">
-          {[7, 30, 90].map((d) => (
-            <button key={d} onClick={() => setDays(d)}
-              className={`px-3 py-1 rounded text-xs font-medium ${days === d ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-              {d}d
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-sm text-slate-400 py-8 text-center">Loading analytics…</div>
-      ) : !data ? (
-        <div className="text-sm text-slate-400 py-8 text-center">No data available yet. Run some playbooks first.</div>
-      ) : (
-        <>
-          {/* Totals */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Total runs', value: data.totals.runs },
-              { label: 'Succeeded', value: data.totals.succeeded },
-              { label: 'Cost (INR)', value: `₹${Math.round(usdToInr(data.totals.cost_usd))}` },
-              { label: 'Active schedules', value: schedules.filter((s) => s.enabled).length },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-slate-800/40 border border-slate-700 rounded-xl p-4">
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
-                <div className="text-xs text-slate-400 mt-1">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Daily volume line chart */}
-          <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
-            <div className="text-sm font-medium text-slate-200 mb-3">Run volume — last {days} days</div>
-            <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${LINE_W} ${LINE_H + 20}`} className="w-full" style={{ minWidth: 280 }}>
-                {/* Grid lines */}
-                {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
-                  <line key={pct} x1={0} x2={LINE_W} y1={LINE_H - pct * (LINE_H - 8) - 4} y2={LINE_H - pct * (LINE_H - 8) - 4}
-                    stroke="#334155" strokeWidth={0.5} />
-                ))}
-                {/* Fill */}
-                {data.daily_series.length > 1 && (
-                  <polyline
-                    points={`0,${LINE_H} ${points} ${LINE_W},${LINE_H}`}
-                    fill="rgba(6,182,212,0.12)" stroke="none"
-                  />
-                )}
-                {/* Line */}
-                {data.daily_series.length > 1 && (
-                  <polyline points={points} fill="none" stroke="#06b6d4" strokeWidth={2} strokeLinejoin="round" />
-                )}
-                {/* Dots */}
-                {data.daily_series.map((d, i, arr) => {
-                  const x = (i / Math.max(1, arr.length - 1)) * LINE_W;
-                  const y = LINE_H - (d.runs / maxDaily) * (LINE_H - 8) - 4;
-                  return d.runs > 0 ? <circle key={i} cx={x} cy={y} r={3} fill="#06b6d4" /> : null;
-                })}
-                {/* X-axis labels (first + last + middle) */}
-                {data.daily_series.length > 1 && [0, Math.floor(data.daily_series.length / 2), data.daily_series.length - 1].map((idx) => {
-                  const d = data.daily_series[idx];
-                  const x = (idx / Math.max(1, data.daily_series.length - 1)) * LINE_W;
-                  return (
-                    <text key={idx} x={x} y={LINE_H + 16} textAnchor="middle"
-                      fill="#64748b" fontSize={9}>
-                      {d.date.slice(5)}
-                    </text>
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
-
-          {/* Runs by playbook */}
-          {data.by_playbook.length > 0 && (
-            <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
-              <div className="text-sm font-medium text-slate-200 mb-4">Runs by playbook</div>
-              <div className="space-y-3">
-                {data.by_playbook.map((p) => {
-                  const name = p.playbook_id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                  const pct = Math.round((p.runs / maxRuns) * 100);
-                  const feedbackTotal = p.thumbsUp + p.thumbsDown;
-                  const feedbackScore = feedbackTotal > 0 ? Math.round((p.thumbsUp / feedbackTotal) * 100) : null;
-                  return (
-                    <div key={p.playbook_id}>
-                      <div className="flex items-center justify-between mb-1 gap-2">
-                        <span className="text-xs text-slate-300 truncate flex-1">{name}</span>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
-                          <span>{p.runs} runs</span>
-                          <span className="text-emerald-400">{p.success_rate}% ok</span>
-                          {feedbackScore !== null && <span className="text-amber-400">{feedbackScore}% ▲</span>}
-                          {p.avg_cost_usd > 0 && <span>₹{Math.round(usdToInr(p.avg_cost_usd))}/run</span>}
-                        </div>
-                      </div>
-                      <div className="h-2 bg-slate-900/60 rounded-full overflow-hidden">
-                        <div className="h-full bg-cyan-500/70 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Trigger stats */}
-          {triggers.length > 0 && (
-            <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
-              <div className="text-sm font-medium text-slate-200 mb-3">Auto-trigger activity</div>
-              <div className="space-y-2">
-                {triggers.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300">{t.event_type} → {t.playbook_id}</span>
-                    <div className="flex items-center gap-3 text-slate-500">
-                      <span>{t.fire_count || 0} fires</span>
-                      <span className={t.enabled ? 'text-emerald-400' : 'text-slate-500'}>{t.enabled ? 'Active' : 'Paused'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 
 // ─── Sub-tabs ─────────────────────────────────────────────────────────────────
 
@@ -2854,7 +2704,11 @@ export default function PlaybooksPage({
       )}
 
       {/* ── Analytics tab ─────────────────────────────────────────────────────── */}
-      {mainTab === 'analytics' && <AnalyticsTab schedules={schedules} triggers={triggers} />}
+      {mainTab === 'analytics' && (
+        <Suspense fallback={<div className="py-8 text-center text-sm text-slate-400">Loading analytics…</div>}>
+          <PlaybooksAnalyticsTab schedules={schedules} triggers={triggers} />
+        </Suspense>
+      )}
     </div>
   );
 }

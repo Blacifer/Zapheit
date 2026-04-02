@@ -8,6 +8,7 @@ import { SupabaseRestError, eq, in_, supabaseRestAsService, supabaseRestAsUser }
 import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { IMPLEMENTED_INTEGRATIONS, getIntegrationSpec } from '../lib/integrations/spec-registry';
 import { getAdapter } from '../lib/integrations/adapters';
+import { normalizeGovernedActionSummary } from '../lib/governed-actions';
 import type {
   IntegrationActionOperation,
   IntegrationActionRisk,
@@ -1178,7 +1179,11 @@ router.get('/executions', requirePermission('connectors.read'), async (req, res)
   if (service) query.set('connector_id', eq(service));
 
   const rows = await safeQuery<StoredConnectorExecutionRow>(rest, 'connector_action_executions', query);
-  return res.json({ success: true, data: rows || [] });
+  const data = (rows || []).map((row) => ({
+    ...row,
+    governance: normalizeGovernedActionSummary(row),
+  }));
+  return res.json({ success: true, data });
 });
 
 // Upsert action enablement for spec actions (writes only).

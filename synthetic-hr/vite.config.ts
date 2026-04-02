@@ -25,12 +25,43 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
 
-          if (id.includes('react') || id.includes('scheduler')) {
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/scheduler/')
+          ) {
             return 'vendor-react';
+          }
+
+          if (id.includes('framer-motion')) {
+            return 'vendor-motion';
+          }
+
+          if (
+            id.includes('react-router-dom') ||
+            id.includes('@tanstack/react-query')
+          ) {
+            return 'vendor-routing';
           }
 
           if (id.includes('@supabase') || id.includes('jose')) {
             return 'vendor-auth';
+          }
+
+          if (id.includes('recharts')) {
+            return 'vendor-charts';
+          }
+
+          if (id.includes('reactflow')) {
+            return 'vendor-flow';
+          }
+
+          if (id.includes('@sentry')) {
+            return 'vendor-observability';
+          }
+
+          if (id.includes('cmdk') || id.includes('react-joyride')) {
+            return 'vendor-ux';
           }
 
           if (id.includes('@radix-ui') || id.includes('lucide-react') || id.includes('class-variance-authority')) {

@@ -78,5 +78,25 @@ export interface ConnectorExecution {
   before_state?: Record<string, any> | null;
   after_state?: Record<string, any> | null;
   remediation?: Record<string, any> | null;
+  governance?: {
+    version: 1;
+    source: 'gateway' | 'connector_console' | 'runtime';
+    decision: 'executed' | 'pending_approval' | 'blocked';
+    result: 'succeeded' | 'failed' | 'pending' | 'blocked';
+    service: string;
+    action: string;
+    recorded_at: string;
+    policy_id?: string | null;
+    required_role?: string | null;
+    approval_required?: boolean;
+    approval_id?: string | null;
+    block_reasons?: string[];
+    approval_reasons?: string[];
+    idempotency_key?: string | null;
+    job_id?: string | null;
+    agent_id?: string | null;
+    requested_by?: string | null;
+    duration_ms?: number | null;
+  } | null;
   created_at: string;
 }

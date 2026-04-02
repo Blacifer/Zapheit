@@ -97,15 +97,32 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
         const cSummary = isClearTax ? clearTaxExecutionSummary(execution) : null;
         const nSummary = isNaukri ? naukriExecutionSummary(execution) : null;
         const sSummary = isSlack ? slackExecutionSummary(execution) : null;
+        const governance = execution.governance;
+        const statusLabel =
+          governance?.result === 'pending' ? 'pending approval'
+          : governance?.result === 'blocked' ? 'blocked'
+          : execution.success ? 'success'
+          : 'failed';
+        const statusClass =
+          governance?.result === 'pending'
+            ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+            : governance?.result === 'blocked'
+              ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+              : execution.success
+                ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                : 'border-rose-400/20 bg-rose-400/10 text-rose-100';
 
         return (
           <div key={execution.id} className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium',
-                execution.success ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-rose-400/20 bg-rose-400/10 text-rose-100'
-              )}>{execution.success ? 'success' : 'failed'}</span>
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', statusClass)}>{statusLabel}</span>
               {execution.approval_required && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-amber-400/20 bg-amber-400/10 text-amber-100 font-medium">approval gated</span>
+              )}
+              {governance?.source && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-300 font-medium">
+                  {governance.source === 'connector_console' ? 'console' : governance.source}
+                </span>
               )}
               <p className="text-xs text-slate-300 flex-1 truncate">{execution.action}</p>
               <p className="text-[10px] text-slate-600 shrink-0">{fmtDate(execution.created_at)}</p>
@@ -122,6 +139,29 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
                 </div>
               </div>
             ))}
+            {governance && (
+              <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Governance record</p>
+                <div className="mt-1 space-y-1">
+                  <p className="text-[11px] text-slate-300">
+                    Decision: <span className="text-slate-100">{governance.decision.replace(/_/g, ' ')}</span>
+                    {governance.required_role ? <> · Required role: <span className="text-slate-100">{governance.required_role}</span></> : null}
+                  </p>
+                  {governance.policy_id && (
+                    <p className="text-[11px] text-slate-300">Policy: <span className="font-mono text-slate-100">{governance.policy_id}</span></p>
+                  )}
+                  {governance.block_reasons && governance.block_reasons.length > 0 && (
+                    <p className="text-[11px] text-rose-200">Reason: {governance.block_reasons.join(' · ')}</p>
+                  )}
+                  {governance.approval_reasons && governance.approval_reasons.length > 0 && (
+                    <p className="text-[11px] text-amber-200">Approval basis: {governance.approval_reasons.join(' · ')}</p>
+                  )}
+                  {governance.idempotency_key && (
+                    <p className="text-[11px] text-slate-400">Idempotency key recorded for duplicate-write protection.</p>
+                  )}
+                </div>
+              </div>
+            )}
             {(execution.requested_by || execution.policy_snapshot || execution.before_state || execution.after_state || execution.remediation) && (
               <div className="mt-2 space-y-2 border-t border-white/[0.06] pt-2">
                 {execution.requested_by && (

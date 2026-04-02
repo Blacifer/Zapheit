@@ -16,6 +16,7 @@ import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
 import { computeEntropy } from '../services/policy-engine';
 import { runPreflightGate } from '../lib/preflight-gate';
+import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { fetchRelevantCorrections } from '../lib/correction-memory';
 import { usdToInr } from '../lib/currency';
 
@@ -839,10 +840,10 @@ const executeSingleToolCall = async (
   // Pre-Flight Gate: policy check, DLP scan, blast-radius limit.
   const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId);
   if (!preflight.allowed) {
-    // If approval is required, create a pending approval request (fire-and-forget).
+    let approvalId: string | null = null;
     if (preflight.approvalRequired && preflight.approvalData) {
       const ad = preflight.approvalData;
-      supabaseRest('approval_requests', '', {
+      const approvalRows = await supabaseRest('approval_requests', '', {
         method: 'POST',
         body: {
           organization_id: orgId,
@@ -857,11 +858,48 @@ const executeSingleToolCall = async (
           sla_deadline: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
           status: 'pending',
         },
+      }).catch(() => []);
+      approvalId = Array.isArray(approvalRows) ? approvalRows?.[0]?.id || null : null;
+    }
+    if (agentId) {
+      supabaseRest('connector_action_executions', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          agent_id: agentId,
+          connector_id: connectorId,
+          action,
+          params,
+          result: { blocked: true, reason: preflight.blockReason },
+          success: false,
+          error_message: preflight.blockReason,
+          approval_required: Boolean(preflight.approvalRequired),
+          approval_id: approvalId,
+          policy_snapshot: buildGovernedActionSnapshot({
+            source: 'gateway',
+            service: connectorId,
+            action,
+            recordedAt: new Date().toISOString(),
+            decision: preflight.approvalRequired ? 'pending_approval' : 'blocked',
+            result: preflight.approvalRequired ? 'pending' : 'blocked',
+            approvalRequired: Boolean(preflight.approvalRequired),
+            approvalId,
+            requiredRole: preflight.approvalData?.required_role || null,
+            blockReasons: [preflight.blockReason],
+            approvalReasons: preflight.approvalRequired ? [preflight.blockReason] : [],
+            agentId,
+          }),
+          remediation: preflight.approvalRequired
+            ? { suggested: 'Review and approve the action before retrying.' }
+            : { suggested: 'Update the payload, policy, or connector permissions before retrying.' },
+        },
       }).catch(() => {/* non-critical */});
     }
     return JSON.stringify({
       blocked: true,
       reason: preflight.blockReason,
+      approvalRequired: Boolean(preflight.approvalRequired),
+      approvalId,
       action: tc.function.name,
     });
   }
@@ -883,6 +921,17 @@ const executeSingleToolCall = async (
         success: result.success,
         error_message: result.error || null,
         ...(result.idempotencyKey ? { idempotency_key: result.idempotencyKey } : {}),
+        policy_snapshot: buildGovernedActionSnapshot({
+          source: 'gateway',
+          service: connectorId,
+          action,
+          recordedAt: new Date().toISOString(),
+          decision: 'executed',
+          result: result.success ? 'succeeded' : 'failed',
+          idempotencyKey: result.idempotencyKey || null,
+          agentId,
+        }),
+        remediation: result.success ? {} : { suggested: 'Check connector state, credentials, and downstream provider health.' },
       },
     }).catch(() => {/* non-critical */});
   }

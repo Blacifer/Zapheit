@@ -9,6 +9,7 @@ import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { notifyJobCompletedAsync } from '../lib/notification-service';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 import { evaluatePolicyConstraints } from '../lib/action-policy-constraints';
+import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 
 const router = Router();
 
@@ -1313,7 +1314,20 @@ router.post('/actions/execute-external', requireRuntimeAuth(), async (req: Reque
           approval_required: Boolean(approvalId),
           approval_id: approvalId,
           requested_by: null,
-          policy_snapshot: policySnapshot,
+          policy_snapshot: buildGovernedActionSnapshot({
+            source: 'runtime',
+            service,
+            action,
+            recordedAt: now,
+            decision: 'executed',
+            result: result.ok ? 'succeeded' : 'failed',
+            approvalRequired: Boolean(approvalId),
+            approvalId,
+            requestedBy: null,
+            agentId: agent_id || null,
+            durationMs: null,
+            existingSnapshot: policySnapshot,
+          }),
           before_state: {},
           after_state: result.ok ? (result.output || {}) : {},
           remediation: result.ok ? {} : { suggested: 'Review connector credentials, provider state, and approval policy' },

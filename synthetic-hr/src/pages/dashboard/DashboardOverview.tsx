@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity,
@@ -21,7 +21,6 @@ import {
 import type { AIAgent, Incident, CostData } from '../../types';
 import type { AuditLogEntry } from '../../lib/api/governance';
 import { USD_TO_INR } from '../../lib/currency';
-import OperationalMetrics from '../../components/OperationalMetrics';
 import { api } from '../../lib/api-client';
 import { authenticatedFetch } from '../../lib/api/_helpers';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -173,6 +172,8 @@ function Sparkline({
 function SectionEyebrow({ label }: { label: string }) {
   return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">{label}</p>;
 }
+
+const OperationalMetrics = lazy(() => import('../../components/OperationalMetrics'));
 
 export default function DashboardOverview({
   agents,
@@ -965,7 +966,22 @@ const hasData = agents.length > 0;
           </div>
           <p className="mt-1 text-sm text-slate-400">Operational metrics from live platform telemetry.</p>
           <div className="mt-6">
-            <OperationalMetrics />
+            <Suspense
+              fallback={
+                <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    {[1, 2, 3, 4].map((item) => (
+                      <div key={item} className="animate-pulse rounded-lg border border-slate-700 bg-slate-900/50 p-4">
+                        <div className="mb-3 h-4 w-3/4 rounded bg-slate-700" />
+                        <div className="h-8 w-1/2 rounded bg-slate-700" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              }
+            >
+              <OperationalMetrics />
+            </Suspense>
           </div>
         </section>
       </div>
