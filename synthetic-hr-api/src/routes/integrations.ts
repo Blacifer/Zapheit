@@ -1241,10 +1241,10 @@ const listGovernedActions = async (req: any, res: any) => {
       : null;
     const reliabilityState: StoredConnectorExecutionRow['reliability_state'] = queuedForRetry
       ? 'queued_for_retry'
-      : breakerOpen
-        ? 'paused_by_circuit_breaker'
-        : recoveredAt
-          ? 'recovered'
+      : recoveredAt
+        ? 'recovered'
+        : breakerOpen
+          ? 'paused_by_circuit_breaker'
           : 'ok';
 
     return {
