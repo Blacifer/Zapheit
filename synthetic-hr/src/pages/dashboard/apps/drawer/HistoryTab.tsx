@@ -1,4 +1,5 @@
 import { Loader2, RefreshCw } from 'lucide-react';
+import { ReasonCallout } from '../../../../components/dashboard/ReasonCallout';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp, ConnectorExecution, ConnectionLog } from '../types';
 import { fmtDate, financeConnectorMode, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
@@ -190,15 +191,13 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
                 </div>
               </div>
             )}
-            {execution.reason_category && execution.reason_message && (
-              <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500">Cannot proceed because</p>
-                <p className="mt-1 text-[11px] text-slate-200">{execution.reason_message}</p>
-                {execution.recommended_next_action && (
-                  <p className="mt-1 text-[11px] text-cyan-200">Next step: {execution.recommended_next_action}</p>
-                )}
-              </div>
-            )}
+            <ReasonCallout
+              className="mt-2 bg-black/10"
+              messageClassName="text-[11px]"
+              nextActionClassName="text-[11px]"
+              reasonMessage={execution.reason_category ? execution.reason_message : null}
+              recommendedNextAction={execution.reason_category ? execution.recommended_next_action : null}
+            />
             {(execution.requested_by || execution.policy_snapshot || execution.before_state || execution.after_state || execution.remediation) && (
               <div className="mt-2 space-y-2 border-t border-white/[0.06] pt-2">
                 {execution.requested_by && (

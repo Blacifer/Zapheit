@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, TimerReset } from 'lucide-react';
 import { PageHero } from '../../components/dashboard/PageHero';
+import { ReasonCallout } from '../../components/dashboard/ReasonCallout';
 import { api } from '../../lib/api-client';
 import type { ApprovalRequest } from '../../lib/api/approvals';
 import { toast } from '../../lib/toast';
@@ -591,15 +592,14 @@ export default function GovernedActionsPage({
                         ))}
                       </div>
                     ) : null}
-                    {item.reason_category && item.reason_message ? (
-                      <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
-                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Cannot proceed because</p>
-                        <p className="mt-1 text-sm text-slate-100">{item.reason_message}</p>
-                        {item.recommended_next_action ? (
-                          <p className="mt-2 text-sm text-cyan-100">Next step: {item.recommended_next_action}</p>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <ReasonCallout
+                      className="mt-3 rounded-xl py-3"
+                      labelClassName="tracking-[0.16em]"
+                      messageClassName="text-sm text-slate-100"
+                      nextActionClassName="mt-2 text-sm text-cyan-100"
+                      reasonMessage={item.reason_category ? item.reason_message : null}
+                      recommendedNextAction={item.reason_category ? item.recommended_next_action : null}
+                    />
                     {(constraints || evaluation?.thresholdTriggered || evaluation?.maxRowsExceeded || evaluation?.domainRestricted) ? (
                       <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Constraint context</p>

@@ -10,6 +10,7 @@ import { api } from '../../lib/api-client';
 import type { ApprovalRequest } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { cn } from '../../lib/utils';
+import { ReasonCallout } from '../../components/dashboard/ReasonCallout';
 
 type Tab = 'queue' | 'history';
 
@@ -233,15 +234,10 @@ function PendingCard({
       {/* Payload */}
       <PayloadPreview payload={request.action_payload} />
 
-      {request.reason_message && (
-        <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Cannot proceed because</p>
-          <p className="mt-1 text-xs text-slate-200">{request.reason_message}</p>
-          {request.recommended_next_action && (
-            <p className="mt-1 text-xs text-cyan-200">Next step: {request.recommended_next_action}</p>
-          )}
-        </div>
-      )}
+      <ReasonCallout
+        reasonMessage={request.reason_message}
+        recommendedNextAction={request.recommended_next_action}
+      />
 
       {/* Sub-tasks */}
       {subTasks.length > 0 && (
@@ -386,15 +382,10 @@ function HistoryCard({ request, highlighted = false }: { request: ApprovalReques
           "{request.reviewer_note}"
         </p>
       )}
-      {request.reason_message && (
-        <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Decision context</p>
-          <p className="mt-1 text-xs text-slate-200">{request.reason_message}</p>
-          {request.recommended_next_action && (
-            <p className="mt-1 text-xs text-cyan-200">Recommended next action: {request.recommended_next_action}</p>
-          )}
-        </div>
-      )}
+      <ReasonCallout
+        reasonMessage={request.reason_message}
+        recommendedNextAction={request.recommended_next_action}
+      />
       <PayloadPreview payload={request.action_payload} />
     </div>
   );
