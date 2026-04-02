@@ -98,5 +98,8 @@ export interface ConnectorExecution {
     requested_by?: string | null;
     duration_ms?: number | null;
   } | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
   created_at: string;
 }

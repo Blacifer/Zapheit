@@ -19,6 +19,9 @@ type GovernedAction = {
   next_retry_at?: string | null;
   breaker_open?: boolean | null;
   recovered_at?: string | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
   requested_by?: string | null;
   policy_snapshot?: {
     constraints?: {
@@ -586,6 +589,15 @@ export default function GovernedActionsPage({
                             <p className="mt-1 text-sm text-slate-100">{reason.detail}</p>
                           </div>
                         ))}
+                      </div>
+                    ) : null}
+                    {item.reason_category && item.reason_message ? (
+                      <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Cannot proceed because</p>
+                        <p className="mt-1 text-sm text-slate-100">{item.reason_message}</p>
+                        {item.recommended_next_action ? (
+                          <p className="mt-2 text-sm text-cyan-100">Next step: {item.recommended_next_action}</p>
+                        ) : null}
                       </div>
                     ) : null}
                     {(constraints || evaluation?.thresholdTriggered || evaluation?.maxRowsExceeded || evaluation?.domainRestricted) ? (

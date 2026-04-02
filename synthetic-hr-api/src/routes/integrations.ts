@@ -132,6 +132,9 @@ type StoredConnectorExecutionRow = {
   next_retry_at?: string | null;
   breaker_open?: boolean | null;
   recovered_at?: string | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
 };
 
 type StoredRetryQueueRow = {
@@ -1247,6 +1250,50 @@ const listGovernedActions = async (req: any, res: any) => {
           ? 'paused_by_circuit_breaker'
           : 'ok';
 
+    const governed = normalizeGovernedActionSummary(row);
+    const reason = (() => {
+      if (reliabilityState === 'queued_for_retry') {
+        return {
+          reason_category: 'reliability_degraded' as const,
+          reason_message: 'Action is queued for retry because the connector rail is unstable.',
+          recommended_next_action: 'Wait for the scheduled retry or inspect connector health before retrying manually.',
+        };
+      }
+      if (reliabilityState === 'paused_by_circuit_breaker') {
+        return {
+          reason_category: 'reliability_degraded' as const,
+          reason_message: 'Execution is paused because the connector circuit breaker is open.',
+          recommended_next_action: 'Resolve connector/provider errors, then allow the breaker to recover.',
+        };
+      }
+      if (governed.decision === 'blocked') {
+        return {
+          reason_category: 'policy_blocked' as const,
+          reason_message: governed.block_reasons?.[0] || row.error_message || 'Action was blocked by governance policy.',
+          recommended_next_action: 'Review policy constraints, payload, or connector capabilities before retrying.',
+        };
+      }
+      if (governed.decision === 'pending_approval' || row.approval_required) {
+        return {
+          reason_category: 'approval_required' as const,
+          reason_message: governed.approval_reasons?.[0] || 'Human approval is required before this action can execute.',
+          recommended_next_action: 'Approve, deny, or escalate the request in the approvals queue.',
+        };
+      }
+      if (!row.success) {
+        return {
+          reason_category: 'execution_failed' as const,
+          reason_message: row.error_message || 'Execution failed after passing governance checks.',
+          recommended_next_action: 'Inspect connector logs and provider state, then retry safely.',
+        };
+      }
+      return {
+        reason_category: null,
+        reason_message: null,
+        recommended_next_action: null,
+      };
+    })();
+
     return {
       ...row,
       reliability_state: reliabilityState,
@@ -1254,7 +1301,8 @@ const listGovernedActions = async (req: any, res: any) => {
       next_retry_at: retry?.next_attempt_at ?? null,
       breaker_open: breakerOpen,
       recovered_at: recoveredAt,
-      governance: normalizeGovernedActionSummary(row),
+      ...reason,
+      governance: governed,
     };
   });
   if (decision) data = data.filter((row) => row.governance?.decision === decision);

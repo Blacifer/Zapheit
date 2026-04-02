@@ -146,6 +146,46 @@ const reviewSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
+function approvalReasonModel(row: any): {
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
+} {
+  if (row.status === 'pending') {
+    return {
+      reason_category: 'approval_required',
+      reason_message: 'Human approval is required before execution can continue.',
+      recommended_next_action: 'Review payload, then approve, deny, or escalate this request.',
+    };
+  }
+  if (row.status === 'denied') {
+    return {
+      reason_category: 'policy_blocked',
+      reason_message: row.reviewer_note || 'Request was denied by the assigned reviewer.',
+      recommended_next_action: 'Adjust policy or payload and create a new governed request if needed.',
+    };
+  }
+  if (row.status === 'expired') {
+    return {
+      reason_category: 'execution_failed',
+      reason_message: 'Approval window expired before a decision was recorded.',
+      recommended_next_action: 'Create a new approval request and route it to the correct reviewer.',
+    };
+  }
+  if (row.status === 'cancelled') {
+    return {
+      reason_category: 'execution_failed',
+      reason_message: 'Approval request was cancelled before completion.',
+      recommended_next_action: 'Recreate the request only if the action is still required.',
+    };
+  }
+  return {
+    reason_category: null,
+    reason_message: null,
+    recommended_next_action: null,
+  };
+}
+
 // GET / — list approval requests
 router.get('/', requirePermission('policies.manage'), async (req: Request, res: Response) => {
   try {
@@ -165,7 +205,11 @@ router.get('/', requirePermission('policies.manage'), async (req: Request, res: 
     if (parsed.data?.action) q.set('action', eq(parsed.data.action));
 
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
-    return res.json({ success: true, data: rows || [], count: rows?.length || 0 });
+    const enriched = (rows || []).map((row: any) => ({
+      ...row,
+      ...approvalReasonModel(row),
+    }));
+    return res.json({ success: true, data: enriched, count: enriched.length });
   } catch (err: any) {
     return errorResponse(res, err);
   }

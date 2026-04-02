@@ -20,6 +20,9 @@ export type ApprovalRequest = {
   reviewer_note?: string | null;
   expires_at: string;
   reviewed_at?: string | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
   created_at: string;
   updated_at: string;
 };

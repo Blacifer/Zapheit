@@ -138,6 +138,7 @@ describe('Integrations Routes - Governed Actions reliability states', () => {
         id: 'exec-ok',
         connector_id: 'salesforce',
         action: 'crm.note.create',
+        success: true,
         created_at: '2026-04-02T10:04:00.000Z',
       },
     ];
@@ -186,13 +187,25 @@ describe('Integrations Routes - Governed Actions reliability states', () => {
     expect(byId.get('exec-queued')?.reliability_state).toBe('queued_for_retry');
     expect(byId.get('exec-queued')?.retry_count).toBe(2);
     expect(byId.get('exec-queued')?.next_retry_at).toBe('2026-04-02T10:06:00.000Z');
+    expect(byId.get('exec-queued')?.reason_category).toBe('reliability_degraded');
+    expect(byId.get('exec-queued')?.reason_message).toContain('queued for retry');
+    expect(byId.get('exec-queued')?.recommended_next_action).toContain('scheduled retry');
 
     expect(byId.get('exec-paused')?.reliability_state).toBe('paused_by_circuit_breaker');
     expect(byId.get('exec-paused')?.breaker_open).toBe(true);
+    expect(byId.get('exec-paused')?.reason_category).toBe('reliability_degraded');
+    expect(byId.get('exec-paused')?.reason_message).toContain('circuit breaker is open');
+    expect(byId.get('exec-paused')?.recommended_next_action).toContain('breaker');
 
     expect(byId.get('exec-recovered')?.reliability_state).toBe('recovered');
     expect(byId.get('exec-recovered')?.recovered_at).toBe('2026-04-02T10:03:00.000Z');
+    expect(byId.get('exec-recovered')?.reason_category).toBeNull();
+    expect(byId.get('exec-recovered')?.reason_message).toBeNull();
+    expect(byId.get('exec-recovered')?.recommended_next_action).toBeNull();
 
     expect(byId.get('exec-ok')?.reliability_state).toBe('ok');
+    expect(byId.get('exec-ok')?.reason_category).toBeNull();
+    expect(byId.get('exec-ok')?.reason_message).toBeNull();
+    expect(byId.get('exec-ok')?.recommended_next_action).toBeNull();
   });
 });
