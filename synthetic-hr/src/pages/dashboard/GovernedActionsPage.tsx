@@ -61,7 +61,7 @@ function buildApprovalRoute(approvalId: string, service?: string | null) {
   return `approvals?${params.toString()}`;
 }
 
-function buildJobRoute(jobId: string, decision?: GovernedAction['governance'] extends { decision?: infer D } ? D : never) {
+function buildJobRoute(jobId: string, decision?: 'executed' | 'pending_approval' | 'blocked') {
   const params = new URLSearchParams({ jobId });
   if (decision === 'pending_approval') params.set('tab', 'pending');
   return `jobs?${params.toString()}`;
@@ -220,6 +220,8 @@ export default function GovernedActionsPage({
           ) : actions.map((item) => {
             const governance = item.governance;
             const result = governance?.result || (item.success ? 'succeeded' : 'failed');
+            const approvalId = item.approval_id;
+            const jobId = governance?.job_id ?? null;
             const reasons = governance?.block_reasons?.length
               ? governance.block_reasons
               : governance?.approval_reasons?.length
@@ -301,16 +303,16 @@ export default function GovernedActionsPage({
                     >
                       Open app history
                     </button>
-                    {item.approval_required && item.approval_id ? (
+                    {item.approval_required && approvalId ? (
                       <button
-                        onClick={() => onNavigate(buildApprovalRoute(item.approval_id, item.connector_id))}
+                        onClick={() => onNavigate(buildApprovalRoute(approvalId, item.connector_id))}
                         className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
                       >
                         Open matching approval
                       </button>
-                    ) : governance?.job_id ? (
+                    ) : jobId ? (
                       <button
-                        onClick={() => onNavigate(buildJobRoute(governance.job_id, governance.decision))}
+                        onClick={() => onNavigate(buildJobRoute(jobId, governance?.decision))}
                         className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
                       >
                         Open linked run
