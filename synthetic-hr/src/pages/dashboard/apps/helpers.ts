@@ -279,11 +279,24 @@ export function trustTierTone(tier?: TrustTier) {
   return 'border-white/10 bg-white/5 text-slate-300';
 }
 
+export function getTrustTierLabel(tier?: TrustTier) {
+  if (tier === 'high-trust-operational') return 'Needs approval';
+  if (tier === 'controlled-write') return 'Can write';
+  return 'Read only';
+}
+
 export function maturityTone(maturity?: Maturity) {
   if (maturity === 'governed') return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200';
   if (maturity === 'action-ready') return 'border-blue-400/25 bg-blue-500/10 text-blue-200';
   if (maturity === 'read-ready') return 'border-violet-400/25 bg-violet-500/10 text-violet-200';
   return 'border-white/10 bg-white/5 text-slate-300';
+}
+
+export function getMaturityLabel(maturity?: Maturity) {
+  if (maturity === 'governed') return 'Ready for agents';
+  if (maturity === 'action-ready') return 'Actions available';
+  if (maturity === 'read-ready') return 'Read access ready';
+  return 'Connected';
 }
 
 export function guardrailTone(status?: GuardrailStatus) {

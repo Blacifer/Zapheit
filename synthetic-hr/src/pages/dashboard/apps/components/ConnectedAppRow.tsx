@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { AlertCircle, Bot, Loader2, MoreHorizontal, Zap } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, maturityTone, guardrailTone, useOutsideClick } from '../helpers';
+import { trustTierTone, maturityTone, guardrailTone, getTrustTierLabel, getMaturityLabel, useOutsideClick } from '../helpers';
 import { AppLogo } from './AppLogo';
 
 interface ConnectedAppRowProps {
@@ -32,7 +32,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
           <p className="text-sm font-semibold text-white leading-tight">{app.name}</p>
           {app.trustTier && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(app.trustTier))}>
-              {app.trustTier}
+              {getTrustTierLabel(app.trustTier)}
             </span>
           )}
           {app.wave === 1 && app.wave1GuardrailsStatus && (
@@ -44,7 +44,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
           )}
           {app.maturity && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(app.maturity))}>
-              {app.maturity}
+              {getMaturityLabel(app.maturity)}
             </span>
           )}
           {healthResult === 'ok' && (
@@ -80,7 +80,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
         <div className="hidden sm:flex items-center gap-1 shrink-0">
           <Zap className="w-3 h-3 text-amber-400" />
           <span className="text-xs text-slate-500">
-            {app.governanceSummary.enabledActionCount}/{app.governanceSummary.actionCount} governed
+            {app.governanceSummary.enabledActionCount}/{app.governanceSummary.actionCount} actions enabled
           </span>
         </div>
       )}

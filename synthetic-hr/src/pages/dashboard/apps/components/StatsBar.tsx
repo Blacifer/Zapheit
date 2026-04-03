@@ -23,11 +23,11 @@ export function StatsBar({ totalConnected, errorCount, totalActions, governedCou
       </div>
       <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-center">
         <p className="text-xl font-bold text-white">{totalActions}</p>
-        <p className="mt-1 text-xs text-slate-400">Governed actions</p>
+        <p className="mt-1 text-xs text-slate-400">Tracked actions</p>
       </div>
       <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-center">
         <p className="text-xl font-bold text-white">{governedCount}</p>
-        <p className="mt-1 text-xs text-slate-400">Governed connectors</p>
+        <p className="mt-1 text-xs text-slate-400">Apps with approvals</p>
       </div>
     </div>
   );

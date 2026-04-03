@@ -233,7 +233,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             ]}
             stats={[
               { label: 'Connected', value: `${connectedList.length}`, detail: 'Apps ready for agents or operators' },
-              { label: 'Governed apps', value: `${governedCount}`, detail: 'Connected apps with governed capabilities' },
+              { label: 'Approval-aware apps', value: `${governedCount}`, detail: 'Connected apps with approval or policy controls' },
               { label: 'Health issues', value: `${errorCount}`, detail: 'Connections needing attention' },
             ]}
           />
