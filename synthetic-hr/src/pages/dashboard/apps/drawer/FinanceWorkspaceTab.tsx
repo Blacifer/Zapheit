@@ -50,22 +50,28 @@ export function FinanceWorkspaceTab({ app, agentNames }: FinanceWorkspaceTabProp
   const [busy, setBusy] = useState(false);
   const [invoices, setInvoices] = useState<HubInvoice[]>([]);
   const [expenses, setExpenses] = useState<HubExpense[]>([]);
+  const [workspacePreview, setWorkspacePreview] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [invoiceRes, expenseRes] = await Promise.all([
+      const [invoiceRes, expenseRes, previewRes] = await Promise.all([
         api.hubs.finance.listInvoices({ limit: 40 }),
         api.hubs.finance.listExpenses({ limit: 40 }),
+        app.connected && app.primaryServiceId && ['stripe', 'razorpay', 'paytm'].includes(String(app.primaryServiceId).toLowerCase())
+          ? api.integrations.getWorkspacePreview(app.primaryServiceId)
+          : Promise.resolve(null),
       ]);
       if (invoiceRes.success && invoiceRes.data) setInvoices(invoiceRes.data);
       if (expenseRes.success && expenseRes.data) setExpenses(expenseRes.data);
       if (!invoiceRes.success) toast.error(invoiceRes.error || 'Failed to load invoices');
       if (!expenseRes.success) toast.error(expenseRes.error || 'Failed to load expenses');
+      if (previewRes?.success && previewRes.data) setWorkspacePreview(previewRes.data);
+      else setWorkspacePreview(null);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [app.connected, app.primaryServiceId]);
 
   useEffect(() => {
     void load();
@@ -165,6 +171,9 @@ export function FinanceWorkspaceTab({ app, agentNames }: FinanceWorkspaceTabProp
             <p className="mt-2 text-2xl font-semibold text-white">{agentNames.length}</p>
           </div>
         </div>
+        {workspacePreview?.suggested_next_action ? (
+          <p className="mt-3 text-xs text-cyan-300">Next: {workspacePreview.suggested_next_action}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -224,6 +233,63 @@ export function FinanceWorkspaceTab({ app, agentNames }: FinanceWorkspaceTabProp
         </div>
 
         <div className="space-y-4">
+          {workspacePreview ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
+              <div className="border-b border-white/8 px-4 py-3">
+                <h4 className="text-sm font-semibold text-white">Connected finance feed</h4>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {workspacePreview.profile ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Connection profile</p>
+                    <p className="mt-2 text-sm font-medium text-white">{workspacePreview.profile.name || workspacePreview.profile.email || 'Connected account'}</p>
+                    {workspacePreview.profile.email ? <p className="text-xs text-slate-400">{workspacePreview.profile.email}</p> : null}
+                  </div>
+                ) : null}
+
+                {workspacePreview.metrics ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(workspacePreview.metrics).slice(0, 4).map(([key, value]) => (
+                      <div key={key} className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{key.replace(/_/g, ' ')}</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{String(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.records) && workspacePreview.records.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider transactions</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.records.slice(0, 5).map((record: any) => (
+                        <div key={record.id} className="px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-white">{record.label}</p>
+                              <p className="mt-1 text-xs text-slate-400">{formatAmount(record.amount, record.currency)}</p>
+                            </div>
+                            <span className={cx('rounded-full border px-2 py-0.5 text-[10px] uppercase', statusBadge(record.status || 'pending'))}>
+                              {record.status || 'pending'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.notes) && workspacePreview.notes.length > 0 ? (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {workspacePreview.notes.join(' ')}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
             <div className="border-b border-white/8 px-4 py-3">
               <h4 className="text-sm font-semibold text-white">Expense review</h4>

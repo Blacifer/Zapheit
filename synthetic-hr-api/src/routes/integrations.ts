@@ -1921,6 +1921,149 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
       ? 'Review open Intercom conversations and decide which replies should require human approval.'
       : 'Reconnect Intercom with conversation-read access if you want live support inbox data inside Rasi.';
+  } else if (aliases.includes('stripe')) {
+    const secretKey = String(credentials.secretKey || credentials.secret_key || '');
+    if (!secretKey) {
+      return res.status(400).json({ success: false, error: 'Stripe credentials are incomplete for workspace preview' });
+    }
+
+    const auth = Buffer.from(`${secretKey}:`).toString('base64');
+    const headers = {
+      Authorization: `Basic ${auth}`,
+      Accept: 'application/json',
+    };
+    const [accountRes, payoutsRes, chargesRes] = await Promise.allSettled([
+      fetch('https://api.stripe.com/v1/account', { headers }),
+      fetch('https://api.stripe.com/v1/payouts?limit=5', { headers }),
+      fetch('https://api.stripe.com/v1/charges?limit=5', { headers }),
+    ]);
+
+    if (accountRes.status === 'fulfilled') {
+      const body: any = await accountRes.value.json().catch(() => null);
+      if (accountRes.value.ok && body) {
+        preview.profile = {
+          name: body.business_profile?.name || body.settings?.dashboard?.display_name || body.email || 'Stripe account',
+          email: body.email || null,
+          country: body.country || null,
+        };
+      }
+    }
+
+    if (chargesRes.status === 'fulfilled') {
+      const body: any = await chargesRes.value.json().catch(() => null);
+      if (chargesRes.value.ok && Array.isArray(body?.data)) {
+        preview.records = body.data.map((charge: any) => ({
+          id: charge.id,
+          label: charge.description || charge.billing_details?.name || 'Charge',
+          amount: charge.amount || 0,
+          currency: charge.currency || 'usd',
+          status: charge.status || 'unknown',
+          updated_at: charge.created ? new Date(Number(charge.created) * 1000).toISOString() : null,
+        }));
+      } else if (!chargesRes.value.ok) {
+        preview.notes.push('Recent Stripe charges could not be loaded with the current credentials.');
+      }
+    }
+
+    if (payoutsRes.status === 'fulfilled') {
+      const body: any = await payoutsRes.value.json().catch(() => null);
+      if (payoutsRes.value.ok && Array.isArray(body?.data)) {
+        preview.metrics = {
+          payouts_loaded: body.data.length,
+          pending_payouts: body.data.filter((payout: any) => payout.status === 'pending').length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review recent charges and payout state before allowing agents to approve refunds or payment operations.'
+      : 'Reconnect Stripe with a live secret key if you want payment activity inside Rasi.';
+  } else if (aliases.includes('razorpay')) {
+    const keyId = String(credentials.key_id || credentials.keyId || '');
+    const keySecret = String(credentials.key_secret || credentials.keySecret || '');
+    if (!keyId || !keySecret) {
+      return res.status(400).json({ success: false, error: 'Razorpay credentials are incomplete for workspace preview' });
+    }
+
+    const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
+    const [paymentsRes, settlementsRes] = await Promise.allSettled([
+      fetch('https://api.razorpay.com/v1/payments?count=8', { headers }),
+      fetch('https://api.razorpay.com/v1/settlements?count=5', { headers }),
+    ]);
+
+    if (paymentsRes.status === 'fulfilled') {
+      const body: any = await paymentsRes.value.json().catch(() => null);
+      if (paymentsRes.value.ok && Array.isArray(body?.items)) {
+        preview.records = body.items.map((payment: any) => ({
+          id: payment.id,
+          label: payment.description || payment.email || 'Payment',
+          amount: payment.amount || 0,
+          currency: payment.currency || 'INR',
+          status: payment.status || 'unknown',
+          updated_at: payment.created_at ? new Date(Number(payment.created_at) * 1000).toISOString() : null,
+        }));
+        preview.metrics = {
+          captured_count: body.items.filter((payment: any) => payment.status === 'captured').length,
+          total_loaded: body.items.length,
+        };
+      } else if (!paymentsRes.value.ok) {
+        preview.notes.push('Recent Razorpay payments could not be loaded with the current credentials.');
+      }
+    }
+
+    if (settlementsRes.status === 'fulfilled') {
+      const body: any = await settlementsRes.value.json().catch(() => null);
+      if (settlementsRes.value.ok && Array.isArray(body?.items)) {
+        preview.settlements = body.items.map((settlement: any) => ({
+          id: settlement.id,
+          amount: settlement.amount || 0,
+          status: settlement.status || 'processed',
+          updated_at: settlement.created_at ? new Date(Number(settlement.created_at) * 1000).toISOString() : null,
+        }));
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review captured payments and settlements before letting agents trigger refunds or payout operations.'
+      : 'Reconnect Razorpay with valid API keys if you want payment activity inside Rasi.';
+  } else if (aliases.includes('paytm')) {
+    const merchantId = String(credentials.merchant_id || '');
+    const merchantKey = String(credentials.merchant_key || '');
+    const channelId = String(credentials.channel_id || '');
+    if (!merchantId || !merchantKey || !channelId) {
+      return res.status(400).json({ success: false, error: 'Paytm credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      'X-Merchant-Id': merchantId,
+      'X-Merchant-Key': merchantKey,
+      'X-Channel-Id': channelId,
+      Accept: 'application/json',
+    };
+    const transactionsRes = await fetch('https://api.paytm.com/v1/transactions?limit=8', { headers });
+    const body: any = await transactionsRes.json().catch(() => null);
+    if (transactionsRes.ok) {
+      const transactions = Array.isArray(body?.transactions) ? body.transactions : Array.isArray(body) ? body : [];
+      preview.records = transactions.map((transaction: any) => ({
+        id: transaction.id || transaction.txn_id || transaction.order_id,
+        label: transaction.order_id || transaction.id || 'Transaction',
+        amount: transaction.amount || 0,
+        currency: transaction.currency || 'INR',
+        status: transaction.status || transaction.txn_status || 'unknown',
+        updated_at: transaction.updated_at || transaction.txn_date || null,
+      }));
+      preview.metrics = {
+        success_count: transactions.filter((transaction: any) => ['success', 'successful', 'txn_success'].includes(String(transaction.status || transaction.txn_status || '').toLowerCase())).length,
+        total_loaded: transactions.length,
+      };
+    } else {
+      preview.notes.push('Recent Paytm transactions could not be loaded with the current credentials.');
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review recent Paytm transactions before allowing agents to trigger finance follow-ups or exception actions.'
+      : 'Reconnect Paytm with transaction-read access if you want finance activity inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }
