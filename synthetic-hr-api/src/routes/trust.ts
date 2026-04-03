@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
-import { eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
+import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { parseOpenApiToCapabilities } from '../lib/openapi-ingest';
 import { appendAuditChainEvent, verifyAuditChain } from '../lib/trust-audit-chain';
 import { runPreflightGate } from '../lib/preflight-gate';
@@ -38,7 +38,8 @@ router.post('/openapi/ingest', requirePermission('connectors.manage'), async (re
     if (!spec) return res.status(400).json({ success: false, error: 'Either source_url or spec_json is required' });
 
     const ingest = parseOpenApiToCapabilities(spec, service_id);
-    await supabaseRestAsService('integration_openapi_specs', '', {
+    const rest = restAsUser(req);
+    await rest('integration_openapi_specs', '', {
       method: 'POST',
       body: {
         organization_id: orgId,
@@ -53,7 +54,6 @@ router.post('/openapi/ingest', requirePermission('connectors.manage'), async (re
       },
     });
 
-    const rest = restAsUser(req);
     for (const capability of ingest.capabilities) {
       if (capability.operation === 'read') continue;
       await rest('action_policies', '', {
@@ -101,11 +101,12 @@ router.post('/openapi/ingest', requirePermission('connectors.manage'), async (re
 router.get('/openapi/specs', requirePermission('connectors.read'), async (req, res) => {
   const orgId = req.user?.organization_id;
   if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  const rest = restAsUser(req);
   const q = new URLSearchParams();
   q.set('organization_id', eq(orgId));
   q.set('order', 'created_at.desc');
   q.set('select', 'id,service_id,title,version,source_url,spec_hash,created_by,created_at,updated_at');
-  const rows = await supabaseRestAsService('integration_openapi_specs', q);
+  const rows = await rest('integration_openapi_specs', q);
   return res.json({ success: true, data: rows || [] });
 });
 
@@ -121,13 +122,14 @@ router.get('/evidence/export/:executionId', requirePermission('compliance.export
   const orgId = req.user?.organization_id;
   if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
   const executionId = req.params.executionId;
+  const rest = restAsUser(req);
 
   const executionQ = new URLSearchParams();
   executionQ.set('id', eq(executionId));
   executionQ.set('organization_id', eq(orgId));
   executionQ.set('select', 'id,connector_id,action,params,result,success,error_message,approval_id,requested_by,policy_snapshot,before_state,after_state,remediation,created_at');
   executionQ.set('limit', '1');
-  const rows = await supabaseRestAsService('connector_action_executions', executionQ);
+  const rows = await rest('connector_action_executions', executionQ);
   const execution = Array.isArray(rows) ? rows[0] : null;
   if (!execution) return res.status(404).json({ success: false, error: 'Governed action not found' });
 
@@ -145,6 +147,7 @@ router.post('/red-team/run', requirePermission('connectors.manage'), async (req,
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const rest = restAsUser(req);
     const scenarios = [
       { connector: 'slack', action: 'send_message', params: { channel: '#general', text: 'Aadhaar 1234 5678 9123' } },
       { connector: 'razorpay', action: 'refund_payment', params: { amount: 5000000, currency: 'INR' } },
@@ -162,7 +165,7 @@ router.post('/red-team/run', requirePermission('connectors.manage'), async (req,
       });
     }
     const blocked = findings.filter((f) => f.decision !== 'allow').length;
-    const runRows = await supabaseRestAsService('redteam_runs', '', {
+    const runRows = await rest('redteam_runs', '', {
       method: 'POST',
       body: {
         organization_id: orgId,
@@ -195,12 +198,13 @@ router.post('/red-team/run', requirePermission('connectors.manage'), async (req,
 router.get('/red-team/runs', requirePermission('connectors.read'), async (req, res) => {
   const orgId = req.user?.organization_id;
   if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  const rest = restAsUser(req);
   const q = new URLSearchParams();
   q.set('organization_id', eq(orgId));
   q.set('select', 'id,status,scenario_count,blocked_count,triggered_by,started_at,finished_at,created_at');
   q.set('order', 'created_at.desc');
   q.set('limit', '50');
-  const rows = await supabaseRestAsService('redteam_runs', q);
+  const rows = await rest('redteam_runs', q);
   return res.json({ success: true, data: rows || [] });
 });
 
