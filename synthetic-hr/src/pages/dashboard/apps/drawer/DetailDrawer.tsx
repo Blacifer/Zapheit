@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { getAppServiceId, getSetupModeLabel, isCollaborationWorkspaceApp, isHrWorkspaceApp, isRecruitmentWorkspaceApp, isSlackRail } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, isCollaborationWorkspaceApp, isComplianceWorkspaceApp, isFinanceWorkspaceApp, isHrWorkspaceApp, isRecruitmentWorkspaceApp, isSlackRail, isSupportWorkspaceApp } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -17,6 +17,9 @@ import { ApprovalsTab } from './ApprovalsTab';
 import { HrWorkspaceTab } from './HrWorkspaceTab';
 import { RecruitmentWorkspaceTab } from './RecruitmentWorkspaceTab';
 import { CollaborationWorkspaceTab } from './CollaborationWorkspaceTab';
+import { SupportWorkspaceTab } from './SupportWorkspaceTab';
+import { FinanceWorkspaceTab } from './FinanceWorkspaceTab';
+import { ComplianceWorkspaceTab } from './ComplianceWorkspaceTab';
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -33,7 +36,10 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   const isCollaborationWorkspace = isCollaborationWorkspaceApp(rawConnectorId);
   const isHrWorkspace = isHrWorkspaceApp(rawConnectorId);
   const isRecruitmentWorkspace = isRecruitmentWorkspaceApp(rawConnectorId);
-  const hasWorkspaceTab = app.connected && (isCollaborationWorkspace || isHrWorkspace || isRecruitmentWorkspace);
+  const isSupportWorkspace = isSupportWorkspaceApp(rawConnectorId);
+  const isFinanceWorkspace = isFinanceWorkspaceApp(rawConnectorId);
+  const isComplianceWorkspace = isComplianceWorkspaceApp(rawConnectorId);
+  const hasWorkspaceTab = app.connected && (isCollaborationWorkspace || isHrWorkspace || isRecruitmentWorkspace || isSupportWorkspace || isFinanceWorkspace || isComplianceWorkspace);
 
   const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
@@ -162,7 +168,20 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
   const TABS: Array<{ id: DrawerTab; label: string }> = [
     { id: 'overview', label: 'Overview' },
-    ...(hasWorkspaceTab ? [{ id: 'workspace' as DrawerTab, label: isRecruitmentWorkspace ? 'Hiring Workspace' : isCollaborationWorkspace ? 'Collaboration Workspace' : 'HR Workspace' }] : []),
+    ...(hasWorkspaceTab ? [{
+      id: 'workspace' as DrawerTab,
+      label: isRecruitmentWorkspace
+        ? 'Hiring Workspace'
+        : isCollaborationWorkspace
+          ? 'Collaboration Workspace'
+          : isSupportWorkspace
+            ? 'Support Workspace'
+            : isFinanceWorkspace
+              ? 'Finance Workspace'
+              : isComplianceWorkspace
+                ? 'Compliance Workspace'
+                : 'HR Workspace'
+    }] : []),
     ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Linked Agents (${linkedAgentIds.size})` }] : []),
     ...(app.connected ? [{ id: 'capabilities' as DrawerTab, label: `Capabilities (${app.agentCapabilities?.length || catalog.length || 0})` }] : []),
     ...(app.connected ? [{ id: 'approvals' as DrawerTab, label: 'HITL Approvals' }] : []),
@@ -316,6 +335,24 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
           )}
           {tab === 'workspace' && isHrWorkspace && (
             <HrWorkspaceTab
+              app={app}
+              agentNames={agentNames}
+            />
+          )}
+          {tab === 'workspace' && isSupportWorkspace && (
+            <SupportWorkspaceTab
+              app={app}
+              agentNames={agentNames}
+            />
+          )}
+          {tab === 'workspace' && isFinanceWorkspace && (
+            <FinanceWorkspaceTab
+              app={app}
+              agentNames={agentNames}
+            />
+          )}
+          {tab === 'workspace' && isComplianceWorkspace && (
+            <ComplianceWorkspaceTab
               app={app}
               agentNames={agentNames}
             />

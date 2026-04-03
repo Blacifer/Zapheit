@@ -366,6 +366,52 @@ export function isRecruitmentWorkspaceApp(connectorId?: string | null) {
   ].some((candidate) => value.includes(candidate));
 }
 
+export function isSupportWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'slack',
+    'zendesk',
+    'freshdesk',
+    'intercom',
+    'helpscout',
+    'kayako',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isFinanceWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'stripe',
+    'razorpay',
+    'paytm',
+    'quickbooks',
+    'xero',
+    'tally',
+    'chargebee',
+    'cashfree',
+    'payu',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isComplianceWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'cleartax',
+    'docusign',
+    'leegality',
+    'zoho-sign',
+    'vanta',
+    'drata',
+    'vakilsearch',
+    'idfy',
+    'epfo',
+    'aadhaar-api',
+    'digilocker',
+    'signdesk',
+    'diligent',
+  ].some((candidate) => value.includes(candidate));
+}
+
 export function isSlackRail(connectorId?: string | null) {
   return String(connectorId || '').toLowerCase().includes('slack');
 }
