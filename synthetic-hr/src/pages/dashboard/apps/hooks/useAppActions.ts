@@ -6,10 +6,11 @@ import type { UnifiedApp } from '../types';
 interface UseAppActionsOptions {
   reload: () => Promise<void>;
   markConnected: (connectorId: string) => void;
+  markDisconnected: (connectorId: string) => void;
   onPostConnect?: (app: UnifiedApp) => void;
 }
 
-export function useAppActions({ reload, markConnected, onPostConnect }: UseAppActionsOptions) {
+export function useAppActions({ reload, markConnected, markDisconnected, onPostConnect }: UseAppActionsOptions) {
   const handleConnect = useCallback(async (app: UnifiedApp, creds: Record<string, string>) => {
     try {
       if (app.source === 'marketplace') {
@@ -52,12 +53,13 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
         ? await api.marketplace.uninstall(app.appId)
         : await api.integrations.disconnect(app.appId);
       if (!res.success) throw new Error((res as any).error);
+      markDisconnected(app.appId);
       toast.success(`${app.name} disconnected`);
       void reload();
     } catch (e: any) {
       toast.error(e.message || 'Disconnect failed');
     }
-  }, [reload]);
+  }, [markDisconnected, reload]);
 
   const handleConfigure = useCallback(async (app: UnifiedApp, creds: Record<string, string>) => {
     try {

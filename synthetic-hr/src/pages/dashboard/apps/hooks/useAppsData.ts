@@ -66,9 +66,28 @@ export function useAppsData(agents: AIAgent[] = []) {
     );
   }, []);
 
+  const markDisconnected = useCallback((connectorId: string) => {
+    setRawCatalog((prev) =>
+      prev.map((entry) => {
+        const entryId = entry.app_key || entry.id;
+        if (entryId !== connectorId) return entry;
+        return {
+          ...entry,
+          installed: false,
+          is_connected: false,
+          connectionStatus: 'disconnected',
+          connection_status: 'disconnected',
+          health_status: 'not_connected',
+          lastErrorMsg: null,
+          last_test_result: null,
+        };
+      }),
+    );
+  }, []);
+
   return {
     allApps, browseList, connectedList, myApps, featured,
-    loading, reload: loadData, markConnected,
+    loading, reload: loadData, markConnected, markDisconnected,
     categoryApps, agentNamesFor,
     totalActions, errorCount, governedCount,
   };

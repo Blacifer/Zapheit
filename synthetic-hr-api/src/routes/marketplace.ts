@@ -2531,6 +2531,7 @@ type InstalledAppHealth = {
 
 export async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
   try {
+    const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
     // Fetch all integrations for the org — both marketplace-installed and spec-driven.
     // This lets marketplace apps appear "installed" even when connected via the
     // Integrations/Connections flow, giving users a unified view.
@@ -2549,6 +2550,7 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
     }>;
     const map = new Map<string, InstalledAppHealth>();
     (rows || []).forEach((r) => {
+      if (!activeStatuses.has(String(r.status || '').toLowerCase())) return;
       // Prefer marketplace rows when both exist for the same service_type.
       const isMarketplace = r.metadata?.marketplace_app === 'true';
       const existing = map.get(r.service_type);

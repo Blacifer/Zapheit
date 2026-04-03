@@ -41,7 +41,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   // Data
   const {
     allApps, browseList, connectedList, myApps, featured,
-    loading, reload, markConnected,
+    loading, reload, markConnected, markDisconnected,
     agentNamesFor, totalActions, errorCount, governedCount,
   } = useAppsData(agents);
 
@@ -101,6 +101,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const { handleConnect, handleDisconnect } = useAppActions({
     reload,
     markConnected,
+    markDisconnected,
     onPostConnect: (app) => {
       setConnectTarget(null);
       setDrawerApp(app);
