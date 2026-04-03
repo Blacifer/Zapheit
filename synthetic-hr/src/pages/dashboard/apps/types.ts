@@ -8,7 +8,7 @@ export type TrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operat
 export type Maturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 export type GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
 export type HealthState = 'healthy' | 'degraded' | 'not_connected' | 'unsupported' | 'unknown';
-export type DrawerTab = 'overview' | 'agents' | 'capabilities' | 'approvals' | 'history' | 'slack' | 'permissions';
+export type DrawerTab = 'overview' | 'workspace' | 'agents' | 'capabilities' | 'approvals' | 'history' | 'slack' | 'permissions';
 
 export interface RequiredField {
   name: string;

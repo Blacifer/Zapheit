@@ -337,6 +337,29 @@ export function isNaukriConnector(connectorId?: string | null) {
   return String(connectorId || '').toLowerCase().includes('naukri');
 }
 
+export function isHrWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'google-workspace',
+    'google_workspace',
+    'microsoft-365',
+    'microsoft_365',
+    'zoho-people',
+    'zoho_people',
+    'zoho-learn',
+    'zoho_learn',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isRecruitmentWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'zoho-recruit',
+    'zoho_recruit',
+    'naukri',
+  ].some((candidate) => value.includes(candidate));
+}
+
 export function isSlackRail(connectorId?: string | null) {
   return String(connectorId || '').toLowerCase().includes('slack');
 }

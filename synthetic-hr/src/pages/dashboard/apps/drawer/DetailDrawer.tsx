@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { getAppServiceId, getSetupModeLabel, isSlackRail } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, isHrWorkspaceApp, isRecruitmentWorkspaceApp, isSlackRail } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -14,6 +14,8 @@ import { ActionsTab } from './ActionsTab';
 import { SlackTab } from './SlackTab';
 import { PermissionsTab } from './PermissionsTab';
 import { ApprovalsTab } from './ApprovalsTab';
+import { HrWorkspaceTab } from './HrWorkspaceTab';
+import { RecruitmentWorkspaceTab } from './RecruitmentWorkspaceTab';
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -27,6 +29,9 @@ interface DetailDrawerProps {
 export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, initialTab = 'overview' }: DetailDrawerProps) {
   const rawConnectorId = getAppServiceId(app);
   const isSlack = isSlackRail(rawConnectorId);
+  const isHrWorkspace = isHrWorkspaceApp(rawConnectorId);
+  const isRecruitmentWorkspace = isRecruitmentWorkspaceApp(rawConnectorId);
+  const hasWorkspaceTab = app.connected && (isHrWorkspace || isRecruitmentWorkspace);
 
   const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
@@ -155,6 +160,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
   const TABS: Array<{ id: DrawerTab; label: string }> = [
     { id: 'overview', label: 'Overview' },
+    ...(hasWorkspaceTab ? [{ id: 'workspace' as DrawerTab, label: isRecruitmentWorkspace ? 'Hiring Workspace' : 'HR Workspace' }] : []),
     ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Linked Agents (${linkedAgentIds.size})` }] : []),
     ...(app.connected ? [{ id: 'capabilities' as DrawerTab, label: `Capabilities (${app.agentCapabilities?.length || catalog.length || 0})` }] : []),
     ...(app.connected ? [{ id: 'approvals' as DrawerTab, label: 'HITL Approvals' }] : []),
@@ -169,7 +175,10 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
       <button className="flex-1 bg-black/40 backdrop-blur-[2px]" onClick={onClose} aria-label="Close" />
 
       {/* Panel */}
-      <div className="w-[480px] max-w-[95vw] h-full bg-[#0e1117] border-l border-white/10 flex flex-col">
+      <div className={cn(
+        'h-full max-w-[95vw] bg-[#0e1117] border-l border-white/10 flex flex-col',
+        hasWorkspaceTab ? 'w-[920px]' : 'w-[480px]'
+      )}>
 
         {/* Header */}
         <div className="flex items-start gap-4 p-5 border-b border-white/8 shrink-0">
@@ -294,6 +303,18 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               agents={agents}
               rawConnectorId={rawConnectorId}
               initialLinkedIds={linkedAgentIds}
+            />
+          )}
+          {tab === 'workspace' && isHrWorkspace && (
+            <HrWorkspaceTab
+              app={app}
+              agentNames={agentNames}
+            />
+          )}
+          {tab === 'workspace' && isRecruitmentWorkspace && (
+            <RecruitmentWorkspaceTab
+              app={app}
+              agentNames={agentNames}
             />
           )}
           {tab === 'history' && (
