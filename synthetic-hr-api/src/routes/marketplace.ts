@@ -2532,13 +2532,6 @@ type InstalledAppHealth = {
 export async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
   try {
     const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
-    const toAliases = (serviceType: string) => {
-      const normalized = String(serviceType || '').trim();
-      const aliases = new Set<string>([normalized]);
-      if (normalized.includes('_')) aliases.add(normalized.replace(/_/g, '-'));
-      if (normalized.includes('-')) aliases.add(normalized.replace(/-/g, '_'));
-      return Array.from(aliases);
-    };
     // Fetch all integrations for the org — both marketplace-installed and spec-driven.
     // This lets marketplace apps appear "installed" even when connected via the
     // Integrations/Connections flow, giving users a unified view.
@@ -2568,7 +2561,7 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
         last_error_msg: r.last_error_msg,
         connectionSource: isMarketplace ? 'marketplace' : 'connections',
       };
-      for (const alias of toAliases(r.service_type)) {
+      for (const alias of toServiceAliases(r.service_type)) {
         const existing = map.get(alias);
         if (existing && existing.connectionSource === 'marketplace' && !isMarketplace) continue;
         map.set(alias, nextValue);
@@ -2578,6 +2571,40 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
   } catch {
     return new Map();
   }
+}
+
+function toServiceAliases(serviceType: string) {
+  const normalized = String(serviceType || '').trim();
+  const aliases = new Set<string>([normalized]);
+  if (normalized.includes('_')) aliases.add(normalized.replace(/_/g, '-'));
+  if (normalized.includes('-')) aliases.add(normalized.replace(/-/g, '_'));
+  return Array.from(aliases);
+}
+
+async function findInstalledIntegrationByAliases(orgId: string, serviceType: string) {
+  const aliases = new Set(toServiceAliases(serviceType));
+  const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
+    organization_id: eq(orgId),
+    status: 'neq.waitlisted',
+    select: 'id,service_type,status,metadata',
+  }))) as Array<{
+    id: string;
+    service_type: string;
+    status: string;
+    metadata?: Record<string, unknown> | null;
+  }>;
+
+  const matches = (rows || []).filter((row) => aliases.has(String(row.service_type || '')));
+  if (!matches.length) return null;
+
+  return matches.sort((a, b) => {
+    const aMarketplace = a.metadata?.marketplace_app === 'true' ? 1 : 0;
+    const bMarketplace = b.metadata?.marketplace_app === 'true' ? 1 : 0;
+    if (aMarketplace !== bMarketplace) return bMarketplace - aMarketplace;
+    const aExact = a.service_type === serviceType ? 1 : 0;
+    const bExact = b.service_type === serviceType ? 1 : 0;
+    return bExact - aExact;
+  })[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -2810,19 +2837,12 @@ router.delete('/apps/:id', async (req: Request, res: Response) => {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    // Find and remove the integration record (any row for this org + service_type)
-    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
-      organization_id: eq(orgId),
-      service_type: eq(req.params.id),
-      select: 'id',
-      limit: '1',
-    }))) as Array<{ id: string }>;
-
-    if (!rows || rows.length === 0) {
+    const installed = await findInstalledIntegrationByAliases(orgId, req.params.id);
+    if (!installed) {
       return res.status(404).json({ success: false, error: 'App not installed' });
     }
 
-    const integrationId = rows[0].id;
+    const integrationId = installed.id;
 
     await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
       method: 'DELETE',
@@ -2857,19 +2877,12 @@ router.patch('/apps/:id/credentials', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'No credentials provided' });
     }
 
-    // Find the existing integration (any row for this org + service_type)
-    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
-      organization_id: eq(orgId),
-      service_type: eq(app.id),
-      select: 'id',
-      limit: '1',
-    }))) as Array<{ id: string }>;
-
-    if (!rows || rows.length === 0) {
+    const installed = await findInstalledIntegrationByAliases(orgId, app.id);
+    if (!installed) {
       return res.status(404).json({ success: false, error: 'App not installed' });
     }
 
-    const integrationId = rows[0].id;
+    const integrationId = installed.id;
     const now = new Date().toISOString();
 
     // Upsert each credential
@@ -2956,16 +2969,10 @@ router.post('/apps/:id/test', async (req: Request, res: Response) => {
     }
 
     // Update integration status if we have one stored
-    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
-      organization_id: eq(orgId),
-      service_type: eq(app.id),
-      'metadata->>marketplace_app': eq('true'),
-      select: 'id',
-      limit: '1',
-    }))) as Array<{ id: string }>;
+    const installed = await findInstalledIntegrationByAliases(orgId, app.id);
 
-    if (rows?.length > 0) {
-      await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(rows[0].id) }), {
+    if (installed?.id) {
+      await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(installed.id) }), {
         method: 'PATCH',
         body: {
           status: testSuccess ? 'connected' : 'error',
