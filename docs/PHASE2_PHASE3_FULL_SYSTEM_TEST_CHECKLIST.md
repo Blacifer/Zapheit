@@ -73,3 +73,80 @@ Phase 2 + early Phase 3 are accepted only if all are true:
 3. Incident workflows persist to backend (not UI-only).
 4. Reason model and copy are consistent across Governed Actions, Approvals, and Apps History.
 5. Deep links and operator actions are stable on desktop and mobile.
+
+## F) Wave 1 Apps Closure
+
+Wave 1 is not closed until the HR, recruiting, and collaboration app workspaces all pass.
+
+### 1. Canonical Catalog
+
+1. Search `google workspace`, `microsoft 365`, `zoho people`, `zoho learn`, `zoho recruit`, and `naukri`.
+2. Verify:
+   - only one card appears per app
+   - no duplicate OAuth/direct cards
+   - primary setup path is correct for the app family
+
+### 2. Connect / Disconnect / Test
+
+1. Connect:
+   - `Google Workspace`
+   - `Microsoft 365`
+   - one Zoho HR app
+   - one recruiting app
+2. Verify:
+   - no `404`
+   - app appears once in `My Apps`
+   - reload preserves connected state
+3. Disconnect one connected app and verify:
+   - it disappears from `My Apps`
+   - connected counts update
+   - reload does not show it as connected again
+4. Click `Test All` and verify:
+   - no raw `404` or `501`
+   - unsupported apps skip cleanly
+   - health counts update correctly
+
+### 3. Workspace Routing
+
+1. Open `Google Workspace` and verify `Collaboration Workspace` loads.
+2. Open `Microsoft 365` and verify `Collaboration Workspace` loads.
+3. Open `Zoho People` and `Zoho Learn` and verify `HR Workspace` loads.
+4. Open `Zoho Recruit` and `Naukri` and verify `Hiring Workspace` loads.
+
+### 4. Workspace Behavior
+
+1. Collaboration Workspace:
+   - profile/account context loads
+   - event preview loads when scope allows
+   - fallback note appears when current scopes are too narrow
+2. HR Workspace:
+   - leave, attendance, payroll, and headcount views load
+   - leave approve/reject works if data exists
+3. Hiring Workspace:
+   - jobs list loads
+   - applications load for selected job
+   - score / shortlist / reject actions work without breaking the UI
+
+### 5. Linked Agents + HITL
+
+1. Open `Linked Agents` for a Wave 1 app and verify:
+   - linked agents load
+   - linking/unlinking updates state correctly
+2. Open `HITL Approvals`, use `Simulate Agent Write Action`, and verify:
+   - pending approval appears
+   - `Approve` resumes execution
+   - `Reject` blocks execution
+   - execution history updates for both
+
+### 6. Wave 1 Close Rule
+
+Wave 1 is closed only if all are true:
+
+1. All six Wave 1 apps pass canonical catalog checks.
+2. Connect, disconnect, and test paths pass without `404`/`501` errors.
+3. Workspace routing is correct:
+   - collaboration apps do not open HR views
+   - HR apps do not open recruiting views
+   - recruiting apps do not open collaboration views
+4. HITL approve/reject passes end-to-end.
+5. No duplicate cards or alias bugs reappear after reload.
