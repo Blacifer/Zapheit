@@ -2064,6 +2064,67 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent Paytm transactions before allowing agents to trigger finance follow-ups or exception actions.'
       : 'Reconnect Paytm with transaction-read access if you want finance activity inside Rasi.';
+  } else if (aliases.includes('cleartax')) {
+    const apiKey = String(credentials.api_key || credentials.apiKey || '');
+    const gstin = String(credentials.gstin || '');
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'ClearTax credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      'X-Cleartax-Api-Key': apiKey,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [statusRes, noticesRes] = await Promise.allSettled([
+      gstin
+        ? fetch(`https://api.cleartax.in/v1/compliance/status?gstin=${encodeURIComponent(gstin)}`, { headers })
+        : Promise.resolve(null as any),
+      fetch('https://api.cleartax.in/v1/notices?limit=8', { headers }),
+    ]);
+
+    if (statusRes.status === 'fulfilled' && statusRes.value) {
+      const body: any = await statusRes.value.json().catch(() => null);
+      if (statusRes.value.ok && body) {
+        preview.profile = {
+          gstin: gstin || null,
+          filing_status: body.filing_status || body.status || null,
+          legal_name: body.legal_name || body.trade_name || null,
+        };
+        preview.metrics = {
+          filing_status: body.filing_status || body.status || 'unknown',
+          notices_open: Array.isArray(body.notices) ? body.notices.length : undefined,
+        };
+      } else if (!statusRes.value.ok) {
+        preview.notes.push('Compliance status could not be loaded with the current ClearTax credentials.');
+      }
+    } else if (!gstin) {
+      preview.notes.push('Add a GSTIN to this connection if you want live filing status inside Rasi.');
+    }
+
+    if (noticesRes.status === 'fulfilled') {
+      const body: any = await noticesRes.value.json().catch(() => null);
+      const notices = Array.isArray(body?.notices) ? body.notices : Array.isArray(body) ? body : [];
+      if (noticesRes.value.ok) {
+        preview.records = notices.map((notice: any) => ({
+          id: notice.id || notice.notice_id || notice.reference_id,
+          label: notice.title || notice.notice_type || 'Compliance notice',
+          status: notice.status || notice.state || 'open',
+          updated_at: notice.updated_at || notice.created_at || null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          notices_loaded: notices.length,
+          open_notices: notices.filter((notice: any) => !['closed', 'resolved', 'completed'].includes(String(notice.status || notice.state || '').toLowerCase())).length,
+        };
+      } else {
+        preview.notes.push('Recent ClearTax notices could not be loaded with the current credentials.');
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review open notices and filing posture before allowing agents to submit or remediate compliance actions.'
+      : 'Reconnect ClearTax with notice and filing access if you want live compliance context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }

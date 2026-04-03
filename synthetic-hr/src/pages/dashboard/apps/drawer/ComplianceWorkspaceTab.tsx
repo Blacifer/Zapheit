@@ -50,24 +50,30 @@ export function ComplianceWorkspaceTab({ app, agentNames }: ComplianceWorkspaceT
   const [deadlines, setDeadlines] = useState<HubDeadline[]>([]);
   const [evidence, setEvidence] = useState<HubEvidence[]>([]);
   const [posture, setPosture] = useState<{ score: number; total: number; completed: number; overdue: number; upcoming: number } | null>(null);
+  const [workspacePreview, setWorkspacePreview] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [dRes, eRes, pRes] = await Promise.all([
+      const [dRes, eRes, pRes, previewRes] = await Promise.all([
         api.hubs.compliance.listDeadlines(),
         api.hubs.compliance.listEvidence(),
         api.hubs.compliance.getPosture(),
+        app.connected && app.primaryServiceId && ['cleartax'].includes(String(app.primaryServiceId).toLowerCase())
+          ? api.integrations.getWorkspacePreview(app.primaryServiceId)
+          : Promise.resolve(null),
       ]);
       if (dRes.data) setDeadlines(dRes.data);
       if (eRes.data) setEvidence(eRes.data);
       if (pRes.data) setPosture(pRes.data);
+      if (previewRes?.success && previewRes.data) setWorkspacePreview(previewRes.data);
+      else setWorkspacePreview(null);
     } catch {
       toast.error('Failed to load compliance workspace');
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [app.connected, app.primaryServiceId]);
 
   useEffect(() => {
     void load();
@@ -142,6 +148,9 @@ export function ComplianceWorkspaceTab({ app, agentNames }: ComplianceWorkspaceT
           </div>
         </div>
         {agentNames.length > 0 && <p className="mt-3 text-xs text-slate-500">Linked agents: <span className="text-slate-300">{agentNames.join(', ')}</span></p>}
+        {workspacePreview?.suggested_next_action ? (
+          <p className="mt-2 text-xs text-cyan-300">Next: {workspacePreview.suggested_next_action}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -187,6 +196,60 @@ export function ComplianceWorkspaceTab({ app, agentNames }: ComplianceWorkspaceT
         </div>
 
         <div className="space-y-4">
+          {workspacePreview ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-sky-300" />
+                <h4 className="text-sm font-semibold text-white">Connected compliance feed</h4>
+              </div>
+              <div className="mt-4 space-y-3">
+                {workspacePreview.profile ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Connection profile</p>
+                    <p className="mt-2 text-sm font-medium text-white">{workspacePreview.profile.legal_name || workspacePreview.profile.gstin || 'Connected compliance account'}</p>
+                    {workspacePreview.profile.filing_status ? <p className="text-xs text-slate-400">Filing status: {workspacePreview.profile.filing_status}</p> : null}
+                  </div>
+                ) : null}
+
+                {workspacePreview.metrics ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(workspacePreview.metrics).slice(0, 4).map(([key, value]) => (
+                      <div key={key} className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{key.replace(/_/g, ' ')}</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{String(value ?? '—')}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.records) && workspacePreview.records.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider notices</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.records.slice(0, 5).map((record: any) => (
+                        <div key={record.id} className="px-3 py-3">
+                          <p className="text-sm font-medium text-white">{record.label}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span className={cx('rounded-full border px-2 py-0.5', statusBadge(record.status || 'upcoming'))}>{String(record.status || 'open').replace('_', ' ')}</span>
+                            {record.updated_at ? <span>{new Date(record.updated_at).toLocaleDateString()}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.notes) && workspacePreview.notes.length > 0 ? (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {workspacePreview.notes.join(' ')}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-300" />
