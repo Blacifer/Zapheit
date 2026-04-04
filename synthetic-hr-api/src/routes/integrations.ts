@@ -2125,6 +2125,138 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review open notices and filing posture before allowing agents to submit or remediate compliance actions.'
       : 'Reconnect ClearTax with notice and filing access if you want live compliance context inside Rasi.';
+  } else if (aliases.includes('salesforce')) {
+    const accessToken = String(credentials.access_token || credentials.accessToken || '');
+    const instanceUrl = String(credentials.instance_url || credentials.instanceUrl || '');
+    if (!accessToken || !instanceUrl) {
+      return res.status(400).json({ success: false, error: 'Salesforce credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    };
+    const [userRes, leadRes, oppRes] = await Promise.allSettled([
+      fetch(`${instanceUrl}/services/oauth2/userinfo`, { headers }),
+      fetch(`${instanceUrl}/services/data/v59.0/query/?q=${encodeURIComponent('SELECT Id, Name, Company, Status, CreatedDate FROM Lead ORDER BY CreatedDate DESC LIMIT 8')}`, { headers }),
+      fetch(`${instanceUrl}/services/data/v59.0/query/?q=${encodeURIComponent('SELECT Id, Name, StageName, Amount, LastModifiedDate FROM Opportunity ORDER BY LastModifiedDate DESC LIMIT 5')}`, { headers }),
+    ]);
+
+    if (userRes.status === 'fulfilled') {
+      const body: any = await userRes.value.json().catch(() => null);
+      if (userRes.value.ok && body) {
+        preview.profile = {
+          email: body.email ?? null,
+          name: body.name ?? null,
+          organization_id: body.organization_id ?? null,
+        };
+      }
+    }
+
+    if (leadRes.status === 'fulfilled') {
+      const body: any = await leadRes.value.json().catch(() => null);
+      if (leadRes.value.ok && Array.isArray(body?.records)) {
+        preview.records = body.records.map((lead: any) => ({
+          id: lead.Id,
+          label: lead.Name || lead.Company || 'Lead',
+          status: lead.Status || 'new',
+          updated_at: lead.CreatedDate || null,
+          meta: lead.Company || null,
+        }));
+        preview.metrics = {
+          lead_count: body.records.length,
+        };
+      } else {
+        preview.notes.push('Recent Salesforce leads could not be loaded with the current connection.');
+      }
+    }
+
+    if (oppRes.status === 'fulfilled') {
+      const body: any = await oppRes.value.json().catch(() => null);
+      if (oppRes.value.ok && Array.isArray(body?.records)) {
+        preview.deals = body.records.map((deal: any) => ({
+          id: deal.Id,
+          name: deal.Name || 'Opportunity',
+          stage: deal.StageName || 'unknown',
+          amount: deal.Amount || 0,
+          updated_at: deal.LastModifiedDate || null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          opportunity_count: body.records.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review recent leads and opportunity stages before letting agents update pipeline state in Salesforce.'
+      : 'Reconnect Salesforce with lead and opportunity read access if you want live CRM context inside Rasi.';
+  } else if (aliases.includes('hubspot')) {
+    const accessToken = String(credentials.access_token || credentials.accessToken || '');
+    if (!accessToken) {
+      return res.status(400).json({ success: false, error: 'HubSpot credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [contactsRes, dealsRes, ownersRes] = await Promise.allSettled([
+      fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=8&properties=firstname,lastname,email,company,lastmodifieddate', { headers }),
+      fetch('https://api.hubapi.com/crm/v3/objects/deals?limit=5&properties=dealname,dealstage,amount,closedate,hs_lastmodifieddate', { headers }),
+      fetch('https://api.hubapi.com/crm/v3/owners?limit=1', { headers }),
+    ]);
+
+    if (ownersRes.status === 'fulfilled') {
+      const body: any = await ownersRes.value.json().catch(() => null);
+      const owner = Array.isArray(body?.results) ? body.results[0] : null;
+      if (ownersRes.value.ok && owner) {
+        preview.profile = {
+          email: owner.email || null,
+          name: `${owner.firstName || ''} ${owner.lastName || ''}`.trim() || owner.email || 'HubSpot owner',
+        };
+      }
+    }
+
+    if (contactsRes.status === 'fulfilled') {
+      const body: any = await contactsRes.value.json().catch(() => null);
+      if (contactsRes.value.ok && Array.isArray(body?.results)) {
+        preview.records = body.results.map((contact: any) => ({
+          id: contact.id,
+          label: [contact.properties?.firstname, contact.properties?.lastname].filter(Boolean).join(' ') || contact.properties?.company || contact.properties?.email || 'Contact',
+          status: 'active',
+          updated_at: contact.properties?.lastmodifieddate || null,
+          meta: contact.properties?.email || null,
+        }));
+        preview.metrics = {
+          contact_count: body.results.length,
+        };
+      } else {
+        preview.notes.push('Recent HubSpot contacts could not be loaded with the current connection.');
+      }
+    }
+
+    if (dealsRes.status === 'fulfilled') {
+      const body: any = await dealsRes.value.json().catch(() => null);
+      if (dealsRes.value.ok && Array.isArray(body?.results)) {
+        preview.deals = body.results.map((deal: any) => ({
+          id: deal.id,
+          name: deal.properties?.dealname || 'Deal',
+          stage: deal.properties?.dealstage || 'unknown',
+          amount: Number(deal.properties?.amount || 0),
+          updated_at: deal.properties?.hs_lastmodifieddate || deal.properties?.closedate || null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          deal_count: body.results.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review recent contacts and deal stages before letting agents update pipeline state in HubSpot.'
+      : 'Reconnect HubSpot with contact and deal read access if you want live CRM context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }
