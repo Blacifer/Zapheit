@@ -64,7 +64,7 @@ export function ItWorkspaceTab({ app, agentNames }: ItWorkspaceTabProps) {
     try {
       const [requestRes, previewRes] = await Promise.all([
         api.hubs.it.listRequests({ limit: 80 }),
-        app.connected && app.primaryServiceId && ['okta', 'jumpcloud', 'jamf', 'azure-ad', 'azure_ad'].includes(String(app.primaryServiceId).toLowerCase())
+        app.connected && app.primaryServiceId && ['okta', 'jumpcloud', 'jamf', 'azure-ad', 'azure_ad', 'onelogin'].includes(String(app.primaryServiceId).toLowerCase())
           ? api.integrations.getWorkspacePreview(app.primaryServiceId)
           : Promise.resolve(null),
       ]);

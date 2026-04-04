@@ -2582,6 +2582,78 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review users and groups before letting agents provision, disable, or change access in Azure AD.'
       : 'Reconnect Azure AD with Microsoft Graph directory read access if you want live identity context inside Rasi.';
+  } else if (aliases.includes('onelogin')) {
+    const domain = String(credentials.domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const clientId = String(credentials.client_id || credentials.clientId || '');
+    const clientSecret = String(credentials.client_secret || credentials.clientSecret || '');
+    if (!domain || !clientId || !clientSecret) {
+      return res.status(400).json({ success: false, error: 'OneLogin credentials are incomplete for workspace preview' });
+    }
+
+    const tokenRes = await fetch(`https://${domain}/auth/oauth2/v2/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `client_id:${clientId}, client_secret:${clientSecret}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ grant_type: 'client_credentials' }),
+    });
+    const tokenBody: any = await tokenRes.json().catch(() => null);
+    const oneLoginToken = tokenRes.ok ? String(tokenBody?.data?.[0]?.access_token || tokenBody?.access_token || '') : '';
+    if (!oneLoginToken) {
+      return res.status(400).json({ success: false, error: 'OneLogin access token could not be generated for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `bearer:${oneLoginToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [usersRes, rolesRes] = await Promise.allSettled([
+      fetch(`https://${domain}/api/1/users?limit=8`, { headers }),
+      fetch(`https://${domain}/api/2/roles`, { headers }),
+    ]);
+
+    if (usersRes.status === 'fulfilled') {
+      const body: any = await usersRes.value.json().catch(() => null);
+      const users = Array.isArray(body?.data) ? body.data : (Array.isArray(body) ? body : []);
+      if (usersRes.value.ok && users.length > 0) {
+        preview.records = users.map((user: any) => ({
+          id: user.id,
+          label: user.firstname && user.lastname ? `${user.firstname} ${user.lastname}` : (user.email || user.username || 'User'),
+          status: user.status || 'unknown',
+          updated_at: user.updated_at || null,
+          meta: user.email || user.username || null,
+        }));
+        preview.metrics = {
+          user_count: users.length,
+          active_users: users.filter((user: any) => String(user.status || '').toLowerCase() === 'active').length,
+        };
+      } else {
+        preview.notes.push('Recent OneLogin users could not be loaded with the current API credentials.');
+      }
+    }
+
+    if (rolesRes.status === 'fulfilled') {
+      const body: any = await rolesRes.value.json().catch(() => null);
+      const roles = Array.isArray(body?.data) ? body.data : (Array.isArray(body) ? body : []);
+      if (rolesRes.value.ok && roles.length > 0) {
+        preview.groups = roles.slice(0, 5).map((role: any) => ({
+          id: role.id,
+          name: role.name || 'Role',
+          description: role.users_count != null ? `${role.users_count} users` : null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: roles.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review OneLogin users and role coverage before letting agents approve or deny identity changes.'
+      : 'Reconnect OneLogin with valid API credentials if you want live identity context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }
