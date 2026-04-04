@@ -53,6 +53,22 @@ jest.mock('../../lib/integrations/spec-registry', () => ({
         category: 'HR',
       };
     }
+    if (normalized === 'mailchimp') {
+      return {
+        id: 'mailchimp',
+        name: 'Mailchimp',
+        authType: 'api_key',
+        category: 'PRODUCTIVITY',
+      };
+    }
+    if (normalized === 'onelogin') {
+      return {
+        id: 'onelogin',
+        name: 'OneLogin',
+        authType: 'api_key',
+        category: 'IAM',
+      };
+    }
     return null;
   },
 }));
@@ -246,5 +262,139 @@ describe('Integrations Routes - workspace preview', () => {
     expect(res.body.data.events).toHaveLength(0);
     expect(res.body.data.notes[0]).toContain('broader Microsoft Graph scopes');
     expect(res.body.data.suggested_next_action).toContain('Reconnect with broader Microsoft Graph scopes');
+  });
+
+  it('returns Mailchimp workspace preview without requiring an OAuth access token', async () => {
+    mockUserRest.mockImplementation(async (_jwt, table, _query, options) => {
+      if (table === 'integrations') {
+        return [{
+          id: 'integration-3',
+          service_type: 'mailchimp',
+          status: 'connected',
+          service_name: 'Mailchimp',
+        }];
+      }
+      if (table === 'integration_credentials') {
+        return [
+          { key: 'api_key', value: 'testkey-us5', is_sensitive: true, expires_at: null },
+        ];
+      }
+      if (table === 'integration_connection_logs' && options?.method === 'POST') {
+        return [{ id: 'log-3' }];
+      }
+      return [];
+    });
+
+    global.fetch = jest.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/campaigns?count=5')) {
+        return {
+          ok: true,
+          json: async () => ({
+            total_items: 1,
+            campaigns: [
+              {
+                id: 'cmp-1',
+                status: 'sent',
+                create_time: '2026-04-03T12:00:00.000Z',
+                settings: { title: 'April Hiring Push', subject_line: 'Hiring update' },
+                recipients: { list_name: 'Hiring Leads' },
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url.includes('/lists?count=5')) {
+        return {
+          ok: true,
+          json: async () => ({
+            total_items: 1,
+            lists: [
+              { id: 'aud-1', name: 'Hiring Leads', stats: { member_count: 124 } },
+            ],
+          }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }) as any;
+
+    const res = await invokeRoute('/mailchimp/workspace-preview');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.records).toHaveLength(1);
+    expect(res.body.data.audiences).toHaveLength(1);
+    expect(res.body.data.metrics.campaign_count).toBe(1);
+    expect(res.body.data.suggested_next_action).toContain('Review campaign state');
+  });
+
+  it('returns OneLogin identity preview using API credentials', async () => {
+    mockUserRest.mockImplementation(async (_jwt, table, _query, options) => {
+      if (table === 'integrations') {
+        return [{
+          id: 'integration-4',
+          service_type: 'onelogin',
+          status: 'connected',
+          service_name: 'OneLogin',
+        }];
+      }
+      if (table === 'integration_credentials') {
+        return [
+          { key: 'domain', value: 'example.onelogin.com', is_sensitive: false, expires_at: null },
+          { key: 'client_id', value: 'client-123', is_sensitive: true, expires_at: null },
+          { key: 'client_secret', value: 'secret-456', is_sensitive: true, expires_at: null },
+        ];
+      }
+      if (table === 'integration_connection_logs' && options?.method === 'POST') {
+        return [{ id: 'log-4' }];
+      }
+      return [];
+    });
+
+    global.fetch = jest.fn(async (input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/auth/oauth2/v2/token')) {
+        expect(init?.method).toBe('POST');
+        return {
+          ok: true,
+          json: async () => ({ data: [{ access_token: 'ol-token' }] }),
+        } as Response;
+      }
+      if (url.includes('/api/1/users')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              {
+                id: 1,
+                firstname: 'Ada',
+                lastname: 'Lovelace',
+                email: 'ada@example.com',
+                status: 'active',
+                updated_at: '2026-04-03T09:00:00.000Z',
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/2/roles')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: 7, name: 'Admins', users_count: 3 },
+            ],
+          }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }) as any;
+
+    const res = await invokeRoute('/onelogin/workspace-preview');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.records).toHaveLength(1);
+    expect(res.body.data.groups).toHaveLength(1);
+    expect(res.body.data.metrics.user_count).toBe(1);
+    expect(res.body.data.suggested_next_action).toContain('Review OneLogin users');
   });
 });
