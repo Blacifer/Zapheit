@@ -2257,6 +2257,165 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent contacts and deal stages before letting agents update pipeline state in HubSpot.'
       : 'Reconnect HubSpot with contact and deal read access if you want live CRM context inside Rasi.';
+  } else if (aliases.includes('mailchimp')) {
+    const apiKey = String(credentials.api_key || credentials.apiKey || '');
+    const explicitServer = String(credentials.server_prefix || credentials.server || '').trim();
+    const server = explicitServer || (apiKey.includes('-') ? apiKey.split('-').pop() || '' : '');
+    if (!apiKey || !server) {
+      return res.status(400).json({ success: false, error: 'Mailchimp credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`,
+      Accept: 'application/json',
+    };
+    const base = `https://${server}.api.mailchimp.com/3.0`;
+    const [campaignsRes, listsRes] = await Promise.allSettled([
+      fetch(`${base}/campaigns?count=5`, { headers }),
+      fetch(`${base}/lists?count=5`, { headers }),
+    ]);
+
+    if (campaignsRes.status === 'fulfilled') {
+      const body: any = await campaignsRes.value.json().catch(() => null);
+      if (campaignsRes.value.ok && Array.isArray(body?.campaigns)) {
+        preview.records = body.campaigns.map((campaign: any) => ({
+          id: campaign.id,
+          label: campaign.settings?.title || campaign.settings?.subject_line || 'Campaign',
+          status: campaign.status || 'draft',
+          updated_at: campaign.send_time || campaign.create_time || null,
+          meta: campaign.recipients?.list_name || null,
+        }));
+        preview.metrics = {
+          campaign_count: body.total_items ?? body.campaigns.length,
+        };
+      } else {
+        preview.notes.push('Recent Mailchimp campaigns could not be loaded with the current API key.');
+      }
+    }
+
+    if (listsRes.status === 'fulfilled') {
+      const body: any = await listsRes.value.json().catch(() => null);
+      if (listsRes.value.ok && Array.isArray(body?.lists)) {
+        preview.audiences = body.lists.map((list: any) => ({
+          id: list.id,
+          name: list.name || 'Audience',
+          members: list.stats?.member_count || 0,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          audience_count: body.total_items ?? body.lists.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review campaign state and audience coverage before letting agents trigger or tune outbound marketing work.'
+      : 'Reconnect Mailchimp with a valid API key if you want live campaign context inside Rasi.';
+  } else if (aliases.includes('brevo')) {
+    const apiKey = String(credentials.api_key || credentials.apiKey || '');
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Brevo credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      'api-key': apiKey,
+      Accept: 'application/json',
+    };
+    const [campaignsRes, contactsRes] = await Promise.allSettled([
+      fetch('https://api.brevo.com/v3/emailCampaigns?limit=5', { headers }),
+      fetch('https://api.brevo.com/v3/contacts?limit=5', { headers }),
+    ]);
+
+    if (campaignsRes.status === 'fulfilled') {
+      const body: any = await campaignsRes.value.json().catch(() => null);
+      if (campaignsRes.value.ok && Array.isArray(body?.campaigns)) {
+        preview.records = body.campaigns.map((campaign: any) => ({
+          id: campaign.id,
+          label: campaign.name || campaign.subject || 'Campaign',
+          status: campaign.status || 'draft',
+          updated_at: campaign.modifiedAt || campaign.createdAt || null,
+          meta: campaign.type || null,
+        }));
+        preview.metrics = {
+          campaign_count: body.count ?? body.campaigns.length,
+        };
+      } else {
+        preview.notes.push('Recent Brevo campaigns could not be loaded with the current API key.');
+      }
+    }
+
+    if (contactsRes.status === 'fulfilled') {
+      const body: any = await contactsRes.value.json().catch(() => null);
+      if (contactsRes.value.ok && Array.isArray(body?.contacts)) {
+        preview.audiences = body.contacts.map((contact: any) => ({
+          id: contact.id || contact.email,
+          name: contact.email || 'Contact',
+          members: Array.isArray(contact.listIds) ? contact.listIds.length : 0,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          contact_count: body.count ?? body.contacts.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review live campaigns and contact coverage before letting agents launch or optimize outbound work.'
+      : 'Reconnect Brevo with a valid API key if you want live campaign context inside Rasi.';
+  } else if (aliases.includes('okta')) {
+    const domain = String(credentials.domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const apiToken = String(credentials.apiToken || credentials.api_token || '');
+    if (!domain || !apiToken) {
+      return res.status(400).json({ success: false, error: 'Okta credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `SSWS ${apiToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [usersRes, groupsRes] = await Promise.allSettled([
+      fetch(`https://${domain}/api/v1/users?limit=8`, { headers }),
+      fetch(`https://${domain}/api/v1/groups?limit=5`, { headers }),
+    ]);
+
+    if (usersRes.status === 'fulfilled') {
+      const body: any = await usersRes.value.json().catch(() => null);
+      if (usersRes.value.ok && Array.isArray(body)) {
+        preview.records = body.map((user: any) => ({
+          id: user.id,
+          label: user.profile?.displayName || user.profile?.email || user.profile?.login || 'User',
+          status: user.status || 'unknown',
+          updated_at: user.lastUpdated || user.statusChanged || null,
+          meta: user.profile?.email || user.profile?.login || null,
+        }));
+        preview.metrics = {
+          user_count: body.length,
+          active_users: body.filter((user: any) => String(user.status || '').toUpperCase() === 'ACTIVE').length,
+        };
+      } else {
+        preview.notes.push('Recent Okta users could not be loaded with the current token.');
+      }
+    }
+
+    if (groupsRes.status === 'fulfilled') {
+      const body: any = await groupsRes.value.json().catch(() => null);
+      if (groupsRes.value.ok && Array.isArray(body)) {
+        preview.groups = body.map((group: any) => ({
+          id: group.id,
+          name: group.profile?.name || 'Group',
+          description: group.profile?.description || null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: body.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review active users and group inventory before letting agents provision, deactivate, or change group membership in Okta.'
+      : 'Reconnect Okta with user and group read access if you want live identity context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }

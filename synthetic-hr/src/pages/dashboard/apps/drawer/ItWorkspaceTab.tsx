@@ -57,17 +57,25 @@ interface ItWorkspaceTabProps {
 export function ItWorkspaceTab({ app, agentNames }: ItWorkspaceTabProps) {
   const [busy, setBusy] = useState(false);
   const [requests, setRequests] = useState<AccessRequestHub[]>([]);
+  const [workspacePreview, setWorkspacePreview] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await api.hubs.it.listRequests({ limit: 80 });
-      if (res.success && res.data) setRequests(res.data);
-      else toast.error(res.error || 'Failed to load access requests');
+      const [requestRes, previewRes] = await Promise.all([
+        api.hubs.it.listRequests({ limit: 80 }),
+        app.connected && app.primaryServiceId && ['okta'].includes(String(app.primaryServiceId).toLowerCase())
+          ? api.integrations.getWorkspacePreview(app.primaryServiceId)
+          : Promise.resolve(null),
+      ]);
+      if (requestRes.success && requestRes.data) setRequests(requestRes.data);
+      else toast.error(requestRes.error || 'Failed to load access requests');
+      if (previewRes?.success && previewRes.data) setWorkspacePreview(previewRes.data);
+      else setWorkspacePreview(null);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [app.connected, app.primaryServiceId]);
 
   useEffect(() => {
     void load();
@@ -134,6 +142,9 @@ export function ItWorkspaceTab({ app, agentNames }: ItWorkspaceTabProps) {
           </div>
         </div>
         {agentNames.length > 0 && <p className="mt-3 text-xs text-slate-500">Linked agents: <span className="text-slate-300">{agentNames.join(', ')}</span></p>}
+        {workspacePreview?.suggested_next_action ? (
+          <p className="mt-2 text-xs text-cyan-300">Next: {workspacePreview.suggested_next_action}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -184,6 +195,67 @@ export function ItWorkspaceTab({ app, agentNames }: ItWorkspaceTabProps) {
         </div>
 
         <div className="space-y-4">
+          {workspacePreview ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
+              <div className="border-b border-white/8 px-4 py-3">
+                <h4 className="text-sm font-semibold text-white">Connected identity feed</h4>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {workspacePreview.metrics ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(workspacePreview.metrics).slice(0, 4).map(([key, value]) => (
+                      <div key={key} className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{key.replace(/_/g, ' ')}</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{String(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.records) && workspacePreview.records.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider users</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.records.slice(0, 5).map((record: any) => (
+                        <div key={record.id} className="px-3 py-3">
+                          <p className="text-sm font-medium text-white">{record.label}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span>{record.status}</span>
+                            {record.meta ? <span>• {record.meta}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.groups) && workspacePreview.groups.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider groups</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.groups.slice(0, 5).map((group: any) => (
+                        <div key={group.id} className="px-3 py-3">
+                          <p className="text-sm font-medium text-white">{group.name}</p>
+                          {group.description ? <p className="mt-1 text-xs text-slate-400">{group.description}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.notes) && workspacePreview.notes.length > 0 ? (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {workspacePreview.notes.join(' ')}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
             <div className="border-b border-white/8 px-4 py-3">
               <h4 className="text-sm font-semibold text-white">Policy log</h4>

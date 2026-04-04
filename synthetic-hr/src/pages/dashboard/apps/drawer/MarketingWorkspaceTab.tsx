@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Mail, Megaphone, MessageSquare, RefreshCw, Smartphone, Sparkles, Users } from 'lucide-react';
+import { api } from '../../../../lib/api-client';
 import { toast } from '../../../../lib/toast';
 import { authenticatedFetch } from '../../../../lib/api/_helpers';
 import type { UnifiedApp } from '../types';
@@ -71,24 +72,30 @@ export function MarketingWorkspaceTab({ app, agentNames }: MarketingWorkspaceTab
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [performance, setPerformance] = useState<CampaignPerformance[]>([]);
+  const [workspacePreview, setWorkspacePreview] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [campaignRes, contactRes, performanceRes] = await Promise.all([
+      const [campaignRes, contactRes, performanceRes, previewRes] = await Promise.all([
         authenticatedFetch<any>('/hubs/marketing/campaigns?limit=200'),
         authenticatedFetch<any>('/hubs/marketing/contacts?limit=200'),
         authenticatedFetch<any>('/hubs/marketing/performance?limit=200'),
+        app.connected && app.primaryServiceId && ['mailchimp', 'brevo'].includes(String(app.primaryServiceId).toLowerCase())
+          ? api.integrations.getWorkspacePreview(app.primaryServiceId)
+          : Promise.resolve(null),
       ]);
       if (campaignRes.success && campaignRes.data) setCampaigns(campaignRes.data);
       if (contactRes.success && contactRes.data) setContacts(contactRes.data);
       if (performanceRes.success && performanceRes.data) setPerformance(performanceRes.data);
+      if (previewRes?.success && previewRes.data) setWorkspacePreview(previewRes.data);
+      else setWorkspacePreview(null);
     } catch (error: any) {
       toast.error(error?.message || 'Failed to load marketing workspace');
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [app.connected, app.primaryServiceId]);
 
   useEffect(() => {
     void load();
@@ -159,6 +166,9 @@ export function MarketingWorkspaceTab({ app, agentNames }: MarketingWorkspaceTab
           </div>
         </div>
         {agentNames.length > 0 && <p className="mt-3 text-xs text-slate-500">Linked agents: <span className="text-slate-300">{agentNames.join(', ')}</span></p>}
+        {workspacePreview?.suggested_next_action ? (
+          <p className="mt-2 text-xs text-cyan-300">Next: {workspacePreview.suggested_next_action}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -195,6 +205,69 @@ export function MarketingWorkspaceTab({ app, agentNames }: MarketingWorkspaceTab
         </div>
 
         <div className="space-y-4">
+          {workspacePreview ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
+              <div className="border-b border-white/8 px-4 py-3">
+                <h4 className="text-sm font-semibold text-white">Connected marketing feed</h4>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {workspacePreview.metrics ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(workspacePreview.metrics).slice(0, 4).map(([key, value]) => (
+                      <div key={key} className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{key.replace(/_/g, ' ')}</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{String(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.records) && workspacePreview.records.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider campaigns</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.records.slice(0, 5).map((record: any) => (
+                        <div key={record.id} className="px-3 py-3">
+                          <p className="text-sm font-medium text-white">{record.label}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span>{record.status}</span>
+                            {record.meta ? <span>• {record.meta}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.audiences) && workspacePreview.audiences.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider audiences</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.audiences.slice(0, 5).map((audience: any) => (
+                        <div key={audience.id} className="px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-white">{audience.name}</p>
+                            <span className="text-xs text-cyan-300">{audience.members} members</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.notes) && workspacePreview.notes.length > 0 ? (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {workspacePreview.notes.join(' ')}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
             <div className="border-b border-white/8 px-4 py-3">
               <h4 className="text-sm font-semibold text-white">Top performance</h4>
