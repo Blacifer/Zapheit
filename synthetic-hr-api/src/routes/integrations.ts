@@ -2654,6 +2654,79 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review OneLogin users and role coverage before letting agents approve or deny identity changes.'
       : 'Reconnect OneLogin with valid API credentials if you want live identity context inside Rasi.';
+  } else if (aliases.includes('kandji')) {
+    const baseUrl = String(credentials.base_url || credentials.baseUrl || '').replace(/\/+$/, '');
+    const apiKey = String(credentials.api_key || credentials.apiKey || '');
+    if (!baseUrl || !apiKey) {
+      return res.status(400).json({ success: false, error: 'Kandji credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [devicesRes, blueprintsRes] = await Promise.allSettled([
+      fetch(`${baseUrl}/devices`, { headers }),
+      fetch(`${baseUrl}/blueprints`, { headers }),
+    ]);
+
+    if (devicesRes.status === 'fulfilled') {
+      const body: any = await devicesRes.value.json().catch(() => null);
+      const devices = Array.isArray(body?.devices)
+        ? body.devices
+        : Array.isArray(body?.results)
+          ? body.results
+          : Array.isArray(body?.data)
+            ? body.data
+            : (Array.isArray(body) ? body : []);
+      if (devicesRes.value.ok && devices.length > 0) {
+        preview.records = devices.slice(0, 8).map((device: any) => ({
+          id: device.id || device.device_id || device.serial_number,
+          label: device.device_name || device.name || device.serial_number || 'Device',
+          status: device.status || device.platform || 'managed',
+          updated_at: device.last_check_in || device.updated_at || null,
+          meta: device.serial_number || device.blueprint_name || null,
+        }));
+        preview.metrics = {
+          device_count: devices.length,
+          online_devices: devices.filter((device: any) => {
+            const status = String(device.status || '').toLowerCase();
+            return ['online', 'active', 'managed'].includes(status);
+          }).length,
+        };
+      } else {
+        preview.notes.push('Recent Kandji devices could not be loaded with the current API token.');
+      }
+    }
+
+    if (blueprintsRes.status === 'fulfilled') {
+      const body: any = await blueprintsRes.value.json().catch(() => null);
+      const blueprints = Array.isArray(body?.blueprints)
+        ? body.blueprints
+        : Array.isArray(body?.results)
+          ? body.results
+          : Array.isArray(body?.data)
+            ? body.data
+            : (Array.isArray(body) ? body : []);
+      if (blueprintsRes.value.ok && blueprints.length > 0) {
+        preview.groups = blueprints.slice(0, 5).map((blueprint: any) => ({
+          id: blueprint.id || blueprint.blueprint_id || blueprint.name,
+          name: blueprint.name || 'Blueprint',
+          description: blueprint.install_application_count != null
+            ? `${blueprint.install_application_count} items`
+            : (blueprint.description || null),
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: blueprints.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review managed devices and blueprint coverage before letting agents apply endpoint policy changes in Kandji.'
+      : 'Reconnect Kandji with a valid tenant API URL and token if you want live endpoint context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }
