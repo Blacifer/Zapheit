@@ -1681,10 +1681,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
   }
 
   const credentials = await readCredentials(rest, connected.id);
-  const token = credentials.access_token || credentials.accessToken;
-  if (!token) {
-    return res.status(400).json({ success: false, error: 'Integration credentials are missing an access token' });
-  }
+  const accessToken = String(credentials.access_token || credentials.accessToken || '');
 
   const preview: Record<string, any> = {
     service: connected.service_type,
@@ -1696,15 +1693,18 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
   };
 
   if (aliases.includes('google-workspace') || aliases.includes('google_workspace')) {
+    if (!accessToken) {
+      return res.status(400).json({ success: false, error: 'Google Workspace credentials are incomplete for workspace preview' });
+    }
     const [profileRes, calendarRes, usersRes] = await Promise.allSettled([
       fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       }),
       fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=5&orderBy=startTime&singleEvents=true&timeMin=${encodeURIComponent(new Date().toISOString())}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       }),
       fetch('https://admin.googleapis.com/admin/directory/v1/users?customer=my_customer&maxResults=5&orderBy=email', {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       }),
     ]);
 
@@ -1752,12 +1752,15 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
       ? 'Review upcoming calendar commitments before allowing agents to send or schedule changes.'
       : 'Reconnect with broader collaboration scopes if you want inbox and calendar work to happen fully inside Rasi.';
   } else if (aliases.includes('microsoft-365') || aliases.includes('microsoft_365')) {
+    if (!accessToken) {
+      return res.status(400).json({ success: false, error: 'Microsoft 365 credentials are incomplete for workspace preview' });
+    }
     const [profileRes, calendarRes] = await Promise.allSettled([
       fetch('https://graph.microsoft.com/v1.0/me', {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       }),
       fetch(`https://graph.microsoft.com/v1.0/me/calendarview?startDateTime=${encodeURIComponent(new Date().toISOString())}&endDateTime=${encodeURIComponent(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())}&$top=5`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       }),
     ]);
 
@@ -2416,6 +2419,169 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review active users and group inventory before letting agents provision, deactivate, or change group membership in Okta.'
       : 'Reconnect Okta with user and group read access if you want live identity context inside Rasi.';
+  } else if (aliases.includes('jumpcloud')) {
+    const apiKey = String(credentials.api_key || credentials.apiKey || '');
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'JumpCloud credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      'x-api-key': apiKey,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [usersRes, groupsRes] = await Promise.allSettled([
+      fetch('https://console.jumpcloud.com/api/systemusers?limit=8', { headers }),
+      fetch('https://console.jumpcloud.com/api/v2/usergroups?limit=5', { headers }),
+    ]);
+
+    if (usersRes.status === 'fulfilled') {
+      const body: any = await usersRes.value.json().catch(() => null);
+      const users = Array.isArray(body?.results) ? body.results : (Array.isArray(body) ? body : []);
+      if (usersRes.value.ok && users.length > 0) {
+        preview.records = users.map((user: any) => ({
+          id: user.id || user._id,
+          label: user.displayName || user.email || user.username || 'User',
+          status: user.suspended ? 'suspended' : 'active',
+          updated_at: user.attributes?.updatedAt || user.updated || null,
+          meta: user.email || user.username || null,
+        }));
+        preview.metrics = {
+          user_count: users.length,
+          active_users: users.filter((user: any) => !user.suspended).length,
+        };
+      } else {
+        preview.notes.push('Recent JumpCloud users could not be loaded with the current API key.');
+      }
+    }
+
+    if (groupsRes.status === 'fulfilled') {
+      const body: any = await groupsRes.value.json().catch(() => null);
+      const groups = Array.isArray(body?.results) ? body.results : (Array.isArray(body) ? body : []);
+      if (groupsRes.value.ok && groups.length > 0) {
+        preview.groups = groups.map((group: any) => ({
+          id: group.id || group._id,
+          name: group.name || 'Group',
+          description: group.description || null,
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: groups.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review JumpCloud users and group coverage before letting agents approve or deny identity changes.'
+      : 'Reconnect JumpCloud with a valid API key if you want live identity context inside Rasi.';
+  } else if (aliases.includes('jamf')) {
+    const baseUrl = String(credentials.base_url || credentials.baseUrl || credentials.domain || '').replace(/\/+$/, '');
+    const jamfToken = String(credentials.access_token || credentials.accessToken || credentials.api_token || credentials.apiToken || '');
+    if (!baseUrl || !jamfToken) {
+      return res.status(400).json({ success: false, error: 'Jamf credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${jamfToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [devicesRes, groupsRes] = await Promise.allSettled([
+      fetch(`${baseUrl}/api/v1/computers-inventory?page=0&page-size=8&sort=general.name%3Aasc`, { headers }),
+      fetch(`${baseUrl}/api/v1/smart-computer-groups?page=0&page-size=5&sort=name%3Aasc`, { headers }),
+    ]);
+
+    if (devicesRes.status === 'fulfilled') {
+      const body: any = await devicesRes.value.json().catch(() => null);
+      const results = Array.isArray(body?.results) ? body.results : [];
+      if (devicesRes.value.ok && results.length > 0) {
+        preview.records = results.map((device: any) => ({
+          id: device.id,
+          label: device.general?.name || device.hardware?.model || 'Device',
+          status: device.general?.remoteManagement?.managed ? 'managed' : 'observed',
+          updated_at: device.general?.lastContactTime || null,
+          meta: device.hardware?.serialNumber || device.general?.assetTag || null,
+        }));
+        preview.metrics = {
+          device_count: results.length,
+          managed_devices: results.filter((device: any) => Boolean(device.general?.remoteManagement?.managed)).length,
+        };
+      } else {
+        preview.notes.push('Recent Jamf devices could not be loaded with the current token.');
+      }
+    }
+
+    if (groupsRes.status === 'fulfilled') {
+      const body: any = await groupsRes.value.json().catch(() => null);
+      const results = Array.isArray(body?.results) ? body.results : [];
+      if (groupsRes.value.ok && results.length > 0) {
+        preview.groups = results.map((group: any) => ({
+          id: group.id,
+          name: group.name || 'Device group',
+          description: group.isSmart ? 'Smart group' : 'Static group',
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: results.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review managed devices and group coverage before letting agents apply endpoint policy changes in Jamf.'
+      : 'Reconnect Jamf with a valid base URL and token if you want live endpoint context inside Rasi.';
+  } else if (aliases.includes('azure-ad') || aliases.includes('azure_ad')) {
+    if (!accessToken) {
+      return res.status(400).json({ success: false, error: 'Azure AD credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    const [usersRes, groupsRes] = await Promise.allSettled([
+      fetch('https://graph.microsoft.com/v1.0/users?$top=8&$select=id,displayName,userPrincipalName,accountEnabled', { headers }),
+      fetch('https://graph.microsoft.com/v1.0/groups?$top=5&$select=id,displayName,mailEnabled,securityEnabled', { headers }),
+    ]);
+
+    if (usersRes.status === 'fulfilled') {
+      const body: any = await usersRes.value.json().catch(() => null);
+      if (usersRes.value.ok && Array.isArray(body?.value)) {
+        preview.records = body.value.map((user: any) => ({
+          id: user.id,
+          label: user.displayName || user.userPrincipalName || 'User',
+          status: user.accountEnabled ? 'active' : 'disabled',
+          updated_at: null,
+          meta: user.userPrincipalName || null,
+        }));
+        preview.metrics = {
+          user_count: body.value.length,
+          active_users: body.value.filter((user: any) => Boolean(user.accountEnabled)).length,
+        };
+      } else {
+        preview.notes.push('Recent Azure AD users could not be loaded with the current token.');
+      }
+    }
+
+    if (groupsRes.status === 'fulfilled') {
+      const body: any = await groupsRes.value.json().catch(() => null);
+      if (groupsRes.value.ok && Array.isArray(body?.value)) {
+        preview.groups = body.value.map((group: any) => ({
+          id: group.id,
+          name: group.displayName || 'Group',
+          description: group.securityEnabled ? 'Security group' : (group.mailEnabled ? 'Mail-enabled group' : null),
+        }));
+        preview.metrics = {
+          ...(preview.metrics || {}),
+          group_count: body.value.length,
+        };
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
+      ? 'Review users and groups before letting agents provision, disable, or change access in Azure AD.'
+      : 'Reconnect Azure AD with Microsoft Graph directory read access if you want live identity context inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }
