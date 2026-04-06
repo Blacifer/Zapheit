@@ -321,7 +321,7 @@ const hasData = agents.length > 0;
         id: `agent-${agent.id}`,
         at: agent.created_at,
         title: `${agent.name} added to agents`,
-        detail: `${agent.platform} · ${agent.model_name}`,
+        detail: `${(agent as any).config?.display_provider || agent.platform} · ${agent.model_name}`,
         tone: agent.status === 'terminated' ? 'warn' : 'info',
       })),
       ...costData.slice(0, 6).map((entry): ActivityItem => ({
