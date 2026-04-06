@@ -85,8 +85,8 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
       }
 
       setLiveModels(FALLBACK_MODELS);
-      setProviderFilter(fallback[0].provider);
-      setForm((f) => ({ ...f, model_name: fallback[0].id }));
+      setProviderFilter(FALLBACK_MODELS[0].provider);
+      setForm((f) => ({ ...f, model_name: FALLBACK_MODELS[0].id }));
       setLoadingModels(false);
     };
     void loadModels();

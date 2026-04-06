@@ -79,10 +79,6 @@ export const agentApi = {
     });
   },
 
-  async getHealth(agentId: string): Promise<ApiResponse<unknown>> {
-    return authenticatedFetch<unknown>(`/agents/${agentId}/health`, { method: 'GET' });
-  },
-
   async getVersions(agentId: string): Promise<ApiResponse<AgentVersion[]>> {
     return authenticatedFetch<AgentVersion[]>(`/agents/${agentId}/versions`, { method: 'GET' });
   },

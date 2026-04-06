@@ -885,7 +885,7 @@ router.post('/bulk-deny', requirePermission('policies.manage'), async (req: Requ
 });
 
 // PATCH /approvals/:id/delegate — re-assign approval to another user
-router.patch('/approvals/:id/delegate', requirePermission('approvals.write'), async (req: Request, res: Response) => {
+router.patch('/approvals/:id/delegate', requirePermission('policies.manage'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     const jwt = getUserJwt(req);

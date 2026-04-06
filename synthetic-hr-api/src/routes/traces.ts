@@ -41,7 +41,7 @@ router.get('/traces', requirePermission('incidents.read'), async (req: Request, 
       sort_dir = 'desc',
     } = req.query;
 
-    const limit = safeLimit(rawLimit as string, 100, 500);
+    const limit = safeLimit(rawLimit as string);
     const offset = Math.max(0, parseInt(rawOffset as string, 10) || 0);
 
     const params = new URLSearchParams();

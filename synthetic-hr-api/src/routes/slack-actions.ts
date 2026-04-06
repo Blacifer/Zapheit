@@ -181,12 +181,12 @@ async function processSlackAction(params: {
   }
 
   // 3. Write audit log
-  await auditLog({
-    organizationId: orgId,
-    userId: null,
+  await auditLog.log({
+    user_id: slackUserName || 'slack',
+    organization_id: orgId,
     action: isApprove ? 'approval.approved_via_slack' : 'approval.denied_via_slack',
-    resourceType: 'approval_request',
-    resourceId: approvalId,
+    resource_type: 'approval_request',
+    resource_id: approvalId,
     metadata: { slack_user: slackUserName, reviewer_note: reviewerNote },
   }).catch((err: any) => {
     logger.warn('slack-actions: audit log failed', { error: err?.message });

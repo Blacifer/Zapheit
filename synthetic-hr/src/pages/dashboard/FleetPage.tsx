@@ -528,6 +528,7 @@ export default function FleetPage({
         analytics: null,
         loadingAnalytics: false,
         analyticsError: null,
+        forecast: null,
       });
       return;
     }

@@ -440,7 +440,7 @@ router.post('/mcp-servers/:id/test', requirePermission('settings.read'), async (
       if (!manifestRes.ok) {
         return res.json({ success: false, error: `Server returned HTTP ${manifestRes.status}` });
       }
-      const manifest = await manifestRes.json().catch(() => null);
+      const manifest: any = await manifestRes.json().catch(() => null);
       const toolCount = Array.isArray(manifest?.tools) ? manifest.tools.length : 0;
       return res.json({ success: true, data: { toolCount, tools: (manifest?.tools || []).map((t: any) => t.name) } });
     } catch (fetchErr: any) {

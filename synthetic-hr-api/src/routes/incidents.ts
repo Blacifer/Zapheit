@@ -417,7 +417,7 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
           incidentId: incident.id,
           title: detectedTitle,
           severity: highest.severity,
-          incidentType: highest.type,
+          incidentType: highest.type || '',
           agentId: agent_id || undefined,
           description: highest.details,
         });
@@ -425,7 +425,7 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
           incidentId: incident.id,
           title: detectedTitle,
           severity: highest.severity as any,
-          incidentType: highest.type,
+          incidentType: highest.type || '',
           agentId: agent_id || undefined,
           description: highest.details,
           dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
