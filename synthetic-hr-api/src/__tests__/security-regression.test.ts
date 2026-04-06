@@ -22,6 +22,9 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'marketplace.ts'),
   // Slack OAuth callback arrives without a user session (server-to-server flow).
   path.join(ROUTES_DIR, 'slack.ts'),
+  // Slack interactive component callbacks (button clicks) arrive from Slack without a user JWT;
+  // HMAC-verified at the transport layer — service-role required to update approval_requests.
+  path.join(ROUTES_DIR, 'slack-actions.ts'),
   // Approvals: service-role used only for action_policies lookup (routing rule enforcement — server-side policy, not user data).
   path.join(ROUTES_DIR, 'approvals.ts'),
   // Playbooks: service-role used only for public API endpoint (B5, API-key auth) and public share endpoint (B6, no user JWT).
