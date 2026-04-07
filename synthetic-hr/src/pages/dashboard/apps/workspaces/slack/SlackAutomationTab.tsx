@@ -73,7 +73,7 @@ export function SlackAutomationTab() {
     setCommandResult(null);
     try {
       // Parse NL command into action + params
-      const res = await api.connectors.executeAction(CONNECTOR_ID, 'nl_command', {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'nl_command', {
         command: command.trim(),
         agentId: selectedAgent,
       });
@@ -82,7 +82,7 @@ export function SlackAutomationTab() {
           setCommandResult({ success: true, message: 'Action requires approval — sent to approval queue.' });
           toast.info('Action sent for approval');
         } else {
-          setCommandResult({ success: true, message: res.data?.result?.message || 'Command executed successfully.' });
+          setCommandResult({ success: true, message: res.data?.data?.message || 'Command executed successfully.' });
           toast.success('Command executed');
         }
       } else {

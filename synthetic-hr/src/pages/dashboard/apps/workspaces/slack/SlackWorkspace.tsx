@@ -41,10 +41,10 @@ export default function SlackWorkspace() {
   const loadChannels = useCallback(async () => {
     setLoadingChannels(true);
     try {
-      const res = await api.connectors.executeAction(CONNECTOR_ID, 'list_channels', {});
-      if (res.success && res.data?.result) {
-        const list = Array.isArray(res.data.result) ? res.data.result
-          : res.data.result?.channels ?? [];
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_channels', {});
+      if (res.success && res.data?.data) {
+        const list = Array.isArray(res.data.data) ? res.data.data
+          : res.data.data?.channels ?? [];
         setChannels(list);
         setConnected(true);
       } else {
@@ -61,13 +61,13 @@ export default function SlackWorkspace() {
   const loadMessages = useCallback(async (channelId: string) => {
     setLoadingMessages(true);
     try {
-      const res = await api.connectors.executeAction(CONNECTOR_ID, 'get_channel_history', {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'get_channel_history', {
         channel: channelId,
         limit: 50,
       });
-      if (res.success && res.data?.result) {
-        const msgs = Array.isArray(res.data.result) ? res.data.result
-          : res.data.result?.messages ?? [];
+      if (res.success && res.data?.data) {
+        const msgs = Array.isArray(res.data.data) ? res.data.data
+          : res.data.data?.messages ?? [];
         setMessages(msgs);
       }
     } catch {
@@ -80,7 +80,7 @@ export default function SlackWorkspace() {
   /* -- Send message ------------------------------------------------ */
   const sendMessage = useCallback(async (text: string) => {
     if (!selectedChannel) return;
-    const res = await api.connectors.executeAction(CONNECTOR_ID, 'send_message', {
+    const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'send_message', {
       channel: selectedChannel.id,
       text,
     });

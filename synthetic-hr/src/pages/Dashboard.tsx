@@ -410,6 +410,24 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     navigate(`/dashboard/${normalizedPage}`);
   }, [navigate]);
 
+  const [error, setError] = useState<string | null>(null);
+
+  const addNotification = async (type: string, title: string, message: string) => {
+    const newNotification: DashboardNotification = {
+      id: crypto.randomUUID(),
+      type: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info',
+      title,
+      message,
+      timestamp: new Date().toISOString(),
+      read: false,
+      source: 'local',
+    };
+    const updated = [newNotification, ...notifications].slice(0, 50);
+    setNotifications(updated);
+    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
+    writeNotificationState(user?.organizationName, readIds);
+  };
+
   const handleTemplateDeploy = useCallback(async (template: any) => {
     const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
       customer_support: 'support', customer_success: 'support', call_center: 'support', healthcare: 'support',
@@ -792,36 +810,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     setNotifications(updated);
     writeNotificationState(user?.organizationName, updated.map((notification) => notification.id));
   };
-
-  const addNotification = async (type: string, title: string, message: string) => {
-    const newNotification: DashboardNotification = {
-      id: crypto.randomUUID(),
-      type: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info',
-      title,
-      message,
-      timestamp: new Date().toISOString(),
-      read: false,
-      source: 'local',
-    };
-    const updated = [newNotification, ...notifications].slice(0, 50);
-    setNotifications(updated);
-    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
-    writeNotificationState(user?.organizationName, readIds);
-
-    // Sync to Appwrite
-    /*try {
-      await appwriteDB.createNotification({
-        type,
-        title,
-        message,
-        read: false
-      });
-    } catch (awError) {
-      console.warn('Failed to sync notification to Appwrite:', awError);
-    }*/
-  };
-
-  const [error, setError] = useState<string | null>(null);
 
   const saveAgents = async (newAgentsOrUpdater: AIAgent[] | ((currentAgents: AIAgent[]) => AIAgent[])) => {
     try {
@@ -1561,7 +1549,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="batch" element={<Navigate to="/dashboard/platform?tab=batch" replace />} />
                   <Route path="audit-log" element={<AuditLogPage />} />
                   <Route path="coverage" element={<CoverageStatusPage />} />
-                  <Route path="jobs" element={<JobsInboxPage agents={agents} />} />
                   <Route path="work-items" element={<WorkItemsPage />} />
                   <Route path="action-policies" element={<ActionPoliciesPage />} />
                   {/* Settings sub-pages */}
