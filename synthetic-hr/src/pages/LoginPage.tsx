@@ -184,8 +184,8 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
         <div className="w-full max-w-md">
           <div className="card-surface p-8">
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                <ShieldCheck className="w-7 h-7 text-cyan-400" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.15)] flex items-center justify-center">
+                <ShieldCheck className="w-7 h-7 text-cyan-300" />
               </div>
               <div>
                 <span className="text-xl font-bold text-white">Two-Factor Auth</span>
@@ -256,11 +256,11 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
 
           <div className="card-surface p-8">
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.15)] flex items-center justify-center">
+                <Brain className="w-7 h-7 text-cyan-300" />
               </div>
               <div>
-                <span className="text-xl font-bold text-white">RASI</span>
+                <span className="text-xl font-bold gradient-text">RASI</span>
                 <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
               </div>
             </div>
@@ -321,27 +321,49 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
 
   // ── Main login view ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen app-bg flex items-center justify-center p-6 text-slate-50">
-      <div className="w-full max-w-md">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors">
-          <ArrowRight className="w-4 h-4 rotate-180" />
-          Back to Home
-        </button>
-
-        <div className="card-surface p-8">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-              <Brain className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <span className="text-xl font-bold text-white">RASI</span>
-              <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
+    <div className="min-h-screen flex text-slate-50">
+      {/* Left branding panel — hidden on mobile */}
+      <div className="hidden lg:flex lg:w-1/2 app-bg items-center justify-center relative overflow-hidden">
+        <div className="absolute top-20 left-10 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-24 right-12 w-60 h-60 bg-blue-500/12 rounded-full blur-3xl animate-float delay-200" />
+        <div className="absolute top-1/3 right-1/4 w-48 h-48 bg-indigo-500/08 rounded-full blur-2xl" />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="surface-raised rounded-3xl p-6 w-64 opacity-40 absolute top-1/4 left-1/4 -translate-x-1/4 animate-float delay-300" style={{ height: 80 }} />
+          <div className="surface-raised rounded-2xl p-4 w-48 opacity-30 absolute bottom-1/3 right-1/4 animate-float delay-100" style={{ height: 60 }} />
+        </div>
+        <div className="relative z-10 text-center px-12">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.20)] flex items-center justify-center">
+              <Brain className="w-8 h-8 text-cyan-300" />
             </div>
           </div>
+          <h1 className="gradient-text text-4xl font-bold mb-3">RASI</h1>
+          <p className="text-slate-400 text-base leading-relaxed">AI Agent Control Plane<br />Govern every agent, every conversation</p>
+        </div>
+      </div>
 
-          <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
-          <p className="text-slate-400 mb-6">Sign in to your account</p>
+      {/* Right form panel */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 app-bg lg:bg-slate-950">
+        <div className="w-full max-w-md">
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors">
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to Home
+          </button>
+
+          <div className="card-surface p-8">
+            {/* Logo — visible on mobile only */}
+            <div className="flex items-center gap-3 mb-8 lg:hidden">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.15)] flex items-center justify-center">
+                <Brain className="w-7 h-7 text-cyan-300" />
+              </div>
+              <div>
+                <span className="text-xl font-bold gradient-text">RASI</span>
+                <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
+            <p className="text-slate-400 mb-6">Sign in to your account</p>
 
           {/* OAuth Buttons */}
           <div className="space-y-3 mb-6">
@@ -496,6 +518,7 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
               Sign up
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

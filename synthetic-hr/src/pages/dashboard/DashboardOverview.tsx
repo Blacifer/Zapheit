@@ -998,7 +998,7 @@ const hasData = agents.length > 0;
                 key={card.label}
                 variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                className="rounded-2xl border border-slate-700/60 bg-slate-950/50 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                className="card-surface p-4"
               >
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">{card.label}</p>
                 <p className={`mt-3 text-3xl font-bold font-mono tabular-nums ${card.tone}`}>{card.value}</p>
@@ -1009,7 +1009,7 @@ const hasData = agents.length > 0;
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-800/80 pt-5 md:grid-cols-2 xl:grid-cols-4">
           {movementCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-slate-800/80 bg-slate-950/35 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div key={card.label} className="card-surface p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
@@ -1076,7 +1076,7 @@ const hasData = agents.length > 0;
         </div>
 
         {/* Widget 3: Incident Heatmap */}
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-950/50 backdrop-blur-sm p-5">
+        <div className="card-surface p-5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">Incidents by Hour of Day</p>
             <span className="text-xs text-slate-600">{incidents.length} incident{incidents.length !== 1 ? 's' : ''} total</span>
@@ -1142,7 +1142,7 @@ const hasData = agents.length > 0;
 
       {/* Plan & Usage card */}
       {usageData && (
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5">
+        <div className="card-surface p-5">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-white">Plan &amp; Usage</p>
             <div className="flex items-center gap-3">
@@ -1310,22 +1310,22 @@ const hasData = agents.length > 0;
           <p className="mt-1 text-sm text-slate-400">Governance and cost visibility across your fleet.</p>
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+            <div className="card-surface p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Budget coverage</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-emerald-300">{agents.length === 0 ? '0%' : `${Math.round((agents.length - agentsWithoutBudget.length) / agents.length * 100)}%`}</p>
               <p className="mt-2 text-sm text-slate-400">{agents.length - agentsWithoutBudget.length}/{agents.length} agents capped</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+            <div className="card-surface p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Open incidents</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-slate-100">{openIncidents.length}</p>
               <p className="mt-2 text-sm text-slate-400">{severeIncidents.length} high severity</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+            <div className="card-surface p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Spend per agent</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-violet-300">{formatCurrency(averageSpendPerAgent)}</p>
               <p className="mt-2 text-sm text-slate-400">Current blended average</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
+            <div className="card-surface p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Spend per conversation</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-white">{formatCurrency(averageSpendPerConversation)}</p>
               <p className="mt-2 text-sm text-slate-400">{totalConversations.toLocaleString()} total governed conversations</p>

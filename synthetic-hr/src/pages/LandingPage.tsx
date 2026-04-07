@@ -612,12 +612,12 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.18)]">
+                <Brain className="w-7 h-7 text-cyan-300" />
               </div>
               <div>
-                <span className="text-xl font-bold text-white">RASI</span>
-                <span className="text-xs text-blue-300 block -mt-1">AI Agent Governance</span>
+                <span className="text-xl font-bold gradient-text">RASI</span>
+                <span className="text-xs text-slate-500 block -mt-1">AI Agent Governance</span>
               </div>
             </div>
 
@@ -686,16 +686,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
-        {/* Animated background elements — single blob, no animate-pulse for performance */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 w-80 h-80 bg-blue-500/14 rounded-full blur-3xl" />
+        {/* Ambient background orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-10 w-96 h-96 bg-blue-500/14 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-32 right-16 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl animate-float delay-200" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/05 rounded-full blur-[80px]" />
         </div>
 
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-6">
           <div className="mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md">
+          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.08)]">
             <Sparkles className="w-4 h-4 text-blue-300" />
             <span className="text-sm text-slate-200">AI control plane for teams running live agents in production</span>
           </div>
@@ -741,9 +743,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             ].map((stat, i) => (
               <div
                 key={i}
-                className="p-4 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 transition-all"
+                className="card-surface p-5 transition-all"
               >
-                <div className="text-2xl font-bold text-cyan-400">{stat.value}</div>
+                <div className="text-2xl font-bold gradient-text">{stat.value}</div>
                 <div className="mt-1 text-sm leading-5 text-slate-400">{stat.label}</div>
               </div>
             ))}
@@ -1221,9 +1223,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             ].map((item, idx) => (
               <div
                 key={idx}
-                className="p-4 sm:p-6 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-cyan-400/30 transition-colors"
+                className="card-surface p-4 sm:p-6"
               >
-                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/15 to-blue-500/15 border border-cyan-500/20 flex items-center justify-center mb-4">
                   <item.icon className="w-6 h-6 text-cyan-300" />
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
@@ -1249,7 +1251,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={onSignUp}
-              className="group px-6 sm:px-8 md:px-10 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center gap-2"
+              className="btn-primary group px-8 md:px-10 py-4 text-base"
             >
               Start Free — No Credit Card
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -1257,7 +1259,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             {onDemo ? (
               <button
                 onClick={onDemo}
-                className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold rounded-xl hover:bg-white/20 transition-all"
+                className="btn-secondary px-8 md:px-10 py-4 text-base"
               >
                 Schedule Demo
               </button>

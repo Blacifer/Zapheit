@@ -194,17 +194,17 @@ export function Sidebar({
         <div className={cn('flex items-center mb-5 px-3 pt-4', expanded ? 'justify-between' : 'justify-center')}>
           {expanded ? (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                <Brain className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+                <Brain className="w-5 h-5 text-cyan-300" />
               </div>
               <div>
-                <span className="text-base font-bold text-white leading-none">RASI</span>
-                <span className="text-[10px] text-blue-300 block leading-none mt-0.5">Synthetic HR</span>
+                <span className="text-base font-bold gradient-text leading-none">RASI</span>
+                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">Synthetic HR</span>
               </div>
             </div>
           ) : (
-            <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-              <Brain className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+              <Brain className="w-5 h-5 text-cyan-300" />
             </div>
           )}
           <button
@@ -222,7 +222,7 @@ export function Sidebar({
         {expanded ? (
           <button
             onClick={dispatchSearch}
-            className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
+            className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.07] text-slate-500 text-xs hover:border-white/[0.12] hover:text-slate-400 transition-colors backdrop-blur-sm"
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span className="flex-1 text-left">Search...</span>

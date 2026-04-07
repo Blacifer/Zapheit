@@ -262,7 +262,7 @@ export default function PublicChatPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
 
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shrink-0">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/70 px-4 py-3 flex items-center gap-3 shrink-0">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0">
           <span className="text-white text-xs font-bold">R</span>
         </div>
@@ -295,20 +295,20 @@ export default function PublicChatPage() {
               <div
                 className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm ${
                   msg.role === 'user'
-                    ? 'bg-slate-900 text-white rounded-tr-sm'
-                    : 'bg-white border border-slate-200 shadow-sm rounded-tl-sm'
+                    ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white border border-white/10 rounded-tr-sm shadow-sm'
+                    : 'bg-white/90 backdrop-blur-sm border border-slate-200/80 border-l-2 border-l-cyan-400/40 shadow-sm rounded-tl-sm'
                 }`}
               >
                 {msg.role === 'user' ? (
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                 ) : msg.content === '' ? (
                   // Streaming cursor
-                  <span className="inline-block w-2 h-4 bg-slate-400 animate-pulse rounded-sm" />
+                  <span className="inline-block w-2 h-4 bg-cyan-400 animate-pulse rounded-sm" />
                 ) : (
                   <>
                     {renderMarkdown(msg.content)}
                     {streaming && msg.id === messages[messages.length - 1]?.id && (
-                      <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse rounded-sm ml-0.5 align-middle" />
+                      <span className="inline-block w-1.5 h-3.5 bg-cyan-400 animate-pulse rounded-sm ml-0.5 align-middle" />
                     )}
                   </>
                 )}
@@ -369,7 +369,7 @@ export default function PublicChatPage() {
           <button
             onClick={() => void handleSend()}
             disabled={!input.trim() || streaming}
-            className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white hover:shadow-[0_0_12px_rgba(34,211,238,0.35)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             aria-label="Send"
           >
             {streaming ? (
