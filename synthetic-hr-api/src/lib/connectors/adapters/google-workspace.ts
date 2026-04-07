@@ -57,7 +57,7 @@ const googleAdapter: ConnectorAdapter = {
         const max = params.maxResults || 20;
         const r = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}${q ? `&q=${encodeURIComponent(q)}` : ''}`, { headers });
         if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data?.messages || [], meta: { resultSizeEstimate: r.data?.resultSizeEstimate } };
+        return { success: true, data: r.data?.messages || [] };
       }
       case 'get_email': {
         const id = params.messageId || params.id;

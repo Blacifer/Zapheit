@@ -84,7 +84,7 @@ const notionAdapter: ConnectorAdapter = {
           method: 'POST', headers, body: JSON.stringify(body),
         });
         if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data?.results || [], meta: { has_more: r.data?.has_more, next_cursor: r.data?.next_cursor } };
+        return { success: true, data: r.data?.results || [] };
       }
       case 'get_page': {
         const pageId = params.pageId || params.id;

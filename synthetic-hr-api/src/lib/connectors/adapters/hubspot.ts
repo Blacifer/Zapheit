@@ -77,7 +77,7 @@ const hubspotAdapter: ConnectorAdapter = {
           { headers },
         );
         if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data.results, meta: { paging: r.data.paging, total: r.data.total } };
+        return { success: true, data: { results: r.data.results, paging: r.data.paging, total: r.data.total } };
       }
 
       case 'get_contact': {
@@ -102,7 +102,7 @@ const hubspotAdapter: ConnectorAdapter = {
           }),
         });
         if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data.results, meta: { total: r.data.total } };
+        return { success: true, data: { results: r.data.results, total: r.data.total } };
       }
 
       /* -- Deals --------------------------------------------------- */
@@ -115,7 +115,7 @@ const hubspotAdapter: ConnectorAdapter = {
           { headers },
         );
         if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data.results, meta: { paging: r.data.paging, total: r.data.total } };
+        return { success: true, data: { results: r.data.results, paging: r.data.paging, total: r.data.total } };
       }
 
       case 'get_deal': {
@@ -137,7 +137,7 @@ const hubspotAdapter: ConnectorAdapter = {
           { headers },
         );
         if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}` };
-        return { success: true, data: r.data.results, meta: { paging: r.data.paging, total: r.data.total } };
+        return { success: true, data: { results: r.data.results, paging: r.data.paging, total: r.data.total } };
       }
 
       default:
