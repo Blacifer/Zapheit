@@ -31,6 +31,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'playbooks.ts'),
   // Compliance: PDF generation and bulk data export require cross-table org reads; no per-request user JWT in the PDF render path.
   path.join(ROUTES_DIR, 'compliance.ts'),
+  // Employee portal: public token-gated endpoints — no user JWT; service-role required to look up agent_portal_links and ai_agents.
+  path.join(ROUTES_DIR, 'portal.ts'),
 ]);
 
 function walk(dir: string): string[] {
