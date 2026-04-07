@@ -155,22 +155,36 @@ const PlaybooksAnalyticsTab = lazy(() => import('./playbooks/PlaybooksAnalyticsT
 // ─── Visual ↔ text workflow conversion helpers ─────────────────────────────────
 
 function workflowToGraph(wf: Workflow): WorkflowGraph {
-  const nodes = wf.steps.map((step, idx) => ({
-    id: step.id,
-    type: step.kind === 'branch' ? 'condition' : 'llm_step',
-    position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
-    data: step.kind === 'llm'
-      ? {
-          label: `Step ${idx + 1}`,
-          model: step.model,
-          prompt: step.messages?.[1]?.content ?? '',
-          output_key: (step as any).output_key,
-        }
-      : {
-          label: `Branch`,
-          condition: (step as BranchStep).source,
-        },
-  }));
+  const nodes = wf.steps.map((step, idx) => {
+    if (step.kind === 'branch') {
+      return {
+        id: step.id,
+        type: 'condition' as const,
+        position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+        data: { label: 'Branch', condition: (step as BranchStep).source },
+      };
+    }
+    if (step.kind === 'connector') {
+      const cs = step as ConnectorStep;
+      return {
+        id: step.id,
+        type: 'action' as const,
+        position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+        data: { label: `${cs.connector_id}.${cs.action}`, tool: cs.action, integration: cs.connector_id },
+      };
+    }
+    return {
+      id: step.id,
+      type: 'llm_step' as const,
+      position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+      data: {
+        label: `Step ${idx + 1}`,
+        model: (step as LlmStep).model,
+        prompt: (step as LlmStep).messages?.[1]?.content ?? '',
+        output_key: (step as any).output_key,
+      },
+    };
+  });
 
   const edges: WorkflowGraph['edges'] = [];
   wf.steps.forEach((step) => {
@@ -184,11 +198,11 @@ function workflowToGraph(wf: Workflow): WorkflowGraph {
           data: { label: c.test === 'else' ? 'false' : 'true' },
         });
       });
-    } else if ((step as LlmStep).next) {
+    } else if ((step as any).next) {
       edges.push({
         id: `e_${step.id}_next`,
         source: step.id,
-        target: (step as LlmStep).next!,
+        target: (step as any).next!,
         type: 'conditional',
         data: { label: '' },
       });
@@ -213,7 +227,21 @@ function graphToWorkflow(graph: WorkflowGraph, existing: Workflow): Workflow {
         })),
       };
     }
-    // llm_step / action / human_review all map to llm kind (best effort)
+    // llm_step / human_review map to llm kind (best effort)
+    // action nodes map to connector kind
+    if (n.type === 'action') {
+      const existingStep = existing.steps.find((s) => s.id === n.id) as ConnectorStep | undefined;
+      const outEdge = graph.edges.find((e) => e.source === n.id);
+      return {
+        id: n.id,
+        kind: 'connector' as const,
+        connector_id: n.data.integration ?? existingStep?.connector_id ?? '',
+        action: n.data.tool ?? existingStep?.action ?? '',
+        params: existingStep?.params ?? {},
+        param_template: existingStep?.param_template ?? {},
+        next: outEdge?.target ?? null,
+      };
+    }
     const existingStep = existing.steps.find((s) => s.id === n.id) as LlmStep | undefined;
     const outEdge = graph.edges.find((e) => e.source === n.id);
     return {
@@ -259,7 +287,17 @@ type BranchStep = {
   conditions: BranchCondition[];
 };
 
-type WorkflowStep = LlmStep | BranchStep;
+type ConnectorStep = {
+  id: string;
+  kind: 'connector';
+  connector_id: string;       // e.g. 'slack', 'jira', 'github'
+  action: string;             // e.g. 'send_message', 'search_issues'
+  params?: Record<string, any>;
+  param_template?: Record<string, string>; // use {{input.x}} or {{steps.y.message}}
+  next?: string | null;
+};
+
+type WorkflowStep = LlmStep | BranchStep | ConnectorStep;
 
 type Workflow = {
   steps: WorkflowStep[];
@@ -495,6 +533,29 @@ function CustomPlaybookCard({
     }));
   };
 
+  const addConnectorStep = () => {
+    wfUpdate((wf) => ({
+      ...wf,
+      steps: [
+        ...wf.steps,
+        {
+          id: `connector_${wf.steps.length + 1}`,
+          kind: 'connector' as const,
+          connector_id: '',
+          action: '',
+          params: {},
+        },
+      ],
+    }));
+  };
+
+  const updateConnectorStep = (id: string, patch: Partial<ConnectorStep>) => {
+    wfUpdate((wf) => ({
+      ...wf,
+      steps: wf.steps.map((s) => s.id === id && s.kind === 'connector' ? { ...s, ...patch } : s),
+    }));
+  };
+
   const saveWorkflow = async () => {
     const res = await api.playbooks.updateCustom(cp.id, { workflow } as any);
     if (res.success && res.data) { onUpdate(res.data); setBuilderDirty(false); toast.success('Workflow saved'); }
@@ -558,6 +619,12 @@ function CustomPlaybookCard({
         if (poll.success) {
           const j = poll.data.job;
           if (j.status === 'succeeded' || j.status === 'failed') {
+            if (j.output?.pending_approval) {
+              const connector = j.output.connector;
+              setRunOutput(`⏳ Awaiting approval — ${connector?.service ?? 'connector'}.${connector?.action ?? 'action'} requires human approval before execution. Check the Approvals page.`);
+              setRunStatus('done');
+              return;
+            }
             const out = j.output?.final?.message || j.output?.message || '';
             setRunOutput(out || (j.status === 'failed' ? 'Run failed.' : '(no output)'));
             setRunStatus(j.status === 'succeeded' ? 'done' : 'error');
@@ -646,6 +713,14 @@ function CustomPlaybookCard({
                   className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" /> Add LLM Step
+                </button>
+              )}
+              {builderMode === 'text' && (
+                <button
+                  onClick={addConnectorStep}
+                  className="px-2 py-1 rounded-md bg-purple-900/40 hover:bg-purple-800/40 border border-purple-500/30 text-xs text-purple-300 flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Add Connector
                 </button>
               )}
               {builderMode === 'text' && (
@@ -799,6 +874,79 @@ function CustomPlaybookCard({
                         >
                           <Plus className="w-3 h-3" /> Add condition
                         </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Connector step
+                if (step.kind === 'connector') {
+                  const cs = step as ConnectorStep;
+                  return (
+                    <div key={step.id} className="bg-slate-900/40 border border-purple-500/30 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono">Connector</span>
+                          <input
+                            value={cs.id}
+                            onChange={(e) => updateConnectorStep(cs.id, { id: e.target.value })}
+                            className="font-mono text-xs bg-transparent border-b border-slate-700 text-slate-300 w-28 focus:outline-none focus:border-purple-500/50"
+                            placeholder="step id"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => moveStep(idx, -1)} disabled={idx === 0} title="Move up" className="text-slate-500 hover:text-slate-300 disabled:opacity-20 p-0.5">
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => moveStep(idx, 1)} disabled={idx === workflow.steps.length - 1} title="Move down" className="text-slate-500 hover:text-slate-300 disabled:opacity-20 p-0.5">
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => removeStep(cs.id)} className="text-slate-500 hover:text-red-400">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500">Connector</label>
+                          <select
+                            value={cs.connector_id || ''}
+                            onChange={(e) => updateConnectorStep(cs.id, { connector_id: e.target.value, action: '' })}
+                            className="mt-0.5 w-full bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs"
+                          >
+                            <option value="">Select…</option>
+                            <option value="slack">Slack</option>
+                            <option value="jira">Jira</option>
+                            <option value="github">GitHub</option>
+                            <option value="hubspot">HubSpot</option>
+                            <option value="quickbooks">QuickBooks</option>
+                            <option value="google-workspace">Google Workspace</option>
+                            <option value="zoho-people">Zoho People</option>
+                            <option value="notion">Notion</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500">Action</label>
+                          <input
+                            value={cs.action || ''}
+                            onChange={(e) => updateConnectorStep(cs.id, { action: e.target.value })}
+                            className="mt-0.5 w-full bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono"
+                            placeholder="send_message"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500">Param template (JSON, use {'{{input.field}}'} tokens)</label>
+                        <textarea
+                          value={typeof cs.param_template === 'string' ? cs.param_template : JSON.stringify(cs.param_template || {}, null, 2)}
+                          onChange={(e) => {
+                            try { updateConnectorStep(cs.id, { param_template: JSON.parse(e.target.value) }); }
+                            catch { updateConnectorStep(cs.id, { param_template: e.target.value as any }); }
+                          }}
+                          rows={3}
+                          className="mt-0.5 w-full bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 font-mono resize-none focus:outline-none focus:border-purple-500/50"
+                          placeholder='{"channel": "{{input.channel}}", "text": "{{steps.step_1.message}}"}'
+                        />
                       </div>
                     </div>
                   );
