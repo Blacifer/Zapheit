@@ -11,6 +11,7 @@ import { useApp } from '../context/AppContext';
 import { api } from '../lib/api-client';
 import { useAgents, useIncidents, useIncidentStream, useCostData, queryKeys } from '../hooks/useData';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
@@ -1517,14 +1518,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="playbooks" element={<Navigate to="/dashboard/agent-studio?tab=playbooks" replace />} />
                   <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="apps" element={<AppsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
-                  <Route path="apps/slack/workspace" element={<SlackWorkspace />} />
-                  <Route path="apps/jira/workspace" element={<JiraWorkspace />} />
-                  <Route path="apps/github/workspace" element={<GitHubWorkspace />} />
-                  <Route path="apps/hubspot/workspace" element={<HubSpotWorkspace />} />
-                  <Route path="apps/quickbooks/workspace" element={<QuickBooksWorkspace />} />
-                  <Route path="apps/google-workspace/workspace" element={<GoogleWorkspace />} />
-                  <Route path="apps/zoho/workspace" element={<ZohoWorkspace />} />
-                  <Route path="apps/notion/workspace" element={<NotionWorkspace />} />
+                  <Route path="apps/slack/workspace" element={<SectionErrorBoundary fallbackMessage="Slack workspace failed to load"><SlackWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/jira/workspace" element={<SectionErrorBoundary fallbackMessage="Jira workspace failed to load"><JiraWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/github/workspace" element={<SectionErrorBoundary fallbackMessage="GitHub workspace failed to load"><GitHubWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/hubspot/workspace" element={<SectionErrorBoundary fallbackMessage="HubSpot workspace failed to load"><HubSpotWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/quickbooks/workspace" element={<SectionErrorBoundary fallbackMessage="QuickBooks workspace failed to load"><QuickBooksWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/google-workspace/workspace" element={<SectionErrorBoundary fallbackMessage="Google Workspace failed to load"><GoogleWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/zoho/workspace" element={<SectionErrorBoundary fallbackMessage="Zoho People workspace failed to load"><ZohoWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={<HubsPage />} />
                   <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />

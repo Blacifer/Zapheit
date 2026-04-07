@@ -27,7 +27,7 @@ type MetricValue = { label: string; value: string | number; loading: boolean; er
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function HubLiveMetrics({ configs }: { configs: IntegrationConfig[] }) {
+export function HubLiveMetrics({ configs, title, subtitle }: { configs: IntegrationConfig[]; title?: string; subtitle?: string }) {
   const navigate = useNavigate();
   const [data, setData] = useState<Record<string, MetricValue[]>>({});
   const [syncTimes, setSyncTimes] = useState<Record<string, Date>>({});
@@ -68,7 +68,7 @@ export function HubLiveMetrics({ configs }: { configs: IntegrationConfig[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Connected Apps</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{title || 'Connected Apps'}</span>
         <div className="flex-1 h-px bg-white/[0.06]" />
       </div>
 

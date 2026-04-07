@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
+  ClipboardList,
   Clock,
   DollarSign,
   Layers3,
@@ -47,6 +48,51 @@ import { authenticatedFetch } from '../../lib/api/_helpers';
 import { useCountUp } from '../../hooks/useCountUp';
 import { useApp } from '../../context/AppContext';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
+import { HubLiveMetrics, type IntegrationConfig } from './hubs/HubLiveMetrics';
+
+// ── Connected App Metrics for Dashboard Overview ──────────────────────────────
+const DASHBOARD_INTEGRATIONS: IntegrationConfig[] = [
+  {
+    connectorId: 'jira',
+    appName: 'Jira',
+    icon: <ClipboardList className="w-3.5 h-3.5 text-blue-400" />,
+    workspacePath: '/dashboard/apps/jira/workspace',
+    brandBg: 'bg-blue-500/20',
+    metrics: [
+      { label: 'Open Issues', action: 'list_issues', params: { jql: 'status != Done', limit: 1 }, transform: (d: any) => Array.isArray(d) ? d.length : (d?.total ?? '—') },
+    ],
+  },
+  {
+    connectorId: 'github',
+    appName: 'GitHub',
+    icon: <Activity className="w-3.5 h-3.5 text-slate-300" />,
+    workspacePath: '/dashboard/apps/github/workspace',
+    brandBg: 'bg-slate-700/60',
+    metrics: [
+      { label: 'Open PRs', action: 'list_pulls', params: { state: 'open', limit: 50 }, transform: (d: any) => Array.isArray(d) ? d.length : 0 },
+    ],
+  },
+  {
+    connectorId: 'quickbooks',
+    appName: 'QuickBooks',
+    icon: <DollarSign className="w-3.5 h-3.5 text-green-400" />,
+    workspacePath: '/dashboard/apps/quickbooks/workspace',
+    brandBg: 'bg-green-500/20',
+    metrics: [
+      { label: 'Unpaid Invoices', action: 'list_invoices', params: { limit: 100 }, transform: (d: any) => Array.isArray(d) ? d.filter((i: any) => Number(i.Balance) > 0).length : '—' },
+    ],
+  },
+  {
+    connectorId: 'hubspot',
+    appName: 'HubSpot',
+    icon: <TrendingUp className="w-3.5 h-3.5 text-orange-400" />,
+    workspacePath: '/dashboard/apps/hubspot/workspace',
+    brandBg: 'bg-orange-500/20',
+    metrics: [
+      { label: 'Deals', action: 'list_deals', params: { limit: 1 }, transform: (d: any) => d?.results?.length ?? (Array.isArray(d) ? d.length : '—') },
+    ],
+  },
+];
 
 interface DashboardOverviewProps {
   agents: AIAgent[];
@@ -1461,6 +1507,12 @@ const hasData = agents.length > 0;
           )}
         </section>
       ) : null}
+
+      {/* Connected Apps Pulse */}
+      <HubLiveMetrics
+        configs={DASHBOARD_INTEGRATIONS}
+        title="Connected Apps Pulse"
+      />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <section className="card-surface rounded-2xl p-6 ">
