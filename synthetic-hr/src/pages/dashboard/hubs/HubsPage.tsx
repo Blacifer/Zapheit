@@ -78,20 +78,20 @@ export default function HubsPage() {
       </div>
 
       {/* Domain tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-thin -mx-1 px-1">
         {DOMAINS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => handleDomainChange(id)}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all',
+              'flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-xs md:text-sm font-medium whitespace-nowrap transition-all',
               activeDomain === id
                 ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 shadow-[0_0_12px_rgba(34,211,238,0.1)]'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent',
             )}
           >
             <Icon className="w-4 h-4" />
-            {label}
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </div>

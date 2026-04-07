@@ -24,39 +24,42 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
   return (
     <div
       onClick={() => onClick(app)}
-      className="flex items-center gap-3 py-3 px-4 rounded-2xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer"
+      className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 rounded-2xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer"
     >
-      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="sm" />
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="sm" />
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold text-white leading-tight">{app.name}</p>
-          {app.trustTier && (
-            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(app.trustTier))}>
-              {getTrustTierLabel(app.trustTier)}
-            </span>
-          )}
-          {app.wave === 1 && app.wave1GuardrailsStatus && (
-            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', guardrailTone(app.wave1GuardrailsStatus))}>
-              {app.wave1GuardrailsStatus === 'applied' ? 'guardrails applied'
-                : app.wave1GuardrailsStatus === 'partial' ? 'guardrails partial'
-                : 'guardrails missing'}
-            </span>
-          )}
-          {app.maturity && (
-            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(app.maturity))}>
-              {getMaturityLabel(app.maturity)}
-            </span>
-          )}
-          <StatusBadge
-            status={
-              healthResult === 'ok' ? 'healthy'
-                : healthResult === 'error' ? 'error'
-                : app.supportsHealthTest === false ? 'unknown'
-                : 'pending'
-            }
-          />
-        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-white leading-tight">{app.name}</p>
+            <StatusBadge
+              status={
+                healthResult === 'ok' ? 'healthy'
+                  : healthResult === 'error' ? 'error'
+                  : app.supportsHealthTest === false ? 'unknown'
+                  : 'pending'
+              }
+            />
+          </div>
+          <div className="hidden sm:flex items-center gap-2 flex-wrap mt-0.5">
+            {app.trustTier && (
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(app.trustTier))}>
+                {getTrustTierLabel(app.trustTier)}
+              </span>
+            )}
+            {app.wave === 1 && app.wave1GuardrailsStatus && (
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', guardrailTone(app.wave1GuardrailsStatus))}>
+                {app.wave1GuardrailsStatus === 'applied' ? 'guardrails applied'
+                  : app.wave1GuardrailsStatus === 'partial' ? 'guardrails partial'
+                  : 'guardrails missing'}
+              </span>
+            )}
+            {app.maturity && (
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(app.maturity))}>
+                {getMaturityLabel(app.maturity)}
+              </span>
+            )}
+          </div>
         {agentNames.length > 0 && (
           <div className="flex items-center gap-1 mt-0.5">
             <Bot className="w-3 h-3 text-slate-500 shrink-0" />
@@ -71,6 +74,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
         {app.lastErrorMsg && (
           <p className="text-[11px] text-rose-400 mt-0.5 truncate">{app.lastErrorMsg}</p>
         )}
+        </div>
       </div>
 
       {app.governanceSummary && !hasError && (
@@ -82,7 +86,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
         </div>
       )}
 
-      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2 shrink-0 pl-0 sm:pl-0" onClick={(e) => e.stopPropagation()}>
         {hasError ? (
           <button
             onClick={() => onConfigure(app)}

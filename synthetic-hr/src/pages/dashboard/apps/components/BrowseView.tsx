@@ -186,8 +186,8 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Filters bar */}
-      <div ref={filtersRef} className="flex items-center gap-2 px-4 py-3 border-b border-white/8 shrink-0 flex-wrap">
-        <div className="relative flex-1 min-w-[160px]">
+      <div ref={filtersRef} className="flex items-center gap-2 px-4 py-3 border-b border-white/8 shrink-0 flex-wrap sticky top-0 z-10 bg-[#0d1117]">
+        <div className="relative flex-1 min-w-0 sm:min-w-[160px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
           <input
             type="text"
@@ -293,7 +293,7 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
               <Star className="w-4 h-4 text-amber-300" />
               <h3 className="text-sm font-semibold text-white">Featured</h3>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {featured.map((a: UnifiedApp) => (
                 <BrowseCard key={a.id} app={a} popLabel={popLabel(a)} onConnect={onConnect} onManage={onManage} />
               ))}
@@ -322,7 +322,7 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
                     <h3 className="text-sm font-semibold text-white">{meta.label}</h3>
                     <span className="text-xs text-slate-500">{domainApps.length} app{domainApps.length !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {domainApps.map((a: UnifiedApp) => (
                       <BrowseCard key={a.id} app={a} popLabel={popLabel(a)} onConnect={onConnect} onManage={onManage} />
                     ))}
@@ -331,7 +331,7 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {filtered.map((a: UnifiedApp) => (
                 <BrowseCard key={a.id} app={a} popLabel={popLabel(a)} onConnect={onConnect} onManage={onManage} />
               ))}
