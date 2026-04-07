@@ -305,6 +305,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                         onNavigate('/dashboard/apps/slack/workspace');
                       } else if (app.appId === 'jira' && onNavigate) {
                         onNavigate('/dashboard/apps/jira/workspace');
+                      } else if (app.appId === 'github' && onNavigate) {
+                        onNavigate('/dashboard/apps/github/workspace');
                       } else {
                         setDrawerApp(app);
                       }
@@ -344,6 +346,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               onNavigate('/dashboard/apps/slack/workspace');
             } else if (app.appId === 'jira' && onNavigate) {
               onNavigate('/dashboard/apps/jira/workspace');
+            } else if (app.appId === 'github' && onNavigate) {
+              onNavigate('/dashboard/apps/github/workspace');
             } else {
               setDrawerApp(app);
             }

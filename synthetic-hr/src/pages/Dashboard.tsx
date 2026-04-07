@@ -48,6 +48,7 @@ const ApiWebhooksPage = lazy(() => import('./dashboard/ApiWebhooksPage'));
 const ExecutionHistoryPage = lazy(() => import('./dashboard/ExecutionHistoryPage'));
 const SlackWorkspace = lazy(() => import('./dashboard/apps/workspaces/slack/SlackWorkspace'));
 const JiraWorkspace = lazy(() => import('./dashboard/apps/workspaces/jira/JiraWorkspace'));
+const GitHubWorkspace = lazy(() => import('./dashboard/apps/workspaces/github/GitHubWorkspace'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1513,6 +1514,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps" element={<AppsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
                   <Route path="apps/slack/workspace" element={<SlackWorkspace />} />
                   <Route path="apps/jira/workspace" element={<JiraWorkspace />} />
+                  <Route path="apps/github/workspace" element={<GitHubWorkspace />} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={<HubsPage />} />
                   <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />
