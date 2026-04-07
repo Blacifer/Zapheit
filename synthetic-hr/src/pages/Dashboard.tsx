@@ -1503,7 +1503,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                           budget_limit: template.budget,
                           primary_pack: TEMPLATE_TYPE_TO_PACK[template.type] || null,
                           integration_ids: (template as any).integration_ids || [],
-                          config: { system_prompt: (template as any).system_prompt || '' },
+                          system_prompt: (template as any).system_prompt || '',
+                          config: {},
                         });
                         if (created.success && created.data) {
                           const newId = (created.data as any).id;

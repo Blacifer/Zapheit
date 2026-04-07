@@ -217,6 +217,27 @@ router.get('/', requirePermission('policies.manage'), async (req: Request, res: 
   }
 });
 
+// GET /:id — fetch a single approval request
+router.get('/:id', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'id is required' });
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
+    if (!rows?.length) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+    const row = { ...rows[0], ...approvalReasonModel(rows[0]) };
+    return res.json({ success: true, data: row });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
 // POST / — create approval request
 router.post('/', requirePermission('policies.manage'), async (req: Request, res: Response) => {
   try {
@@ -445,6 +466,16 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
             text: body,
           });
           logger.info('Portal email sent after approval', { approval_id: id, to });
+          auditLog.log({
+            user_id: userId,
+            action: 'email.sent',
+            resource_type: 'approval_request',
+            resource_id: id,
+            organization_id: orgId,
+            ip_address: req.ip || (req.socket as any)?.remoteAddress,
+            user_agent: req.get('user-agent') || undefined,
+            metadata: { recipient: to, subject, approval_id: id },
+          });
         } catch (emailErr: any) {
           logger.warn('Portal email send failed after approval', { approval_id: id, error: emailErr?.message });
           // Don't fail the response — approval stands; delivery failure is a separate concern

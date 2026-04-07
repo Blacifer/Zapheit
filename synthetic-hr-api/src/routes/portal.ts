@@ -99,6 +99,9 @@ router.post('/:token/chat', async (req: Request, res: Response) => {
     if (!message?.trim()) {
       return res.status(400).json({ success: false, error: 'message is required.' });
     }
+    if (message.length > 10_000) {
+      return res.status(400).json({ success: false, error: 'Message too long (max 10,000 characters).' });
+    }
 
     const resolved = await resolvePortal(token);
     if (!resolved) {
