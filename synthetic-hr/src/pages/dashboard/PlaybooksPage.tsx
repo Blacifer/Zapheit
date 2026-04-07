@@ -155,22 +155,36 @@ const PlaybooksAnalyticsTab = lazy(() => import('./playbooks/PlaybooksAnalyticsT
 // ─── Visual ↔ text workflow conversion helpers ─────────────────────────────────
 
 function workflowToGraph(wf: Workflow): WorkflowGraph {
-  const nodes = wf.steps.map((step, idx) => ({
-    id: step.id,
-    type: step.kind === 'branch' ? 'condition' : 'llm_step',
-    position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
-    data: step.kind === 'llm'
-      ? {
-          label: `Step ${idx + 1}`,
-          model: step.model,
-          prompt: step.messages?.[1]?.content ?? '',
-          output_key: (step as any).output_key,
-        }
-      : {
-          label: `Branch`,
-          condition: (step as BranchStep).source,
-        },
-  }));
+  const nodes = wf.steps.map((step, idx) => {
+    if (step.kind === 'branch') {
+      return {
+        id: step.id,
+        type: 'condition' as const,
+        position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+        data: { label: 'Branch', condition: (step as BranchStep).source },
+      };
+    }
+    if (step.kind === 'connector') {
+      const cs = step as ConnectorStep;
+      return {
+        id: step.id,
+        type: 'action' as const,
+        position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+        data: { label: `${cs.connector_id}.${cs.action}`, tool: cs.action, integration: cs.connector_id },
+      };
+    }
+    return {
+      id: step.id,
+      type: 'llm_step' as const,
+      position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+      data: {
+        label: `Step ${idx + 1}`,
+        model: (step as LlmStep).model,
+        prompt: (step as LlmStep).messages?.[1]?.content ?? '',
+        output_key: (step as any).output_key,
+      },
+    };
+  });
 
   const edges: WorkflowGraph['edges'] = [];
   wf.steps.forEach((step) => {
@@ -184,11 +198,11 @@ function workflowToGraph(wf: Workflow): WorkflowGraph {
           data: { label: c.test === 'else' ? 'false' : 'true' },
         });
       });
-    } else if ((step as LlmStep).next) {
+    } else if ((step as any).next) {
       edges.push({
         id: `e_${step.id}_next`,
         source: step.id,
-        target: (step as LlmStep).next!,
+        target: (step as any).next!,
         type: 'conditional',
         data: { label: '' },
       });
@@ -213,7 +227,21 @@ function graphToWorkflow(graph: WorkflowGraph, existing: Workflow): Workflow {
         })),
       };
     }
-    // llm_step / action / human_review all map to llm kind (best effort)
+    // llm_step / human_review map to llm kind (best effort)
+    // action nodes map to connector kind
+    if (n.type === 'action') {
+      const existingStep = existing.steps.find((s) => s.id === n.id) as ConnectorStep | undefined;
+      const outEdge = graph.edges.find((e) => e.source === n.id);
+      return {
+        id: n.id,
+        kind: 'connector' as const,
+        connector_id: n.data.integration ?? existingStep?.connector_id ?? '',
+        action: n.data.tool ?? existingStep?.action ?? '',
+        params: existingStep?.params ?? {},
+        param_template: existingStep?.param_template ?? {},
+        next: outEdge?.target ?? null,
+      };
+    }
     const existingStep = existing.steps.find((s) => s.id === n.id) as LlmStep | undefined;
     const outEdge = graph.edges.find((e) => e.source === n.id);
     return {
@@ -259,7 +287,17 @@ type BranchStep = {
   conditions: BranchCondition[];
 };
 
-type WorkflowStep = LlmStep | BranchStep;
+type ConnectorStep = {
+  id: string;
+  kind: 'connector';
+  connector_id: string;       // e.g. 'slack', 'jira', 'github'
+  action: string;             // e.g. 'send_message', 'search_issues'
+  params?: Record<string, any>;
+  param_template?: Record<string, string>; // use {{input.x}} or {{steps.y.message}}
+  next?: string | null;
+};
+
+type WorkflowStep = LlmStep | BranchStep | ConnectorStep;
 
 type Workflow = {
   steps: WorkflowStep[];
@@ -558,6 +596,12 @@ function CustomPlaybookCard({
         if (poll.success) {
           const j = poll.data.job;
           if (j.status === 'succeeded' || j.status === 'failed') {
+            if (j.output?.pending_approval) {
+              const connector = j.output.connector;
+              setRunOutput(`⏳ Awaiting approval — ${connector?.service ?? 'connector'}.${connector?.action ?? 'action'} requires human approval before execution. Check the Approvals page.`);
+              setRunStatus('done');
+              return;
+            }
             const out = j.output?.final?.message || j.output?.message || '';
             setRunOutput(out || (j.status === 'failed' ? 'Run failed.' : '(no output)'));
             setRunStatus(j.status === 'succeeded' ? 'done' : 'error');

@@ -282,7 +282,18 @@ type BranchStep = {
   conditions: BranchCondition[];
 };
 
-type WorkflowStep = LlmStep | BranchStep;
+type WorkflowStep = LlmStep | BranchStep | ConnectorStep;
+
+type ConnectorStep = {
+  id: string;
+  kind: 'connector';
+  connector_id: string;       // e.g. 'slack', 'jira', 'github'
+  action: string;             // e.g. 'send_message', 'search_issues'
+  params?: Record<string, any>;
+  /** Template params: {{input.fieldKey}} and {{steps.stepId.message}} resolved at runtime */
+  param_template?: Record<string, string>;
+  next?: string | null;
+};
 
 /** Evaluate branch conditions against source text; return matching next-step id. */
 async function evalBranch(conditions: BranchCondition[], text: string, agentId: string): Promise<string | null> {
@@ -423,6 +434,86 @@ async function runWorkflow(job: JobRow) {
       const idx = steps.indexOf(step);
       const nextInOrder = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1].id : null;
       currentId = (ls as any).next || nextInOrder;
+      continue;
+    }
+
+    // ── Connector step — execute external connector action via control plane ─
+    if (step.kind === 'connector') {
+      const cs = step as ConnectorStep;
+      const connectorId = cs.connector_id;
+      const actionName = cs.action;
+
+      if (!connectorId || !actionName) {
+        await logJob(job.id, `Connector step=${cs.id} missing connector_id or action, skipping`, 'warn');
+        const idx = steps.indexOf(step);
+        currentId = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1].id : null;
+        continue;
+      }
+
+      // Build params: merge static params with resolved templates
+      const templateCtx = {
+        input: fields,
+        steps: Object.fromEntries(
+          Object.entries(stepResults).map(([id, r]) => [id, { message: r.message, model: r.model }]),
+        ),
+      };
+      const resolvedParams: Record<string, any> = { ...(cs.params || {}) };
+      if (cs.param_template && typeof cs.param_template === 'object') {
+        for (const [key, tmpl] of Object.entries(cs.param_template)) {
+          resolvedParams[key] = renderTemplate(String(tmpl), templateCtx);
+        }
+      }
+
+      await logJob(job.id, `Connector step=${cs.id} service=${connectorId} action=${actionName}`, 'info');
+
+      const jwt = signRuntimeJwt();
+      const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute-external`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          job_id: job.id,
+          agent_id: job.agent_id || undefined,
+          service: connectorId,
+          action: actionName,
+          payload: resolvedParams,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({} as any));
+
+      if (payload?.success === false && payload?.error?.includes('requires an approved job')) {
+        // Approval required — record partial result and stop; job can be resumed after approval
+        stepResults[cs.id] = {
+          message: `⏳ Awaiting approval for ${connectorId}.${actionName}`,
+          model: 'connector',
+          raw: { approval_required: true, ...payload },
+        };
+        await logJob(job.id, `Connector step=${cs.id} paused: approval required`, 'info');
+        // Return partial result with pending state
+        return {
+          workflow: { version: wf.version || 2, final_step: cs.id },
+          steps: Object.entries(stepResults).map(([id, r]) => ({ id, model: r.model, message: r.message })),
+          final: { step_id: cs.id, model: 'connector', message: stepResults[cs.id].message },
+          pending_approval: true,
+          paused_at_step: cs.id,
+          connector: { service: connectorId, action: actionName, params: resolvedParams },
+        };
+      }
+
+      if (!response.ok || payload?.success === false) {
+        const errMsg = payload?.error || `Connector action failed (HTTP ${response.status})`;
+        await logJob(job.id, `Connector step=${cs.id} failed: ${errMsg}`, 'error');
+        stepResults[cs.id] = { message: `❌ ${connectorId}.${actionName} failed: ${errMsg}`, model: 'connector', raw: payload };
+      } else {
+        const output = payload?.data?.output || payload?.data || payload?.action_run?.output || {};
+        const summary = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+        stepResults[cs.id] = { message: summary, model: 'connector', raw: payload };
+      }
+
+      // Advance
+      const idx = steps.indexOf(step);
+      const nextInOrder = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1].id : null;
+      currentId = cs.next || nextInOrder;
       continue;
     }
 

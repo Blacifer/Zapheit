@@ -33,6 +33,17 @@ const edgeTypes = {
   conditional: ConditionalEdge,
 };
 
+const CONNECTOR_ACTIONS: Record<string, string[]> = {
+  slack: ['send_message', 'create_channel', 'list_channels', 'add_reaction', 'upload_file'],
+  jira: ['create_issue', 'update_issue', 'transition_issue', 'add_comment', 'search_issues'],
+  github: ['create_issue', 'create_pr', 'add_comment', 'list_repos', 'merge_pr'],
+  hubspot: ['create_contact', 'update_contact', 'create_deal', 'search_contacts', 'add_note'],
+  quickbooks: ['create_invoice', 'create_payment', 'list_customers', 'create_expense'],
+  'google-workspace': ['send_email', 'create_event', 'create_doc', 'list_files', 'share_file'],
+  'zoho-people': ['create_record', 'update_record', 'list_records', 'get_attendance'],
+  notion: ['create_page', 'update_page', 'query_database', 'create_database', 'add_block'],
+};
+
 export type WorkflowGraph = {
   type: 'workflow_run';
   nodes: Node[];
@@ -68,10 +79,10 @@ const PALETTE: Array<{
   },
   {
     type: 'action',
-    label: 'Action',
+    label: 'Connector Action',
     icon: <Zap className="w-4 h-4" />,
     color: 'text-purple-600',
-    defaultData: { label: 'Call Tool', tool: '' },
+    defaultData: { label: 'Connector Action', tool: '', integration: '' },
   },
   {
     type: 'human_review',
@@ -327,22 +338,48 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
           {selectedNode.type === 'action' && (
             <>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Tool / function name</label>
-                <input
-                  value={selectedNode.data.tool ?? ''}
-                  onChange={(e) => updateSelectedData('tool', e.target.value)}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  placeholder="send_email"
-                />
+                <label className="block text-xs text-gray-500 mb-1">Connector</label>
+                <select
+                  value={selectedNode.data.integration ?? ''}
+                  onChange={(e) => {
+                    updateSelectedData('integration', e.target.value);
+                    updateSelectedData('tool', '');
+                    updateSelectedData('label', e.target.value ? `${e.target.value} Action` : 'Connector Action');
+                  }}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select connector…</option>
+                  <option value="slack">Slack</option>
+                  <option value="jira">Jira</option>
+                  <option value="github">GitHub</option>
+                  <option value="hubspot">HubSpot</option>
+                  <option value="quickbooks">QuickBooks</option>
+                  <option value="google-workspace">Google Workspace</option>
+                  <option value="zoho-people">Zoho People</option>
+                  <option value="notion">Notion</option>
+                </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Integration</label>
-                <input
-                  value={selectedNode.data.integration ?? ''}
-                  onChange={(e) => updateSelectedData('integration', e.target.value)}
+                <label className="block text-xs text-gray-500 mb-1">Action</label>
+                <select
+                  value={selectedNode.data.tool ?? ''}
+                  onChange={(e) => {
+                    updateSelectedData('tool', e.target.value);
+                    const connector = selectedNode.data.integration || '';
+                    if (e.target.value && connector) {
+                      updateSelectedData('label', `${connector}.${e.target.value}`);
+                    }
+                  }}
                   className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Slack, Gmail, Jira…"
-                />
+                >
+                  <option value="">Select action…</option>
+                  {(CONNECTOR_ACTIONS[selectedNode.data.integration ?? ''] ?? []).map((a: string) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+                {!selectedNode.data.integration && (
+                  <p className="text-xs text-gray-400 mt-1">Select a connector first</p>
+                )}
               </div>
             </>
           )}
