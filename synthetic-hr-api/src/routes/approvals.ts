@@ -10,6 +10,7 @@ import { notifySlackApproval } from '../lib/slack-notify';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { storeCorrection } from '../lib/correction-memory';
 import { markApprovalDeniedExecution, resumeApprovedToolCall } from '../lib/agentic-tool-execution';
+import { sendTransactionalEmail } from '../lib/email';
 
 const router = Router();
 
@@ -431,6 +432,30 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
         action: row.action,
       },
     });
+
+    // Portal email actions: send directly via email service (no connector execution needed)
+    if (row.service === 'email' && row.action === 'send_email') {
+      const { to, subject, body } = (row.action_payload || {}) as { to?: string; subject?: string; body?: string };
+      if (to && subject && body) {
+        try {
+          await sendTransactionalEmail({
+            to,
+            subject,
+            html: `<p>${body.replace(/\n/g, '<br>')}</p>`,
+            text: body,
+          });
+          logger.info('Portal email sent after approval', { approval_id: id, to });
+        } catch (emailErr: any) {
+          logger.warn('Portal email send failed after approval', { approval_id: id, error: emailErr?.message });
+          // Don't fail the response — approval stands; delivery failure is a separate concern
+        }
+      }
+      return res.json({
+        success: true,
+        data: updated?.[0] || row,
+        execution: { resumed: true, connector_id: 'email', action: 'send_email', result: { sent: true }, audit_ref: null },
+      });
+    }
 
     let resumed: any = null;
     try {

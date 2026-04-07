@@ -10,6 +10,12 @@ type Message = {
   content: string;
 };
 
+type PendingAction = {
+  approvalId: string;
+  to: string;
+  subject: string;
+};
+
 type AgentInfo = {
   name: string;
   description: string;
@@ -95,6 +101,7 @@ export default function PublicChatPage() {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -183,6 +190,19 @@ export default function PublicChatPage() {
           if (payload.startsWith('[ERROR]')) {
             setStreamError(payload.replace('[ERROR]', '').trim() || 'Something went wrong.');
             break;
+          }
+          if (payload.startsWith('[ACTION_PENDING:')) {
+            try {
+              const action: PendingAction = JSON.parse(payload.slice('[ACTION_PENDING:'.length));
+              setPendingAction(action);
+              setMessages(prev =>
+                prev.map(m => m.id === assistantId
+                  ? { ...m, content: `I've submitted a request to send your email to **${action.to}** with subject **"${action.subject}"**. An HR admin will review and approve it shortly.` }
+                  : m
+                )
+              );
+            } catch { /* ignore parse errors */ }
+            continue;
           }
           accumulated += payload;
           setMessages((prev) =>
@@ -307,6 +327,30 @@ export default function PublicChatPage() {
           <div ref={bottomRef} />
         </div>
       </main>
+
+      {/* Pending approval banner */}
+      {pendingAction && (
+        <div className="bg-amber-50 border-t border-amber-200 px-4 py-3 shrink-0">
+          <div className="max-w-2xl mx-auto flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-amber-600 text-sm">⏳</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Waiting for admin approval</p>
+              <p className="text-xs text-amber-600 mt-0.5 truncate">
+                Email to {pendingAction.to} · "{pendingAction.subject}"
+              </p>
+            </div>
+            <button
+              onClick={() => setPendingAction(null)}
+              className="text-amber-400 hover:text-amber-600 transition-colors mt-0.5 text-xs"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input bar */}
       <div className="bg-white border-t border-slate-200 px-4 py-3 shrink-0">
