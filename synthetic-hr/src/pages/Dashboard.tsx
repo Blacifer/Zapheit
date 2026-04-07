@@ -50,6 +50,10 @@ const SlackWorkspace = lazy(() => import('./dashboard/apps/workspaces/slack/Slac
 const JiraWorkspace = lazy(() => import('./dashboard/apps/workspaces/jira/JiraWorkspace'));
 const GitHubWorkspace = lazy(() => import('./dashboard/apps/workspaces/github/GitHubWorkspace'));
 const HubSpotWorkspace = lazy(() => import('./dashboard/apps/workspaces/hubspot/HubSpotWorkspace'));
+const QuickBooksWorkspace = lazy(() => import('./dashboard/apps/workspaces/quickbooks/QuickBooksWorkspace'));
+const GoogleWorkspace = lazy(() => import('./dashboard/apps/workspaces/google-workspace/GoogleWorkspace'));
+const ZohoWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho/ZohoWorkspace'));
+const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/NotionWorkspace'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1517,6 +1521,10 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/jira/workspace" element={<JiraWorkspace />} />
                   <Route path="apps/github/workspace" element={<GitHubWorkspace />} />
                   <Route path="apps/hubspot/workspace" element={<HubSpotWorkspace />} />
+                  <Route path="apps/quickbooks/workspace" element={<QuickBooksWorkspace />} />
+                  <Route path="apps/google-workspace/workspace" element={<GoogleWorkspace />} />
+                  <Route path="apps/zoho/workspace" element={<ZohoWorkspace />} />
+                  <Route path="apps/notion/workspace" element={<NotionWorkspace />} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={<HubsPage />} />
                   <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />

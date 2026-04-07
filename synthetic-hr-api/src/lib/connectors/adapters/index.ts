@@ -8,6 +8,10 @@ import './slack';
 import './jira';
 import './github';
 import './hubspot';
+import './quickbooks';
+import './google-workspace';
+import './zoho-people';
+import './notion';
 
 export { getRegisteredAdapter, listRegisteredAdapters } from '../adapter';
 export type { ConnectorAdapter, HealthResult } from '../adapter';

@@ -309,6 +309,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                         onNavigate('/dashboard/apps/github/workspace');
                       } else if (app.appId === 'hubspot' && onNavigate) {
                         onNavigate('/dashboard/apps/hubspot/workspace');
+                      } else if (app.appId === 'quickbooks' && onNavigate) {
+                        onNavigate('/dashboard/apps/quickbooks/workspace');
+                      } else if (app.appId === 'google-workspace' && onNavigate) {
+                        onNavigate('/dashboard/apps/google-workspace/workspace');
+                      } else if (app.appId === 'zoho-people' && onNavigate) {
+                        onNavigate('/dashboard/apps/zoho/workspace');
+                      } else if (app.appId === 'notion' && onNavigate) {
+                        onNavigate('/dashboard/apps/notion/workspace');
                       } else {
                         setDrawerApp(app);
                       }
@@ -352,6 +360,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               onNavigate('/dashboard/apps/github/workspace');
             } else if (app.appId === 'hubspot' && onNavigate) {
               onNavigate('/dashboard/apps/hubspot/workspace');
+            } else if (app.appId === 'quickbooks' && onNavigate) {
+              onNavigate('/dashboard/apps/quickbooks/workspace');
+            } else if (app.appId === 'google-workspace' && onNavigate) {
+              onNavigate('/dashboard/apps/google-workspace/workspace');
+            } else if (app.appId === 'zoho-people' && onNavigate) {
+              onNavigate('/dashboard/apps/zoho/workspace');
+            } else if (app.appId === 'notion' && onNavigate) {
+              onNavigate('/dashboard/apps/notion/workspace');
             } else {
               setDrawerApp(app);
             }
