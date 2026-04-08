@@ -429,7 +429,10 @@ export default function GovernedActionsPage({
 
         <div className="mt-5 space-y-3">
           {loading ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 text-sm text-slate-400">Loading governed actions…</div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-slate-600 border-t-cyan-500 rounded-full animate-spin" />
+              <span className="text-sm text-slate-400">Loading governed actions…</span>
+            </div>
           ) : actions.length === 0 ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 text-sm text-slate-400">
               No governed actions match this filter yet.

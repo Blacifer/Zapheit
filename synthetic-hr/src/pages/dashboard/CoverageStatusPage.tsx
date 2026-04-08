@@ -298,7 +298,10 @@ export default function CoverageStatusPage() {
   if (loading) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-cyan-500"></div>
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-slate-600 border-t-cyan-500 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-400">Loading coverage data…</p>
+        </div>
       </div>
     );
   }

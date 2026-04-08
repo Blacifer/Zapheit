@@ -10,7 +10,7 @@ import {
   Siren,
   FileUp,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '../../lib/toast';
 import { useAgents, useAuth, useIncidents } from '../../hooks/useData';
 import { api } from '../../lib/api-client';
 

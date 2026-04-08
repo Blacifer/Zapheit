@@ -187,10 +187,10 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
   }, [nodes, edges, onSave]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+    <div className="flex h-full w-full overflow-hidden rounded-xl border border-slate-700">
       {/* Left palette */}
-      <div className="w-44 shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 flex flex-col gap-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Drag to add</p>
+      <div className="w-44 shrink-0 border-r border-slate-700 bg-slate-900 p-3 flex flex-col gap-2">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Drag to add</p>
         {PALETTE.map((item) => (
           <div
             key={item.type}
@@ -200,10 +200,10 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
               e.dataTransfer.setData('application/reactflow-data', JSON.stringify(item.defaultData));
               e.dataTransfer.effectAllowed = 'move';
             }}
-            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-grab shadow-sm hover:shadow-md transition-shadow select-none"
+            className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700 cursor-grab shadow-sm hover:shadow-md transition-shadow select-none"
           >
             <span className={item.color}>{item.icon}</span>
-            <span className="text-sm text-gray-700 dark:text-gray-200">{item.label}</span>
+            <span className="text-sm text-slate-200">{item.label}</span>
           </div>
         ))}
       </div>
@@ -225,9 +225,9 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
           edgeTypes={edgeTypes}
           fitView
           deleteKeyCode="Delete"
-          className="bg-gray-50 dark:bg-gray-950"
+          className="bg-slate-950"
         >
-          <Background gap={16} color="#e5e7eb" />
+          <Background gap={16} color="#334155" />
           <Controls />
           <MiniMap
             nodeColor={(n: Node) => {
@@ -237,7 +237,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
               if (n.type === 'human_review') return '#22c55e';
               return '#6b7280';
             }}
-            className="!bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-700"
+            className="!bg-slate-800 !border-slate-700"
           />
           <Panel position="top-right" className="flex gap-2">
             <button
@@ -253,17 +253,17 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
         {/* Empty state */}
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <Plus className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" />
-            <p className="text-gray-400 dark:text-gray-500 text-sm">Drag nodes from the left panel to build your playbook</p>
+            <Plus className="w-10 h-10 text-slate-600 mb-2" />
+            <p className="text-slate-500 text-sm">Drag nodes from the left panel to build your playbook</p>
           </div>
         )}
       </div>
 
       {/* Right property panel */}
       {selectedNode && (
-        <div className="w-64 shrink-0 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 flex flex-col gap-3 overflow-y-auto">
+        <div className="w-64 shrink-0 border-l border-slate-700 bg-slate-900 p-4 flex flex-col gap-3 overflow-y-auto">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Properties</p>
+            <p className="text-sm font-semibold text-gray-100">Properties</p>
             <button
               onClick={deleteSelected}
               className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
@@ -278,7 +278,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
             <input
               value={selectedNode.data.label ?? ''}
               onChange={(e) => updateSelectedData('label', e.target.value)}
-              className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -289,7 +289,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                 <select
                   value={selectedNode.data.model ?? 'gpt-4o'}
                   onChange={(e) => updateSelectedData('model', e.target.value)}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="gpt-4o">gpt-4o</option>
                   <option value="gpt-4o-mini">gpt-4o-mini</option>
@@ -304,7 +304,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                   value={selectedNode.data.prompt ?? ''}
                   onChange={(e) => updateSelectedData('prompt', e.target.value)}
                   rows={4}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"
                   placeholder="System or user prompt..."
                 />
               </div>
@@ -313,7 +313,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                 <input
                   value={selectedNode.data.output_key ?? ''}
                   onChange={(e) => updateSelectedData('output_key', e.target.value)}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   placeholder="result"
                 />
               </div>
@@ -326,7 +326,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
               <input
                 value={selectedNode.data.condition ?? ''}
                 onChange={(e) => updateSelectedData('condition', e.target.value)}
-                className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 placeholder="{{result}} !== null"
               />
               <p className="text-xs text-gray-400 mt-1">
@@ -346,7 +346,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                     updateSelectedData('tool', '');
                     updateSelectedData('label', e.target.value ? `${e.target.value} Action` : 'Connector Action');
                   }}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select connector…</option>
                   <option value="slack">Slack</option>
@@ -370,7 +370,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                       updateSelectedData('label', `${connector}.${e.target.value}`);
                     }
                   }}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select action…</option>
                   {(CONNECTOR_ACTIONS[selectedNode.data.integration ?? ''] ?? []).map((a: string) => (
@@ -391,7 +391,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                 <select
                   value={selectedNode.data.required_role ?? 'manager'}
                   onChange={(e) => updateSelectedData('required_role', e.target.value)}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="manager">Manager</option>
@@ -407,7 +407,7 @@ function PlaybookBuilderInner({ initialGraph, onSave }: Props) {
                   max={168}
                   value={selectedNode.data.timeout_hours ?? 24}
                   onChange={(e) => updateSelectedData('timeout_hours', e.target.value)}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-slate-700 rounded-lg px-2.5 py-1.5 bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Left = approved, right = denied

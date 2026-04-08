@@ -17,6 +17,7 @@ import {
   Layers, Settings, Sparkles, Wand2, CheckSquare, Shield, ScrollText,
   Key, PlugZap, ClipboardList, Database, Server,
   User, LogOut, Sun, Moon, Bell, ChevronRight, Search,
+  LifeBuoy, ShieldCheck, Calculator, Box,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -67,6 +68,10 @@ const GROUPS: NavGroup[] = [
       { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
       { id: 'costs', icon: DollarSign, label: 'Costs' },
       { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
+      { id: 'work-items', icon: LifeBuoy, label: 'Work Items' },
+      { id: 'coverage', icon: ShieldCheck, label: 'Coverage' },
+      { id: 'ctc-calculator', icon: Calculator, label: 'CTC Calculator' },
+      { id: 'blackbox', icon: Box, label: 'Black Box' },
       { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
     ],
   },

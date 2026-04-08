@@ -678,7 +678,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                         </div>
 
                         {/* Metrics row */}
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           {[
                             { icon: <Cpu className="w-3 h-3" />, label: 'Tokens', value: trace.total_tokens?.toLocaleString() ?? '—' },
                             { icon: <Clock className="w-3 h-3" />, label: 'Latency', value: trace.latency_ms != null ? `${trace.latency_ms}ms` : '—' },
