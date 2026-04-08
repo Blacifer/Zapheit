@@ -264,9 +264,10 @@ async function storeInboundMessage(
     logger.error('Failed to store WhatsApp inbound message', { error: err?.message, wa_message_id: waMessageId });
   }
 
-  // Upsert contact
+  // Upsert contact — include BSUID if present (Meta 2026 migration)
   const contactInfo = contacts?.find((c: any) => c.wa_id === from);
   const contactName = contactInfo?.profile?.name || from;
+  const bsuid = contactInfo?.user_id || null; // Business Scoped User ID
 
   try {
     await supabaseRestAsService('whatsapp_contacts', new URLSearchParams(), {
@@ -277,6 +278,7 @@ async function storeInboundMessage(
         phone: from,
         name: contactName,
         wa_id: from,
+        ...(bsuid ? { bsuid } : {}),
         opted_in: true,
         last_message_at: now,
         updated_at: now,

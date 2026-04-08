@@ -31,6 +31,7 @@ import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
 import slackActionsRoutes from './routes/slack-actions';
 import whatsappWebhookRoutes from './routes/whatsapp-webhook';
+import dpdpRoutes from './routes/dpdp';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
 import approvalsRoutes from './routes/approvals';
@@ -53,6 +54,7 @@ import { setProviderSyncSchedulerNextRun, syncEnabledProviderCostsForAllOrganiza
 import { startIntegrationTokenRefreshScheduler } from './lib/integrations/auto-refresh';
 import { startRetryWorker } from './lib/retry-worker';
 import { startRedTeamScheduler } from './lib/redteam-scheduler';
+import { startDpdpRetentionWorker } from './lib/dpdp-retention-worker';
 import { runSchemaCompatibilityCheck } from './lib/schema-compat';
 
 dotenv.config();
@@ -463,6 +465,7 @@ app.use('/api', webhooksRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/policies', policiesRoutes);
 app.use('/api/compliance', complianceRoutes);
+app.use('/api/compliance/dpdp', dpdpRoutes);
 app.use('/admin', adminRoutes);
 
 // 404 handler
@@ -513,6 +516,7 @@ async function startServer() {
   // Drain the connector retry queue (circuit-breaker retries).
 startRetryWorker();
 startRedTeamScheduler();
+startDpdpRetentionWorker();
 
   const server = app.listen(PORT, () => {
     logger.info('Synthetic HR API server started', {

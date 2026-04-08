@@ -21,6 +21,7 @@ export type Permission =
   | 'policies.manage'
   | 'compliance.export'
   | 'compliance.log'
+  | 'compliance.consent'
   | 'connectors.read'
   | 'connectors.manage'
   | 'workitems.read'
@@ -37,7 +38,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve', 'incidents.escalate', 'incidents.delete',
     'costs.create', 'costs.read', 'costs.update', 'costs.delete',
     'policies.manage',
-    'compliance.export', 'compliance.log',
+    'compliance.export', 'compliance.log', 'compliance.consent',
     'connectors.read',
     'connectors.manage',
     'workitems.read', 'workitems.manage',
@@ -49,7 +50,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve', 'incidents.escalate',
     'costs.create', 'costs.read', 'costs.update',
     'policies.manage',
-    'compliance.export', 'compliance.log',
+    'compliance.export', 'compliance.log', 'compliance.consent',
     'connectors.read',
     'connectors.manage',
     'workitems.read', 'workitems.manage',
@@ -61,7 +62,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve', 'incidents.escalate',
     'costs.read',
     'policies.manage',
-    'compliance.export', 'compliance.log',
+    'compliance.export', 'compliance.log', 'compliance.consent',
     'connectors.read',
     'workitems.read', 'workitems.manage',
     'dashboard.read', 'settings.read',
