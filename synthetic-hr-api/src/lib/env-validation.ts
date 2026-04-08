@@ -39,6 +39,14 @@ export function validateEnvironment(): void {
     if (!result.data.API_URL) required.push('API_URL');
     if (!result.data.EMAIL_FROM) required.push('EMAIL_FROM');
     if (!result.data.ALERT_EMAIL_TO) required.push('ALERT_EMAIL_TO');
+
+    // Security-critical: encryption key and erasure salt must not fall back to hardcoded values
+    if (!process.env.INTEGRATIONS_ENCRYPTION_KEY && !process.env.ENCRYPTION_KEY) {
+      required.push('INTEGRATIONS_ENCRYPTION_KEY');
+    }
+    if (!process.env.ERASURE_SIGNING_SALT) {
+      required.push('ERASURE_SIGNING_SALT');
+    }
     
     if (required.length > 0) {
       throw new Error(`Environment validation failed: Production requires [${required.join(', ')}]`);

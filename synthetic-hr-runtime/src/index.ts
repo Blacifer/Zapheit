@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 
 type EnrollResponse = {
@@ -767,6 +768,17 @@ async function loopPoll() {
 
 async function main() {
   console.log(`[runtime] starting controlPlane=${CONTROL_PLANE_URL} gateway=${GATEWAY_URL} mode=${STREAM_MODE}`);
+
+  // Lightweight health server for container orchestrators
+  const HEALTH_PORT = Number(env('HEALTH_PORT', '3002'));
+  const healthServer = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', service: 'synthetic-hr-runtime' }));
+  });
+  healthServer.listen(HEALTH_PORT, () => {
+    console.log(`[runtime] health server listening on :${HEALTH_PORT}`);
+  });
+
   await enroll();
   if (!runtimeSecret) {
     throw new Error('Runtime secret missing after enrollment');

@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
+import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
 import { parsePolicy, validateYaml, evaluatePolicies, POLICY_TEMPLATES, type EvalContext } from '../services/policy-engine';
 
@@ -40,7 +41,7 @@ router.get('/packs', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching policy packs:', error);
+    logger.error('Error fetching policy packs:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -68,7 +69,7 @@ router.get('/packs/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching policy pack:', error);
+    logger.error('Error fetching policy pack:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -108,7 +109,7 @@ router.post('/packs', requirePermission('policies.manage'), async (req: Request,
 
     res.status(201).json({ success: true, data: created?.[0] });
   } catch (error: any) {
-    console.error('Error creating policy pack:', error);
+    logger.error('Error creating policy pack:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -137,7 +138,7 @@ router.patch('/packs/:id', requirePermission('policies.manage'), async (req: Req
 
     res.json({ success: true, data: updated?.[0] });
   } catch (error: any) {
-    console.error('Error updating policy pack:', error);
+    logger.error('Error updating policy pack:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -159,7 +160,7 @@ router.delete('/packs/:id', requirePermission('policies.manage'), async (req: Re
 
     res.json({ success: true, message: 'Policy pack deleted' });
   } catch (error: any) {
-    console.error('Error deleting policy pack:', error);
+    logger.error('Error deleting policy pack:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -183,7 +184,7 @@ router.get('/assignments', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching policy assignments:', error);
+    logger.error('Error fetching policy assignments:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -213,7 +214,7 @@ router.post('/assignments', requirePermission('policies.manage'), async (req: Re
 
     res.status(201).json({ success: true, data: created?.[0] });
   } catch (error: any) {
-    console.error('Error creating policy assignment:', error);
+    logger.error('Error creating policy assignment:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -231,7 +232,7 @@ router.delete('/assignments/:id', requirePermission('policies.manage'), async (r
 
     res.json({ success: true, message: 'Policy assignment removed' });
   } catch (error: any) {
-    console.error('Error deleting policy assignment:', error);
+    logger.error('Error deleting policy assignment:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -302,7 +303,7 @@ router.post('/check', async (req: Request, res: Response) => {
       warnings,
     });
   } catch (error: any) {
-    console.error('Error checking policies:', error);
+    logger.error('Error checking policies:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

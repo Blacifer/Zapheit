@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 .vercel
 synthetic-hr/test-results/
+test-results/

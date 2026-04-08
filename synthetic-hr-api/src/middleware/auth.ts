@@ -177,7 +177,7 @@ export const authenticateToken = async (
 
     next();
   } catch (error: any) {
-    console.error('Authentication error:', error);
+    logger.error('Authentication error:', error);
     res.status(500).json({
       success: false,
       error: 'Authentication failed',

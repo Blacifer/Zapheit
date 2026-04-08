@@ -47,7 +47,7 @@ router.get('/exports', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching compliance exports:', error);
+    logger.error('Error fetching compliance exports:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -110,7 +110,7 @@ router.post('/exports', requirePermission('compliance.export'), async (req: Requ
 
     res.status(201).json({ success: true, data: exportRecord });
   } catch (error: any) {
-    console.error('Error creating compliance export:', error);
+    logger.error('Error creating compliance export:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -138,7 +138,7 @@ router.get('/exports/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching compliance export:', error);
+    logger.error('Error fetching compliance export:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -498,7 +498,7 @@ router.get('/events', async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error fetching compliance events:', error);
+    logger.error('Error fetching compliance events:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -533,7 +533,7 @@ router.post('/events', requirePermission('compliance.log'), async (req: Request,
 
     res.status(201).json({ success: true, data: created?.[0] });
   } catch (error: any) {
-    console.error('Error creating compliance event:', error);
+    logger.error('Error creating compliance event:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -603,7 +603,7 @@ router.get('/stats', async (req: Request, res: Response) => {
 
     res.json({ success: true, data: stats });
   } catch (error: any) {
-    console.error('Error fetching compliance stats:', error);
+    logger.error('Error fetching compliance stats:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
