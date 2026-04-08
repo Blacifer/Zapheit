@@ -33,6 +33,10 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'compliance.ts'),
   // Employee portal: public token-gated endpoints — no user JWT; service-role required to look up agent_portal_links and ai_agents.
   path.join(ROUTES_DIR, 'portal.ts'),
+  // WhatsApp webhook: inbound Meta Cloud API callbacks arrive without a user JWT; HMAC-verified — service-role required to persist messages/contacts.
+  path.join(ROUTES_DIR, 'whatsapp-webhook.ts'),
+  // DPDP compliance: consent lifecycle writes, compliance_events logging, and retention policy enforcement require service-role for cross-table org writes (same justification as compliance.ts).
+  path.join(ROUTES_DIR, 'dpdp.ts'),
 ]);
 
 function walk(dir: string): string[] {
