@@ -18,8 +18,11 @@ const transports: winston.transport[] = [
   }),
 ];
 
-// Add file transport in production
-if (process.env.NODE_ENV === 'production') {
+// File transports are only used when LOG_TO_FILE is explicitly set.
+// In containerised deployments (Railway, Docker) stdout/stderr is captured
+// by the platform — writing to disk wastes space and causes EACCES errors
+// when running as a non-root user.
+if (process.env.LOG_TO_FILE === 'true') {
   transports.push(
     new winston.transports.File({
       filename: 'logs/error.log',
