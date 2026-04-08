@@ -25,6 +25,7 @@ export { alertChannelsApi } from './alert-channels';
 export type { AlertChannel, ChannelType, SeverityLevel, CreateAlertChannelInput } from './alert-channels';
 export { recruitmentApi } from './recruitment';
 export { dpdpApi } from './dpdp';
+export { ctcApi } from './ctc';
 export type { ConsentRecord, ConsentStats, RetentionPolicy, DataPrincipalRequest, DpdpDashboard } from './dpdp';
 export { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 export {
@@ -85,6 +86,7 @@ import { approvalsApi } from './approvals';
 import { alertChannelsApi } from './alert-channels';
 import { recruitmentApi } from './recruitment';
 import { dpdpApi } from './dpdp';
+import { ctcApi } from './ctc';
 import { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 import {
   adminApi,
@@ -114,6 +116,7 @@ export const api = {
   policies: policiesApi,
   compliance: complianceApi,
   dpdp: dpdpApi,
+  ctc: ctcApi,
   batches: batchesApi,
   fineTunes: fineTunesApi,
   caching: cachingApi,

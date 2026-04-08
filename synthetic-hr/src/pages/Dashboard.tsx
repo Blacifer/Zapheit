@@ -42,6 +42,7 @@ const AppsPage = lazy(() => import('./dashboard/apps'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
+const CTCCalculatorPage = lazy(() => import('./dashboard/CTCCalculatorPage'));
 const HubsPage = lazy(() => import('./dashboard/hubs/HubsPage'));
 const AgentStudioPage = lazy(() => import('./dashboard/AgentStudioPage'));
 const PlatformPage = lazy(() => import('./dashboard/PlatformPage'));
@@ -1568,6 +1569,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="coverage" element={<CoverageStatusPage />} />
                   <Route path="work-items" element={<WorkItemsPage />} />
                   <Route path="action-policies" element={<ActionPoliciesPage />} />
+                  <Route path="ctc-calculator" element={<CTCCalculatorPage />} />
                   {/* Settings sub-pages */}
                   <Route path="persona" element={<PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="shadow" element={<ShadowModePage />} />
