@@ -13,7 +13,7 @@ const TOUR_STEPS: Step[] = [
     skipBeacon: true,
   },
   {
-    target: '[data-tour="fleet"]',
+    target: '[data-tour="agents"]',
     placement: 'right',
     title: 'Agent Fleet',
     content:
@@ -93,11 +93,15 @@ export function OnboardingTour({ forceStart, onFinish }: Props) {
     return undefined;
   }, [forceStart]);
 
-  const handleEvent = (data: EventData) => {
+  const handleEvent = (data: EventData, controls: { next: () => void }) => {
     if (data.type === EVENTS.TOUR_END) {
       localStorage.setItem(TOUR_STORAGE_KEY, '1');
       setRun(false);
       onFinish?.();
+    }
+    // If a sidebar element hasn't rendered yet, skip to the next step
+    if (data.type === EVENTS.TARGET_NOT_FOUND) {
+      controls.next();
     }
   };
 

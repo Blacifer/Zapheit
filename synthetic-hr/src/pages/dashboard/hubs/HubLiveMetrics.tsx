@@ -61,8 +61,30 @@ export function HubLiveMetrics({ configs, title, subtitle }: { configs: Integrat
     setSyncTimes(prev => ({ ...prev, [cfg.connectorId]: new Date() }));
   }, []);
 
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   useEffect(() => {
-    configs.forEach(c => void fetchOne(c));
+    // Pre-check which connectors are actually installed before firing execute calls.
+    // This avoids noisy 400 errors for new users with no integrations.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.marketplace.getInstalled();
+        if (cancelled) return;
+        const installedIds = new Set(
+          (res.success && Array.isArray(res.data) ? res.data : []).map((app: any) => app.connectorId || app.id),
+        );
+        const connected = configs.filter(c => installedIds.has(c.connectorId));
+        if (connected.length > 0) {
+          connected.forEach(c => void fetchOne(c));
+        }
+      } catch {
+        // Silently skip — user just has no integrations yet
+      } finally {
+        if (!cancelled) setHasLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
