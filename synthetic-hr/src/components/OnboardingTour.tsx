@@ -29,7 +29,7 @@ const TOUR_STEPS: Step[] = [
     skipBeacon: true,
   },
   {
-    target: '[data-tour="playbooks"]',
+    target: '[data-tour="agent-studio"]',
     placement: 'right',
     title: 'Playbooks',
     content:

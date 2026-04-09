@@ -104,6 +104,7 @@ function NavBtn({
     <motion.button
       onClick={onClick}
       aria-current={isActive ? 'page' : undefined}
+      data-tour={item.id}
       whileTap={{ scale: 0.95 }}
       className={cn(
         'relative flex items-center rounded-xl transition-all duration-200 group',
