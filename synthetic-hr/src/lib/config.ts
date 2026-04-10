@@ -29,14 +29,42 @@ function readBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
+function normalizeApiUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.replace(/\/+$/, '');
+  if (!trimmed) return undefined;
+  if (trimmed.endsWith('/api')) return trimmed;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+      if (!normalizedPath || normalizedPath === '/') {
+        parsed.pathname = '/api';
+        return parsed.toString().replace(/\/+$/, '');
+      }
+      return `${trimmed}/api`;
+    } catch {
+      return `${trimmed}/api`;
+    }
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `${trimmed}/api`;
+  }
+
+  return `https://${trimmed}/api`;
+}
+
 export function getFrontendConfig(): SyntheticHrFrontendConfig {
   const runtime = (typeof window !== 'undefined' ? window.__SYNTHETICHR_CONFIG__ : undefined) || {};
 
-  const apiUrlFromRuntime = readString(runtime.apiUrl);
+  const apiUrlFromRuntime = normalizeApiUrl(readString(runtime.apiUrl));
   const supabaseUrlFromRuntime = readString(runtime.supabaseUrl);
   const supabaseAnonKeyFromRuntime = readString(runtime.supabaseAnonKey);
 
-  const apiUrlFromBuild = readString(import.meta.env.VITE_API_URL);
+  const apiUrlFromBuild = normalizeApiUrl(readString(import.meta.env.VITE_API_URL));
   const supabaseUrlFromBuild = readString(import.meta.env.VITE_SUPABASE_URL);
   const supabaseAnonKeyFromBuild = readString(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
