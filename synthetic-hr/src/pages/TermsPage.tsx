@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Brain, ArrowLeft } from 'lucide-react';
 
 const EFFECTIVE_DATE = '1 April 2025';
-const COMPANY = 'Rasi Solutions';
+const COMPANY = 'Rasi Cyber Solutions Private Limited';
 const PRODUCT = 'Zapheit';
 const CONTACT_EMAIL = 'legal@zapheit.com';
 

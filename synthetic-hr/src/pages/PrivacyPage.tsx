@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Brain, ArrowLeft } from 'lucide-react';
 
 const EFFECTIVE_DATE = '1 April 2025';
-const COMPANY = 'Rasi Solutions';
+const COMPANY = 'Rasi Cyber Solutions Private Limited';
 const PRODUCT = 'Zapheit';
 const CONTACT_EMAIL = 'privacy@zapheit.com';
 
@@ -104,7 +104,7 @@ export default function PrivacyPage() {
             <p>Your data is stored using the following infrastructure:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li><span className="text-slate-300 font-medium">Database</span> — Supabase (PostgreSQL), with row-level security ensuring your data is isolated from other organisations.</li>
-              <li><span className="text-slate-300 font-medium">API servers</span> — Railway (hosted infrastructure), with encrypted connections (TLS 1.2+).</li>
+              <li><span className="text-slate-300 font-medium">API servers</span> — Google Cloud Platform (Cloud Run, asia-south1 region), with encrypted connections (TLS 1.2+).</li>
               <li><span className="text-slate-300 font-medium">Frontend</span> — Vercel (CDN), with HTTPS enforced.</li>
             </ul>
             <p className="mt-3">
@@ -119,7 +119,7 @@ export default function PrivacyPage() {
             <p>We share your data only in the following limited cases:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li><span className="text-slate-300 font-medium">AI providers</span> — when you use the LLM gateway, your prompts are forwarded to the AI provider you select (OpenAI, Anthropic, etc.). Their privacy policies apply to that processing.</li>
-              <li><span className="text-slate-300 font-medium">Infrastructure providers</span> — Supabase, Railway, and Vercel process data as part of hosting the service. All are bound by data processing agreements.</li>
+              <li><span className="text-slate-300 font-medium">Infrastructure providers</span> — Supabase, Google Cloud Platform, and Vercel process data as part of hosting the service. All are bound by data processing agreements.</li>
               <li><span className="text-slate-300 font-medium">Legal requirements</span> — if required by a court order or applicable law, we may disclose data to authorities. We will notify you where legally permitted.</li>
               <li><span className="text-slate-300 font-medium">Business transfer</span> — in the event of a merger or acquisition, your data may transfer to the new entity, which will be bound by this policy.</li>
             </ul>
