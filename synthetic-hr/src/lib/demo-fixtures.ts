@@ -9,6 +9,7 @@
  */
 
 import type { AIAgent, Incident, CostData } from '../types';
+import type { AgentConnectionDraft } from '../pages/dashboard/types';
 
 // ── Agents ────────────────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ export const DEMO_INTEGRATIONS = [
   { id: 'stripe', name: 'Stripe', category: 'PAYMENTS', status: 'configured', lifecycleStatus: 'configured', lastSyncAt: new Date(Date.now() - 86400000).toISOString() },
 ];
 
-export const DEMO_AGENT_CONNECTIONS: Record<string, { integrationIds: string[]; primaryPack: string }> = {
+export const DEMO_AGENT_CONNECTIONS: Record<string, AgentConnectionDraft> = {
   '1': { integrationIds: ['zendesk', 'intercom'], primaryPack: 'support' },
   '2': { integrationIds: ['hubspot'], primaryPack: 'sales' },
   '3': { integrationIds: [], primaryPack: 'recruitment' },

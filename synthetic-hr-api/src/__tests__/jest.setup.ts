@@ -11,6 +11,9 @@ process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.supabase.co
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-anon-key';
 process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-service-key';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
+process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-test-openai-key';
+process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'sk-ant-test-anthropic-key';
+process.env.INTEGRATIONS_ENCRYPTION_KEY = process.env.INTEGRATIONS_ENCRYPTION_KEY || '0000000000000000000000000000000000000000000000000000000000000000';
 
 import net from 'net';
 

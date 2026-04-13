@@ -19,7 +19,7 @@ import { DEMO_AGENTS, DEMO_INTEGRATIONS, DEMO_AGENT_CONNECTIONS, DEMO_INCIDENTS,
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
 import { OnboardingTour } from '../components/OnboardingTour';
 import { useDashboardNotifications, readNotificationState, buildCoverageNotifications } from '../hooks/useDashboardNotifications';
-import { useDashboardAgentConnections } from '../hooks/useDashboardAgentConnections';
+import { useDashboardAgentConnections, writeFocusedAgentWorkspace } from '../hooks/useDashboardAgentConnections';
 import { useDashboardSetup } from '../hooks/useDashboardSetup';
 
 import { MfaNudgeBanner } from '../components/MfaNudgeBanner';
