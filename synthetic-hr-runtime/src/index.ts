@@ -81,7 +81,7 @@ async function gcpGetTokenAndProject(): Promise<{ token: string; project: string
   return { token, project };
 }
 
-async function loadRuntimeSecretFromGCP(): Promise<string> {
+async function loadRuntimeSecretFromGCP(): Promise<{ secret: string; orgId: string }> {
   try {
     const { token, project } = await gcpGetTokenAndProject();
     const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions/latest:access`;
@@ -89,24 +89,32 @@ async function loadRuntimeSecretFromGCP(): Promise<string> {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return '';
+    if (!res.ok) return { secret: '', orgId: '' };
     const data = await res.json() as { payload?: { data?: string } };
-    if (!data?.payload?.data) return '';
+    if (!data?.payload?.data) return { secret: '', orgId: '' };
     const value = Buffer.from(data.payload.data, 'base64').toString('utf8').trim();
-    return value;
+    // Try to parse as JSON (new format: { secret, org_id })
+    try {
+      const parsed = JSON.parse(value) as { secret?: string; org_id?: string };
+      if (parsed?.secret) return { secret: parsed.secret, orgId: parsed.org_id || '' };
+    } catch {
+      // Legacy: plain secret string
+    }
+    return { secret: value, orgId: '' };
   } catch {
-    return '';
+    return { secret: '', orgId: '' };
   }
 }
 
-async function persistRuntimeSecretToGCP(secret: string): Promise<void> {
+async function persistRuntimeSecretToGCP(secret: string, orgId: string): Promise<void> {
   try {
     const { token, project } = await gcpGetTokenAndProject();
-    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions`;
+    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions:add`;
+    const payload = JSON.stringify({ secret, org_id: orgId });
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payload: { data: Buffer.from(secret, 'utf8').toString('base64') } }),
+      body: JSON.stringify({ payload: { data: Buffer.from(payload, 'utf8').toString('base64') } }),
       signal: AbortSignal.timeout(5000),
     });
     if (res.ok) {
@@ -126,21 +134,24 @@ async function persistRuntimeSecretToGCP(secret: string): Promise<void> {
 // Placeholder values like "pending-first-enrollment" are shorter and must be ignored.
 const MIN_RUNTIME_SECRET_LENGTH = 32;
 
-async function loadRuntimeSecret(): Promise<string> {
-  if (RUNTIME_SECRET_ENV && RUNTIME_SECRET_ENV.length >= MIN_RUNTIME_SECRET_LENGTH) return RUNTIME_SECRET_ENV;
+async function loadRuntimeSecret(): Promise<{ secret: string; orgId: string }> {
+  if (RUNTIME_SECRET_ENV && RUNTIME_SECRET_ENV.length >= MIN_RUNTIME_SECRET_LENGTH) {
+    return { secret: RUNTIME_SECRET_ENV, orgId: '' };
+  }
   if (RUNTIME_SECRET_FILE) {
     try {
       if (fs.existsSync(RUNTIME_SECRET_FILE)) {
         const value = fs.readFileSync(RUNTIME_SECRET_FILE, 'utf8').trim();
-        if (value && value.length >= MIN_RUNTIME_SECRET_LENGTH) return value;
+        if (value && value.length >= MIN_RUNTIME_SECRET_LENGTH) return { secret: value, orgId: '' };
       }
     } catch {
       // ignore
     }
   }
   // Cloud Run: dynamically read from Secret Manager (survives container restarts)
-  const gcpSecret = await loadRuntimeSecretFromGCP();
-  return gcpSecret.length >= MIN_RUNTIME_SECRET_LENGTH ? gcpSecret : '';
+  const gcpResult = await loadRuntimeSecretFromGCP();
+  if (gcpResult.secret.length >= MIN_RUNTIME_SECRET_LENGTH) return gcpResult;
+  return { secret: '', orgId: '' };
 }
 
 function persistRuntimeSecret(secret: string) {
@@ -176,8 +187,9 @@ function signRuntimeJwt(): string {
 
 async function enroll(): Promise<void> {
   const existing = await loadRuntimeSecret();
-  if (existing) {
-    runtimeSecret = existing;
+  if (existing.secret) {
+    runtimeSecret = existing.secret;
+    if (existing.orgId) organizationId = existing.orgId;
     console.log('[runtime] using existing runtime secret (skipping enrollment)');
     return;
   }
@@ -208,7 +220,7 @@ async function enroll(): Promise<void> {
   runtimeSecret = payload.runtime_secret;
   organizationId = payload.organization_id;
   persistRuntimeSecret(runtimeSecret);
-  await persistRuntimeSecretToGCP(runtimeSecret);
+  await persistRuntimeSecretToGCP(runtimeSecret, organizationId);
   console.log(`[runtime] enrolled runtime_id=${payload.runtime_id} org_id=${payload.organization_id}`);
 }
 

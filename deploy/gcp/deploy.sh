@@ -191,7 +191,7 @@ gcloud run deploy synthetic-hr-runtime \
   --cpu=1 \
   --cpu-boost \
   --min-instances=1 \
-  --max-instances=3 \
+  --max-instances=1 \
   --timeout=3600 \
   --concurrency=1 \
   --service-account="zapheit-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \

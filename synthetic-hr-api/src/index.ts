@@ -416,6 +416,12 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/runtimes/jobs/') || req.path.startsWith('/api/v1/runtimes/jobs/')) {
     return next();
   }
+  if (req.path.startsWith('/api/runtimes/schedules/') || req.path.startsWith('/api/v1/runtimes/schedules/')) {
+    return next();
+  }
+  if (req.path.startsWith('/api/runtimes/actions/') || req.path.startsWith('/api/v1/runtimes/actions/')) {
+    return next();
+  }
 
   // Invite claim requires auth, but the user may not be provisioned into an org yet.
   // Allow authenticateToken, skip org isolation for this one endpoint.
