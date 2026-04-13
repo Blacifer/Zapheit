@@ -4,6 +4,14 @@
  *
  * Force localhost binding for all tests to avoid EPERM on listen.
  */
+
+// Provide dummy Supabase env vars so supabase.ts doesn't throw at module load time
+// during integration tests. Real values are never used — all DB calls are mocked.
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.supabase.co';
+process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-anon-key';
+process.env.SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'test-service-key';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
+
 import net from 'net';
 
 const originalListen = net.Server.prototype.listen;
