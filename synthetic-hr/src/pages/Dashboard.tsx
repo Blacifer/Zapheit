@@ -15,9 +15,12 @@ import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
-import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
+import { DEMO_AGENTS, DEMO_INTEGRATIONS, DEMO_AGENT_CONNECTIONS, DEMO_INCIDENTS, DEMO_COST_DATA, DEMO_NOTIFICATIONS, DEMO_API_KEYS } from '../lib/demo-fixtures';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
 import { OnboardingTour } from '../components/OnboardingTour';
+import { useDashboardNotifications, readNotificationState, buildCoverageNotifications } from '../hooks/useDashboardNotifications';
+import { useDashboardAgentConnections } from '../hooks/useDashboardAgentConnections';
+import { useDashboardSetup } from '../hooks/useDashboardSetup';
 
 import { MfaNudgeBanner } from '../components/MfaNudgeBanner';
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
@@ -71,184 +74,6 @@ function DashboardSectionLoading() {
   );
 }
 
-type DashboardNotification = {
-  id: string;
-  type: 'info' | 'warning' | 'error' | 'success';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  source: 'local' | 'reconciliation';
-};
-
-const COVERAGE_FOCUS_STORAGE_KEY = 'synthetic_hr_coverage_focus';
-const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
-
-type CoverageNotificationPayload = Awaited<ReturnType<typeof api.admin.getCoverageStatus>>['data'];
-type IntegrationSummaryRow = {
-  id: string;
-  name: string;
-  category: string;
-  tags?: string[];
-  status?: string;
-  lifecycleStatus?: string;
-  lastSyncAt?: string | null;
-};
-
-type AgentConnectionDraft = {
-  integrationIds: string[];
-  primaryPack: IntegrationPackId | null;
-};
-
-function getNotificationReadStorageKey(orgName?: string | null) {
-  return `synthetic_hr_notification_reads:${orgName || 'workspace'}`;
-}
-
-function getAgentConnectionStorageKey(orgName?: string | null) {
-  return `synthetic_hr_agent_connections:${orgName || 'workspace'}`;
-}
-
-function readAgentConnectionState(orgName?: string | null) {
-  if (typeof window === 'undefined') return {} as Record<string, AgentConnectionDraft>;
-  try {
-    const raw = localStorage.getItem(getAgentConnectionStorageKey(orgName));
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed as Record<string, AgentConnectionDraft> : {};
-  } catch {
-    return {} as Record<string, AgentConnectionDraft>;
-  }
-}
-
-function writeAgentConnectionState(orgName: string | null | undefined, state: Record<string, AgentConnectionDraft>) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(getAgentConnectionStorageKey(orgName), JSON.stringify(state));
-}
-
-function readNotificationState(orgName?: string | null) {
-  if (typeof window === 'undefined') return new Set<string>();
-  try {
-    const raw = localStorage.getItem(getNotificationReadStorageKey(orgName));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set<string>();
-  }
-}
-
-function writeNotificationState(orgName: string | null | undefined, ids: Iterable<string>) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(getNotificationReadStorageKey(orgName), JSON.stringify(Array.from(ids)));
-}
-
-function readFocusedAgentWorkspace() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { agentId?: string };
-    return parsed?.agentId ? parsed.agentId : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeFocusedAgentWorkspace(agentId: string | null | undefined) {
-  if (typeof window === 'undefined') return;
-  if (!agentId) {
-    localStorage.removeItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY);
-    return;
-  }
-  localStorage.setItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, JSON.stringify({ agentId }));
-}
-
-function buildCoverageNotifications(
-  coverage: CoverageNotificationPayload | undefined,
-  readIds: Set<string>,
-): DashboardNotification[] {
-  if (!coverage) return [];
-
-  const sentNotifications = (coverage.reconciliationNotifications?.history || []).map((entry) => ({
-    id: `recon:${entry.id}`,
-    type: entry.severity === 'critical' ? 'error' as const : 'warning' as const,
-    title: entry.title,
-    message: entry.message,
-    timestamp: entry.sentAt,
-    read: readIds.has(`recon:${entry.id}`),
-    source: 'reconciliation' as const,
-  }));
-
-  const activeAlerts = (coverage.reconciliationAlerts || []).map((alert) => {
-    const id = `active:${alert.code}:${alert.provider}`;
-    return {
-      id,
-      type: alert.severity === 'critical'
-        ? 'error' as const
-        : alert.severity === 'warning'
-          ? 'warning' as const
-          : 'info' as const,
-      title: alert.title,
-      message: alert.message,
-      timestamp: coverage.generatedAt,
-      read: readIds.has(id),
-      source: 'reconciliation' as const,
-    };
-  });
-
-  if (coverage.reconciliationAlertConfig?.channels?.inApp === false) {
-    return [];
-  }
-
-  const deduped = new Map<string, DashboardNotification>();
-
-  [...activeAlerts, ...sentNotifications]
-    .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())
-    .forEach((notification) => {
-      const key = `${notification.title}::${notification.message}`;
-      const existing = deduped.get(key);
-
-      if (!existing) {
-        deduped.set(key, notification);
-        return;
-      }
-
-      const existingTime = new Date(existing.timestamp).getTime();
-      const nextTime = new Date(notification.timestamp).getTime();
-      const preferred = nextTime >= existingTime ? notification : existing;
-      const merged: DashboardNotification = {
-        ...preferred,
-        read: existing.read && notification.read,
-      };
-
-      deduped.set(key, merged);
-    });
-
-  return Array.from(deduped.values())
-    .sort((left, right) => {
-      const severityRank = (notification: DashboardNotification) => {
-        if (notification.type === 'error') return 0;
-        if (notification.type === 'warning') return 1;
-        if (notification.type === 'info') return 2;
-        return 3;
-      };
-      const sourceRank = (notification: DashboardNotification) => {
-        if (notification.source === 'reconciliation') return 0;
-        return 1;
-      };
-      const readRank = (notification: DashboardNotification) => notification.read ? 1 : 0;
-
-      const readDiff = readRank(left) - readRank(right);
-      if (readDiff !== 0) return readDiff;
-
-      const severityDiff = severityRank(left) - severityRank(right);
-      if (severityDiff !== 0) return severityDiff;
-
-      const sourceDiff = sourceRank(left) - sourceRank(right);
-      if (sourceDiff !== 0) return sourceDiff;
-
-      return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime();
-    })
-    .slice(0, 50);
-}
 
 function areAgentWritableFieldsEqual(left: AIAgent, right: AIAgent) {
   const leftPrompt = String((left as any).system_prompt || '');
@@ -293,18 +118,47 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const costData = isDemoMode ? demoCostData : liveCostData;
   const loading = isDemoMode ? demoLoading : agentsLoading;
 
-  const [integrationRows, setIntegrationRows] = useState<IntegrationSummaryRow[]>([]);
-  const [agentConnections, setAgentConnections] = useState<Record<string, AgentConnectionDraft>>({});
-  const [fleetWorkspaceAgentId, setFleetWorkspaceAgentId] = useState<string | null>(null);
-  const [domainAgentPreselect, setDomainAgentPreselect] = useState<{ packId: IntegrationPackId; agentId: string } | null>(null);
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const { user, signOut } = useApp();
 
-  // Simple local state for notifications and role
-  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  // navigateTo must be declared before hooks that accept it as a parameter
+  const hasUserNavigatedRef = useRef(false);
+  const hasAutoRedirectedRef = useRef(false);
+
+  const navigateTo = useCallback((page: string, options?: { userInitiated?: boolean }) => {
+    const userInitiated = options?.userInitiated ?? true;
+    const normalizedPage = page === 'fleet' ? 'agents' : page;
+    if (userInitiated) {
+      hasUserNavigatedRef.current = true;
+    }
+    navigate(`/dashboard/${normalizedPage}`);
+  }, [navigate]);
+
+  // ── Custom hooks ─────────────────────────────────────────────────────────
+  const {
+    notifications, setNotifications,
+    showNotificationPanel, setShowNotificationPanel,
+    coverageStatus, setCoverageStatus,
+    unreadCount,
+    addNotification, markAsRead, markAllAsRead, clearNotifications, openCoverageFromNotification,
+  } = useDashboardNotifications({ orgName: user?.organizationName, navigateTo });
+
+  const {
+    agentConnections, setAgentConnections,
+    integrationRows, setIntegrationRows,
+    fleetWorkspaceAgentId, setFleetWorkspaceAgentId,
+    domainAgentPreselect, setDomainAgentPreselect,
+    apiKeys, setApiKeys,
+    suggestPackForAgent, openIntegrationsForAgent, handleIntegrationConnected,
+    enrichedAgents,
+  } = useDashboardAgentConnections({
+    orgName: user?.organizationName,
+    agents, liveAgents, isDemoMode: !!isDemoMode, mounted, navigateTo,
+  });
+
+  const { setupBarDismissed, whatsNewDismissed, setWhatsNewDismissed, whatsNewData, needsOnboarding, dismissSetupBar } =
+    useDashboardSetup({ orgName: user?.organizationName, isDemoMode: !!isDemoMode, agents, incidents, loading, coverageStatus });
+
   const [role, setRole] = useState<string>('super_admin');
-  const [coverageStatus, setCoverageStatus] = useState<CoverageNotificationPayload | null>(null);
 
   // Dark/Light mode toggle
   const themePrefKey = 'synthetic_hr_theme';
@@ -317,49 +171,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   }, [isLightMode]);
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // Setup progress bar
-  const setupBarDismissKey = `synthetic_hr_setup_bar_dismissed:${user?.organizationName || 'workspace'}`;
-  const [setupBarDismissed, setSetupBarDismissed] = useState(() =>
-    typeof window !== 'undefined' ? Boolean(localStorage.getItem(setupBarDismissKey)) : false
-  );
-  const dismissSetupBar = useCallback(() => {
-    localStorage.setItem(setupBarDismissKey, '1');
-    setSetupBarDismissed(true);
-  }, [setupBarDismissKey]);
-
-  // "What changed since you left" banner — shown on first load after 24h+ absence
-  const lastVisitKey = `synthetic_hr_last_visit:${user?.organizationName || 'workspace'}`;
-  const [whatsNewDismissed, setWhatsNewDismissed] = useState(false);
-  const [whatsNewData, setWhatsNewData] = useState<{
-    newIncidents: number;
-    openIncidents: number;
-    agentCount: number;
-    prevAgentCount: number;
-    hoursAway: number;
-  } | null>(null);
-
-  // Record visit + compute delta on first data load
-  useEffect(() => {
-    if (loading || isDemoMode) return;
-    const now = Date.now();
-    const lastVisitStr = localStorage.getItem(lastVisitKey);
-    const lastVisit = lastVisitStr ? parseInt(lastVisitStr, 10) : 0;
-    const hoursAway = lastVisit ? (now - lastVisit) / 3600000 : 0;
-
-    if (hoursAway > 24 && lastVisit) {
-      // Count incidents created since last visit
-      const newIncidents = incidents.filter((i: Incident) => new Date(i.created_at).getTime() > lastVisit).length;
-      const openIncidents = incidents.filter((i: Incident) => i.status === 'open').length;
-      const prevAgentCount = parseInt(localStorage.getItem(`${lastVisitKey}:agents`) || '0', 10);
-      setWhatsNewData({ newIncidents, openIncidents, agentCount: agents.length, prevAgentCount, hoursAway: Math.round(hoursAway) });
-    }
-
-    // Update last visit timestamp
-    localStorage.setItem(lastVisitKey, String(now));
-    localStorage.setItem(`${lastVisitKey}:agents`, String(agents.length));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
 
   // Memorable moments
   const orgScope = user?.organizationName || 'workspace';
@@ -408,35 +219,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     if (goToIncidents) navigate('/dashboard/incidents');
   }, [orgScope, navigate]);
 
-  const hasUserNavigatedRef = useRef(false);
-  const hasAutoRedirectedRef = useRef(false);
-
-  const navigateTo = useCallback((page: string, options?: { userInitiated?: boolean }) => {
-    const userInitiated = options?.userInitiated ?? true;
-    const normalizedPage = page === 'fleet' ? 'agents' : page;
-    if (userInitiated) {
-      hasUserNavigatedRef.current = true;
-    }
-    navigate(`/dashboard/${normalizedPage}`);
-  }, [navigate]);
-
   const [error, setError] = useState<string | null>(null);
-
-  const addNotification = async (type: string, title: string, message: string) => {
-    const newNotification: DashboardNotification = {
-      id: crypto.randomUUID(),
-      type: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info',
-      title,
-      message,
-      timestamp: new Date().toISOString(),
-      read: false,
-      source: 'local',
-    };
-    const updated = [newNotification, ...notifications].slice(0, 50);
-    setNotifications(updated);
-    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
-    writeNotificationState(user?.organizationName, readIds);
-  };
 
   const handleTemplateDeploy = useCallback(async (template: any) => {
     const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
@@ -511,151 +294,21 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     } catch (err) { console.error('Domain agent deploy error:', err); throw err; }
   }, [isDemoMode, queryClient, navigateTo, addNotification]);
 
-  const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
-    const type = String(agent.agent_type || '').toLowerCase();
-    const name = String(agent.name || '').toLowerCase();
-    const text = `${type} ${name}`;
-    if (text.includes('support') || text.includes('customer')) return 'support';
-    if (text.includes('sales') || text.includes('lead') || text.includes('revenue')) return 'sales';
-    if (text.includes('refund') || text.includes('finance') || text.includes('billing') || text.includes('payment')) return 'finance';
-    if (text.includes('recruit') || text.includes('talent') || text.includes('hiring') || text.includes('hr')) return 'recruitment';
-    if (text.includes('compliance') || text.includes('legal') || text.includes('policy')) return 'compliance';
-    return 'it';
-  }, []);
-
-  const openIntegrationsForAgent = useCallback((agent: AIAgent, _packId?: IntegrationPackId | null) => {
-    setFleetWorkspaceAgentId(agent.id);
-    writeFocusedAgentWorkspace(agent.id);
-    navigateTo(`apps?agentId=${agent.id}`, { userInitiated: false });
-  }, [navigateTo]);
-
-  const handleIntegrationConnected = useCallback((payload: {
-    agentId: string;
-    integrationId: string;
-    integrationName: string;
-    packId: IntegrationPackId;
-    status: string;
-    lastSyncAt?: string | null;
-  }) => {
-    void api.agents.updatePublishState(payload.agentId, {
-      publish_status: payload.status === 'connected' ? 'live' : 'ready',
-      primary_pack: payload.packId,
-      integration_ids: Array.from(new Set([
-        ...(agentConnections[payload.agentId]?.integrationIds || agents.find((agent) => agent.id === payload.agentId)?.integrationIds || []),
-        payload.integrationId,
-      ])),
-    });
-    setAgentConnections((current) => {
-      const existing = current[payload.agentId] || { integrationIds: [], primaryPack: payload.packId };
-      const next = {
-        ...current,
-        [payload.agentId]: {
-          integrationIds: Array.from(new Set([...existing.integrationIds, payload.integrationId])),
-          primaryPack: existing.primaryPack || payload.packId,
-        },
-      };
-      writeAgentConnectionState(user?.organizationName, next);
-      return next;
-    });
-    setFleetWorkspaceAgentId(payload.agentId);
-    writeFocusedAgentWorkspace(payload.agentId);
-  }, [agentConnections, agents, user?.organizationName]);
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    setAgentConnections(readAgentConnectionState(user?.organizationName));
-  }, [mounted, user?.organizationName]);
-
-  // Initialise agentConnections from live API data on first successful load
-  const agentConnectionsInitialized = useRef(false);
-  useEffect(() => {
-    if (isDemoMode || liveAgents.length === 0 || agentConnectionsInitialized.current) return;
-    agentConnectionsInitialized.current = true;
-    setAgentConnections(Object.fromEntries(
-      liveAgents.map((agent) => [
-        agent.id,
-        {
-          integrationIds: agent.integrationIds || [],
-          primaryPack: agent.primaryPack || suggestPackForAgent(agent),
-        },
-      ]),
-    ));
-  }, [liveAgents, isDemoMode, suggestPackForAgent]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    const focusedAgentId = readFocusedAgentWorkspace();
-    if (focusedAgentId) {
-      setFleetWorkspaceAgentId(focusedAgentId);
-    }
-  }, [mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    writeFocusedAgentWorkspace(fleetWorkspaceAgentId);
-  }, [fleetWorkspaceAgentId, mounted]);
 
   const refreshData = useCallback(async () => {
     // Demo mode: populate local demo state directly
     if (isDemoMode) {
       setDemoLoading(true);
-      const demoAgentsList: AIAgent[] = [
-        { id: '1', name: 'Support Bot', description: 'Customer support AI agent', agent_type: 'support', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 23, conversations: 15420, created_at: '2024-01-15', satisfaction: 94, uptime: 99.5, budget_limit: 1000, current_spend: 462, auto_throttle: true, publishStatus: 'live', primaryPack: 'support', integrationIds: ['zendesk', 'intercom'] },
-        { id: '2', name: 'Sales Assistant', description: 'Sales qualification AI agent', agent_type: 'sales', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'medium', risk_score: 45, conversations: 8932, created_at: '2024-02-01', satisfaction: 88, uptime: 98.2, budget_limit: 500, current_spend: 267, auto_throttle: false, publishStatus: 'live', primaryPack: 'sales', integrationIds: ['hubspot'] },
-        { id: '3', name: 'HR Bot', description: 'HR internal support agent', agent_type: 'hr', platform: 'web', model_name: 'GPT-4', status: 'active', lifecycle_state: 'idle', risk_level: 'low', risk_score: 18, conversations: 4521, created_at: '2024-02-15', satisfaction: 96, uptime: 99.8, budget_limit: 300, current_spend: 135, auto_throttle: true, publishStatus: 'ready', primaryPack: 'recruitment', integrationIds: [] },
-        { id: '4', name: 'Refund Handler', description: 'Automated refund processing', agent_type: 'finance', platform: 'web', model_name: 'GPT-4', status: 'paused', lifecycle_state: 'error', risk_level: 'high', risk_score: 78, conversations: 2341, created_at: '2024-03-01', satisfaction: 72, uptime: 95.5, budget_limit: 200, current_spend: 70, auto_throttle: false, publishStatus: 'ready', primaryPack: 'finance', integrationIds: ['stripe'] },
-        { id: '5', name: 'Knowledge Base', description: 'Internal knowledge assistant', agent_type: 'support', platform: 'web', model_name: 'Claude-3', status: 'active', lifecycle_state: 'processing', risk_level: 'low', risk_score: 12, conversations: 28754, created_at: '2024-01-20', satisfaction: 97, uptime: 99.9, budget_limit: 1500, current_spend: 862, auto_throttle: true, publishStatus: 'not_live', primaryPack: 'support', integrationIds: [] },
-      ];
-      setIntegrationRows([
-        { id: 'zendesk', name: 'Zendesk', category: 'SUPPORT', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
-        { id: 'intercom', name: 'Intercom', category: 'SUPPORT', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
-        { id: 'hubspot', name: 'HubSpot', category: 'CRM', status: 'connected', lifecycleStatus: 'connected', lastSyncAt: new Date().toISOString() },
-        { id: 'stripe', name: 'Stripe', category: 'PAYMENTS', status: 'configured', lifecycleStatus: 'configured', lastSyncAt: new Date(Date.now() - 86400000).toISOString() },
-      ]);
-      setAgentConnections({
-        '1': { integrationIds: ['zendesk', 'intercom'], primaryPack: 'support' },
-        '2': { integrationIds: ['hubspot'], primaryPack: 'sales' },
-        '3': { integrationIds: [], primaryPack: 'recruitment' },
-        '4': { integrationIds: ['stripe'], primaryPack: 'finance' },
-        '5': { integrationIds: [], primaryPack: 'support' },
-      });
-      const demoIncidentsList: Incident[] = [
-        { id: '1', agent_id: '4', agent_name: 'Refund Handler', incident_type: 'refund_abuse', severity: 'critical', status: 'open', title: 'Unauthorized Refund Approved', description: 'Bot approved a refund request without proper verification', created_at: new Date().toISOString() },
-        { id: '2', agent_id: '2', agent_name: 'Sales Assistant', incident_type: 'hallucination', severity: 'low', status: 'resolved', title: 'Incorrect Pricing Information', description: 'Bot provided wrong pricing for enterprise plan', resolved_at: new Date().toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() },
-        { id: '3', agent_id: '1', agent_name: 'Support Bot', incident_type: 'pii_leak', severity: 'high', status: 'open', title: 'Potential PII Exposure', description: 'Bot may have shared customer email in response', created_at: new Date(Date.now() - 172800000).toISOString() },
-      ];
-      const demoCostList: CostData[] = [
-        { id: '1', tokens: 1542000, cost: 462.60, date: new Date().toISOString(), requests: 5000 },
-        { id: '2', tokens: 893200, cost: 267.96, date: new Date().toISOString(), requests: 2800 },
-        { id: '3', tokens: 452100, cost: 135.63, date: new Date().toISOString(), requests: 1500 },
-        { id: '4', tokens: 234100, cost: 70.23, date: new Date().toISOString(), requests: 750 },
-        { id: '5', tokens: 2875400, cost: 862.62, date: new Date().toISOString(), requests: 9200 },
-      ];
-      const demoNotificationsList: DashboardNotification[] = [
-        { id: '1', type: 'incident', title: 'Critical Incident Detected', message: 'Refund Handler approved unauthorized refund', read: false, created_at: new Date().toISOString() },
-        { id: '2', type: 'cost', title: 'Cost Alert', message: 'Monthly AI costs exceeded budget by 15%', read: false, created_at: new Date(Date.now() - 86400000).toISOString() },
-        { id: '3', type: 'system', title: 'Shadow Mode Complete', message: 'New agent passed deployment testing with 92% score', read: true, created_at: new Date(Date.now() - 172800000).toISOString() },
-      ].map((n: any) => ({
-        id: n.id,
-        type: n.type === 'cost' ? 'warning' as const : n.type === 'incident' ? 'error' as const : 'success' as const,
-        title: n.title,
-        message: n.message,
-        timestamp: n.created_at,
-        read: n.read,
-        source: 'local' as const,
-      }));
-
-      setDemoAgents(demoAgentsList);
-      setDemoIncidents(demoIncidentsList);
-      setDemoCostData(demoCostList);
-      setNotifications(demoNotificationsList);
-      setApiKeys([
-        { id: '1', name: 'Production Key', key: 'sk-demo-xxxx', permissions: ['agents.read', 'agents.update'], created: new Date().toISOString(), lastUsed: new Date().toISOString() },
-      ]);
+      setIntegrationRows(DEMO_INTEGRATIONS);
+      setAgentConnections(DEMO_AGENT_CONNECTIONS);
+      setDemoAgents(DEMO_AGENTS);
+      setDemoIncidents(DEMO_INCIDENTS);
+      setDemoCostData(DEMO_COST_DATA);
+      setNotifications(DEMO_NOTIFICATIONS);
+      setApiKeys(DEMO_API_KEYS);
       setDemoLoading(false);
       return;
     }
@@ -709,56 +362,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     void refreshData();
   }, [mounted, refreshData]);
 
-  const onboardingStorageScope = user?.organizationName || 'workspace';
-  const onboardingDismissedKey = `synthetic_hr_onboarding_dismissed:${onboardingStorageScope}`;
-  const onboardingCompletedKey = `synthetic_hr_onboarding_completed:${onboardingStorageScope}`;
-  const onboardingDismissed = typeof window !== 'undefined' ? Boolean(localStorage.getItem(onboardingDismissedKey)) : false;
-  const onboardingCompleted = typeof window !== 'undefined' ? Boolean(localStorage.getItem(onboardingCompletedKey)) : false;
-  const needsOnboarding = Boolean(
-    !isDemoMode
-    && !onboardingCompleted
-    && !onboardingDismissed
-    && (
-      (coverageStatus?.agents?.total ?? agents.length) === 0
-      || (coverageStatus?.telemetry?.gatewayObserved === false)
-    )
-  );
-
-  const enrichedAgents = agents.map((agent) => {
-    const connectionState = agentConnections[agent.id] || {
-      integrationIds: agent.integrationIds || [],
-      primaryPack: agent.primaryPack || suggestPackForAgent(agent),
-    };
-    const linkedIntegrations = connectionState.integrationIds
-      .map((integrationId) => integrationRows.find((row) => row.id === integrationId))
-      .filter(Boolean) as IntegrationSummaryRow[];
-    const connectedTargets = linkedIntegrations.map((integration) => ({
-      integrationId: integration.id,
-      integrationName: integration.name,
-      packId: guessPackForIntegration(integration),
-      status: integration.lifecycleStatus || integration.status || 'disconnected',
-      lastSyncAt: integration.lastSyncAt || null,
-      lastActivityAt: integration.lastSyncAt || null,
-    }));
-    const connectedCount = connectedTargets.filter((target) => target.status === 'connected').length;
-    const publishStatus = connectedTargets.length === 0
-      ? 'not_live'
-      : connectedCount > 0
-        ? 'live'
-        : 'ready';
-
-    return {
-      ...agent,
-      publishStatus,
-      primaryPack: connectionState.primaryPack || suggestPackForAgent(agent),
-      integrationIds: connectionState.integrationIds,
-      connectedTargets,
-      lastIntegrationSyncAt: connectedTargets[0]?.lastSyncAt || null,
-    } as AIAgent;
-  });
-
-
-
   useEffect(() => {
     if (!mounted) return;
     if (loading) return;
@@ -770,64 +373,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     }
   }, [mounted, loading, needsOnboarding, currentPage, navigateTo]);
 
-  useEffect(() => {
-    if (!mounted || isDemoMode) return;
-    writeAgentConnectionState(user?.organizationName, agentConnections);
-  }, [agentConnections, isDemoMode, mounted, user?.organizationName]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
   const hasPriorityOverlay = Boolean(caughtSomethingData || agentAliveData);
   const showSetupProgress = Boolean(needsOnboarding && !setupBarDismissed && !isDemoMode && !hasPriorityOverlay);
   const showWhatsNewBanner = Boolean(whatsNewData && !whatsNewDismissed && !showSetupProgress && !hasPriorityOverlay);
-
-  const markAsRead = async (id: string) => {
-    const updated = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
-    setNotifications(updated);
-    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
-    writeNotificationState(user?.organizationName, readIds);
-
-    // Sync to Appwrite
-    /*try {
-      await appwriteDB.markNotificationRead(id);
-    } catch (awError) {
-      console.warn('Failed to sync notification to Appwrite:', awError);
-    }*/
-  };
-
-  const openCoverageFromNotification = async (notification: DashboardNotification) => {
-    await markAsRead(notification.id);
-    if (notification.source === 'reconciliation') {
-      localStorage.setItem(COVERAGE_FOCUS_STORAGE_KEY, JSON.stringify({
-        id: notification.id,
-        title: notification.title,
-        message: notification.message,
-        timestamp: notification.timestamp,
-      }));
-    }
-    navigateTo('coverage', { userInitiated: false });
-    setShowNotificationPanel(false);
-  };
-
-  const markAllAsRead = async () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    writeNotificationState(user?.organizationName, updated.map((notification) => notification.id));
-
-    // Sync all to Appwrite
-    /*try {
-      for (const n of notifications) {
-        await appwriteDB.markNotificationRead(n.id);
-      }
-    } catch (awError) {
-      console.warn('Failed to sync notifications to Appwrite:', awError);
-    }*/
-  };
-
-  const clearNotifications = () => {
-    const updated = notifications.map((notification) => ({ ...notification, read: true }));
-    setNotifications(updated);
-    writeNotificationState(user?.organizationName, updated.map((notification) => notification.id));
-  };
 
   const saveAgents = async (newAgentsOrUpdater: AIAgent[] | ((currentAgents: AIAgent[]) => AIAgent[])) => {
     try {
@@ -1474,60 +1022,74 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 <Routes>
                   <Route index element={<Navigate to="overview" replace />} />
                   <Route path="overview" element={
-                    <DashboardOverview
-                      agents={enrichedAgents}
-                      incidents={incidents}
-                      costData={costData}
-                      onAddAgent={() => navigateTo('agents')}
-                      onNavigate={(page) => navigateTo(page)}
-                    />
+                    <SectionErrorBoundary fallbackMessage="Overview failed to load">
+                      <DashboardOverview
+                        agents={enrichedAgents}
+                        incidents={incidents}
+                        costData={costData}
+                        onAddAgent={() => navigateTo('agents')}
+                        onNavigate={(page) => navigateTo(page)}
+                      />
+                    </SectionErrorBoundary>
                   } />
                   <Route path="getting-started" element={
-                    <GettingStartedPage
-                      agents={enrichedAgents}
-                      onNavigate={(page) => navigateTo(page)}
-                      onRefresh={refreshData}
-                      storageScope={onboardingStorageScope}
-                    />
+                    <SectionErrorBoundary fallbackMessage="Getting started failed to load">
+                      <GettingStartedPage
+                        agents={enrichedAgents}
+                        onNavigate={(page) => navigateTo(page)}
+                        onRefresh={refreshData}
+                        storageScope={user?.organizationName || 'workspace'}
+                      />
+                    </SectionErrorBoundary>
                   } />
                   <Route path="connect" element={
-                    <ConnectAgentPage
-                      agents={enrichedAgents}
-                      onNavigate={(page) => navigateTo(page)}
-                      onRefresh={refreshData}
-                    />
+                    <SectionErrorBoundary fallbackMessage="Connect agent failed to load">
+                      <ConnectAgentPage
+                        agents={enrichedAgents}
+                        onNavigate={(page) => navigateTo(page)}
+                        onRefresh={refreshData}
+                      />
+                    </SectionErrorBoundary>
                   } />
                   <Route path="agents" element={
-                    <FleetPage
-                      agents={enrichedAgents}
-                      setAgents={saveAgents}
-                      selectedAgentId={fleetWorkspaceAgentId}
-                      onSelectAgent={setFleetWorkspaceAgentId}
-                      onPublishAgent={openIntegrationsForAgent}
-                      isLoading={loading}
-                      onOpenOperationsPage={(page, options) => {
-                        if (options?.agentId) writeFocusedAgentWorkspace(options.agentId);
-                        navigateTo(page, { userInitiated: false });
-                      }}
-                    />
+                    <SectionErrorBoundary fallbackMessage="Fleet failed to load">
+                      <FleetPage
+                        agents={enrichedAgents}
+                        setAgents={saveAgents}
+                        selectedAgentId={fleetWorkspaceAgentId}
+                        onSelectAgent={setFleetWorkspaceAgentId}
+                        onPublishAgent={openIntegrationsForAgent}
+                        isLoading={loading}
+                        onOpenOperationsPage={(page, options) => {
+                          if (options?.agentId) writeFocusedAgentWorkspace(options.agentId);
+                          navigateTo(page, { userInitiated: false });
+                        }}
+                      />
+                    </SectionErrorBoundary>
                   } />
                   <Route path="fleet" element={<Navigate to="/dashboard/agents" replace />} />
                   {/* Agent Studio — consolidates Templates + Agent Library + Playbooks */}
                   <Route path="agent-studio" element={
-                    <AgentStudioPage
-                      onDeployTemplate={handleTemplateDeploy}
-                      onDeployLibraryAgent={handleLibraryAgentDeploy}
-                      agents={enrichedAgents}
-                      onNavigate={navigateTo}
-                      initialPackId={domainAgentPreselect?.packId}
-                      initialAgentId={domainAgentPreselect?.agentId}
-                    />
+                    <SectionErrorBoundary fallbackMessage="Agent Studio failed to load">
+                      <AgentStudioPage
+                        onDeployTemplate={handleTemplateDeploy}
+                        onDeployLibraryAgent={handleLibraryAgentDeploy}
+                        agents={enrichedAgents}
+                        onNavigate={navigateTo}
+                        initialPackId={domainAgentPreselect?.packId}
+                        initialAgentId={domainAgentPreselect?.agentId}
+                      />
+                    </SectionErrorBoundary>
                   } />
                   <Route path="templates" element={<Navigate to="/dashboard/agent-studio?tab=templates" replace />} />
                   <Route path="agent-library" element={<Navigate to="/dashboard/agent-studio?tab=library" replace />} />
                   <Route path="playbooks" element={<Navigate to="/dashboard/agent-studio?tab=playbooks" replace />} />
                   <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
-                  <Route path="apps" element={<AppsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
+                  <Route path="apps" element={
+                    <SectionErrorBoundary fallbackMessage="Apps & integrations failed to load">
+                      <AppsPage onNavigate={navigateTo} agents={enrichedAgents} />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="apps/slack/workspace" element={<SectionErrorBoundary fallbackMessage="Slack workspace failed to load"><SlackWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/jira/workspace" element={<SectionErrorBoundary fallbackMessage="Jira workspace failed to load"><JiraWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/github/workspace" element={<SectionErrorBoundary fallbackMessage="GitHub workspace failed to load"><GitHubWorkspace /></SectionErrorBoundary>} />
@@ -1538,7 +1100,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
-                  <Route path="hubs" element={<HubsPage />} />
+                  <Route path="hubs" element={
+                    <SectionErrorBoundary fallbackMessage="Hubs failed to load">
+                      <HubsPage />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />
                   <Route path="hr-hub" element={<Navigate to="/dashboard/hubs?domain=hr" replace />} />
                   <Route path="recruitment" element={<Navigate to="/dashboard/hubs?domain=recruitment" replace />} />
@@ -1550,40 +1116,124 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="identity-hub" element={<Navigate to="/dashboard/hubs?domain=identity" replace />} />
                   <Route path="marketplace" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="integrations" element={<Navigate to="/dashboard/apps" replace />} />
-                  <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
-                  <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />} />
-                  <Route path="governed-actions" element={<GovernedActionsPage onNavigate={navigateTo} currentUserId={user?.id} currentRole={role} />} />
-                  <Route path="approvals" element={<ApprovalsPage />} />
-                  <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
+                  <Route path="conversations" element={
+                    <SectionErrorBoundary fallbackMessage="Conversations failed to load">
+                      <ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="incidents" element={
+                    <SectionErrorBoundary fallbackMessage="Incidents failed to load">
+                      <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="governed-actions" element={
+                    <SectionErrorBoundary fallbackMessage="Governed actions failed to load">
+                      <GovernedActionsPage onNavigate={navigateTo} currentUserId={user?.id} currentRole={role} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="approvals" element={
+                    <SectionErrorBoundary fallbackMessage="Approvals failed to load">
+                      <ApprovalsPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="costs" element={
+                    <SectionErrorBoundary fallbackMessage="Cost analytics failed to load">
+                      <CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
                   {/* API & Webhooks — consolidated */}
-                  <Route path="api-webhooks" element={<ApiWebhooksPage apiKeys={apiKeys} setApiKeys={saveApiKeys} onNavigate={navigateTo} />} />
+                  <Route path="api-webhooks" element={
+                    <SectionErrorBoundary fallbackMessage="API & Webhooks failed to load">
+                      <ApiWebhooksPage apiKeys={apiKeys} setApiKeys={saveApiKeys} onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="api-access" element={<Navigate to="/dashboard/api-webhooks?tab=keys" replace />} />
                   <Route path="webhooks" element={<Navigate to="/dashboard/api-webhooks?tab=webhooks" replace />} />
-                  <Route path="settings/*" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
-                  <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
-                  <Route path="blackbox" element={<BlackBoxPage incidents={incidents} onNavigate={navigateTo} />} />
+                  <Route path="settings/*" element={
+                    <SectionErrorBoundary fallbackMessage="Settings failed to load">
+                      <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="developer" element={
+                    <SectionErrorBoundary fallbackMessage="Developer tools failed to load">
+                      <DeveloperPage onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="blackbox" element={
+                    <SectionErrorBoundary fallbackMessage="Black-box replay failed to load">
+                      <BlackBoxPage incidents={incidents} onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
                   {/* Execution History — consolidated Run History + Traces */}
-                  <Route path="execution-history" element={<ExecutionHistoryPage agents={enrichedAgents} />} />
+                  <Route path="execution-history" element={
+                    <SectionErrorBoundary fallbackMessage="Execution history failed to load">
+                      <ExecutionHistoryPage agents={enrichedAgents} />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="jobs" element={<Navigate to="/dashboard/execution-history?tab=runs" replace />} />
                   <Route path="traces" element={<Navigate to="/dashboard/execution-history?tab=traces" replace />} />
                   {/* Platform — consolidated Models + Fine-tuning + Runtime + Caching + Batch */}
-                  <Route path="platform" element={<PlatformPage />} />
+                  <Route path="platform" element={
+                    <SectionErrorBoundary fallbackMessage="Platform settings failed to load">
+                      <PlatformPage />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="runtime-workers" element={<Navigate to="/dashboard/platform?tab=runtime" replace />} />
                   <Route path="models" element={<Navigate to="/dashboard/platform?tab=models" replace />} />
                   <Route path="fine-tuning" element={<Navigate to="/dashboard/platform?tab=fine-tuning" replace />} />
                   <Route path="caching" element={<Navigate to="/dashboard/platform?tab=caching" replace />} />
                   <Route path="batch" element={<Navigate to="/dashboard/platform?tab=batch" replace />} />
-                  <Route path="audit-log" element={<AuditLogPage />} />
-                  <Route path="coverage" element={<CoverageStatusPage />} />
-                  <Route path="work-items" element={<WorkItemsPage />} />
-                  <Route path="action-policies" element={<ActionPoliciesPage />} />
-                  <Route path="ctc-calculator" element={<CTCCalculatorPage />} />
+                  <Route path="audit-log" element={
+                    <SectionErrorBoundary fallbackMessage="Audit log failed to load">
+                      <AuditLogPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="coverage" element={
+                    <SectionErrorBoundary fallbackMessage="Coverage status failed to load">
+                      <CoverageStatusPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="work-items" element={
+                    <SectionErrorBoundary fallbackMessage="Work items failed to load">
+                      <WorkItemsPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="action-policies" element={
+                    <SectionErrorBoundary fallbackMessage="Action policies failed to load">
+                      <ActionPoliciesPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="ctc-calculator" element={
+                    <SectionErrorBoundary fallbackMessage="CTC calculator failed to load">
+                      <CTCCalculatorPage />
+                    </SectionErrorBoundary>
+                  } />
                   {/* Settings sub-pages */}
-                  <Route path="persona" element={<PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />} />
-                  <Route path="shadow" element={<ShadowModePage />} />
-                  <Route path="api-analytics" element={<ApiAnalyticsPage isDemoMode={!!isDemoMode} />} />
-                  <Route path="pricing" element={<PricingPage onNavigate={navigateTo} />} />
-                  <Route path="legal" element={<SafeHarborPage onNavigate={navigateTo} userRole={role} />} />
+                  <Route path="persona" element={
+                    <SectionErrorBoundary fallbackMessage="Persona page failed to load">
+                      <PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="shadow" element={
+                    <SectionErrorBoundary fallbackMessage="Shadow mode failed to load">
+                      <ShadowModePage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="api-analytics" element={
+                    <SectionErrorBoundary fallbackMessage="API analytics failed to load">
+                      <ApiAnalyticsPage isDemoMode={!!isDemoMode} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="pricing" element={
+                    <SectionErrorBoundary fallbackMessage="Pricing failed to load">
+                      <PricingPage onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="legal" element={
+                    <SectionErrorBoundary fallbackMessage="Legal page failed to load">
+                      <SafeHarborPage onNavigate={navigateTo} userRole={role} />
+                    </SectionErrorBoundary>
+                  } />
                   <Route path="*" element={<Navigate to="overview" replace />} />
                 </Routes>
               </ErrorBoundary>
