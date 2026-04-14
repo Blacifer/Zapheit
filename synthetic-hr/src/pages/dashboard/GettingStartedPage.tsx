@@ -170,13 +170,13 @@ export default function GettingStartedPage(props: {
   const explainGatewayError = (message: string) => {
     const text = message || '';
     if (text.toLowerCase().includes('provider key missing for openrouter')) {
-      return 'Missing OpenRouter runtime key. Set RASI_OPENROUTER_API_KEY (or OPENROUTER_API_KEY) in the backend environment (Railway variables for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
+      return 'Missing OpenRouter runtime key. Set RASI_OPENROUTER_API_KEY (or OPENROUTER_API_KEY) in the backend environment (GCP Secret Manager for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
     }
     if (text.toLowerCase().includes('provider key missing for openai')) {
-      return 'Missing OpenAI runtime key. Set RASI_OPENAI_API_KEY (or OPENAI_API_KEY) in the backend environment (Railway variables for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
+      return 'Missing OpenAI runtime key. Set RASI_OPENAI_API_KEY (or OPENAI_API_KEY) in the backend environment (GCP Secret Manager for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
     }
     if (text.toLowerCase().includes('provider key missing for anthropic')) {
-      return 'Missing Anthropic runtime key. Set RASI_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) in the backend environment (Railway variables for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
+      return 'Missing Anthropic runtime key. Set RASI_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) in the backend environment (GCP Secret Manager for prod, or synthetic-hr-api/.env for local) and restart/redeploy the backend.';
     }
     if (text.toLowerCase().includes('not authenticated')) {
       return 'Not authenticated. Refresh the page and sign in again.';
