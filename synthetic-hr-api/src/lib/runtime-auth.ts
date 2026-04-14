@@ -74,9 +74,21 @@ export function requireRuntimeAuth() {
         return res.status(401).json({ success: false, error: 'Runtime secret unavailable' });
       }
 
-      const key = new TextEncoder().encode(secret);
-      const verified = await jwtVerify(token, key, { algorithms: ['HS256'] });
-      const payload = verified.payload as any;
+      // Verify using the same HMAC-SHA256 approach the runtime uses to sign.
+      // jose v5's jwtVerify is not used here to avoid format incompatibilities.
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return res.status(401).json({ success: false, error: 'Malformed runtime token' });
+      }
+      const expectedSig = crypto.createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest('base64url');
+      if (expectedSig !== parts[2]) {
+        return res.status(401).json({ success: false, error: 'Runtime token signature invalid' });
+      }
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as any;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (!payload?.exp || payload.exp < nowSec) {
+        return res.status(401).json({ success: false, error: 'Runtime token expired' });
+      }
 
       const organizationId = typeof payload?.organization_id === 'string' ? payload.organization_id : '';
       if (!organizationId || organizationId !== runtime.organization_id) {
