@@ -118,8 +118,8 @@ export const AadhaarAdapter: IntegrationAdapter = {
 
 export const Phase2Adapters: Record<string, IntegrationAdapter> = {
   greythr: GreythrAdapter,
-  zoho_recruit: ZohoRecruitAdapter,
+  'zoho-recruit': ZohoRecruitAdapter,
   apna: ApnaAdapter,
-  aadhaar: AadhaarAdapter,
+  'aadhaar-api': AadhaarAdapter,
 };
 

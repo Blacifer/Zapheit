@@ -96,7 +96,7 @@ export const PaytmAdapter: IntegrationAdapter = {
 export const Phase3Adapters: Record<string, IntegrationAdapter> = {
   digilocker: DigiLockerAdapter,
   idfy: IdfyAdapter,
-  zoho_learn: ZohoLearnAdapter,
+  'zoho-learn': ZohoLearnAdapter,
   paytm: PaytmAdapter,
 };
 

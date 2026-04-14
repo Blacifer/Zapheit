@@ -131,7 +131,7 @@ export const TallyAdapter: IntegrationAdapter = {
 export const Phase1Adapters: Record<string, IntegrationAdapter> = {
   naukri: NaukriAdapter,
   cleartax: ClearTaxAdapter,
-  zoho_people: ZohoPeopleAdapter,
-  linkedin: LinkedInAdapter,
+  'zoho-people': ZohoPeopleAdapter,
+  'linkedin-recruiter': LinkedInAdapter,
   tally: TallyAdapter,
 };
