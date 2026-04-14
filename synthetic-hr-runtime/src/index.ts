@@ -115,7 +115,7 @@ async function persistRuntimeSecretToGCP(secret: string, orgId: string): Promise
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ payload: { data: Buffer.from(payload, 'utf8').toString('base64') } }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(15000),
     });
     if (res.ok) {
       console.log('[runtime] runtime secret persisted to Secret Manager');
@@ -220,8 +220,9 @@ async function enroll(): Promise<void> {
   runtimeSecret = payload.runtime_secret;
   organizationId = payload.organization_id;
   persistRuntimeSecret(runtimeSecret);
-  await persistRuntimeSecretToGCP(runtimeSecret, organizationId);
   console.log(`[runtime] enrolled runtime_id=${payload.runtime_id} org_id=${payload.organization_id}`);
+  // Persist to Secret Manager in the background — don't block startup
+  void persistRuntimeSecretToGCP(runtimeSecret, organizationId);
 }
 
 async function heartbeat(): Promise<void> {
