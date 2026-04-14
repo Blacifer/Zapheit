@@ -13,6 +13,43 @@ import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 
 const router = Router();
 
+const GCP_RUNTIME_SECRET_NAME = 'SYNTHETICHR_RUNTIME_SECRET';
+
+async function persistRuntimeSecretToGCPFromAPI(secret: string, orgId: string): Promise<void> {
+  try {
+    // Use GCP metadata service to get an access token (works on Cloud Run)
+    const tokenRes = await fetch(
+      'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+      { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5000) }
+    );
+    if (!tokenRes.ok) return;
+    const projectRes = await fetch(
+      'http://metadata.google.internal/computeMetadata/v1/project/project-id',
+      { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5000) }
+    );
+    if (!projectRes.ok) return;
+    const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
+    const project = (await projectRes.text()).trim();
+
+    const payload = JSON.stringify({ secret, org_id: orgId });
+    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_RUNTIME_SECRET_NAME}:addVersion`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: { data: Buffer.from(payload, 'utf8').toString('base64') } }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (res.ok) {
+      logger.info('[enrollment] runtime secret persisted to Secret Manager');
+    } else {
+      const err = await res.text();
+      logger.warn(`[enrollment] Secret Manager write failed (${res.status}): ${err.slice(0, 200)}`);
+    }
+  } catch (err: any) {
+    logger.warn(`[enrollment] could not persist runtime secret to Secret Manager: ${err?.message || String(err)}`);
+  }
+}
+
 const getOrgId = (req: any): string | null => req.user?.organization_id || null;
 const getUserJwt = (req: any): string => {
   const jwt = req.userJwt as string | undefined;
@@ -334,6 +371,10 @@ router.post('/enroll', async (req: Request, res: Response) => {
       runtime_id: finalRuntime.id,
       organization_id: finalRuntime.organization_id,
     });
+
+    // Persist secret to GCP Secret Manager in the background so the runtime
+    // survives Cloud Run restarts without re-enrollment.
+    void persistRuntimeSecretToGCPFromAPI(runtimeSecret, finalRuntime.organization_id);
 
     return res.json({
       success: true,
