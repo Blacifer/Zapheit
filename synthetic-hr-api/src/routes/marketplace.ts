@@ -408,7 +408,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     featured: false,
     colorHex: '#1A1F36',
     logoLetter: 'P',
-    comingSoon: true,
   },
 
   // --- IT / Identity ---
@@ -480,7 +479,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'India Priority',
     colorHex: '#0C8A40',
     logoLetter: 'C',
-    comingSoon: true,
   },
 
   // --- Recruitment ---
@@ -524,7 +522,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#24B247',
     logoLetter: 'G',
-    comingSoon: true,
   },
 
   // --- HR / Payroll ---
@@ -1424,13 +1421,15 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Open issues', 'Comment on PRs', 'Fetch CI status', 'Read repo activity', 'Trigger workflows'],
     setupTimeMinutes: 4,
     bundleIds: ['devops-stack'],
-    installMethod: 'oauth2',
+    installMethod: 'api_key',
+    requiredFields: [
+      { name: 'access_token', label: 'Personal Access Token', type: 'password', placeholder: 'ghp_...', required: true },
+    ],
     installCount: 8900,
     featured: true,
     badge: 'Popular',
     colorHex: '#24292E',
     logoLetter: 'G',
-    comingSoon: true,
   },
   {
     id: 'gitlab',
@@ -1443,13 +1442,15 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Fetch pipeline status', 'Read MRs', 'Open issues', 'Monitor CI failures'],
     setupTimeMinutes: 4,
     bundleIds: ['devops-stack'],
-    installMethod: 'oauth2',
+    installMethod: 'api_key',
+    requiredFields: [
+      { name: 'access_token', label: 'Personal Access Token', type: 'password', placeholder: 'glpat-...', required: true },
+    ],
     installCount: 4600,
     featured: false,
     badge: 'Verified',
     colorHex: '#FC6D26',
     logoLetter: 'G',
-    comingSoon: true,
   },
   {
     id: 'servicenow',
@@ -1481,13 +1482,16 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Send email campaigns', 'Add/remove subscribers', 'Read open rates', 'Trigger automation'],
     setupTimeMinutes: 4,
     bundleIds: ['marketing-stack'],
-    installMethod: 'oauth2',
+    installMethod: 'api_key',
+    requiredFields: [
+      { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us1', required: true },
+      { name: 'server_prefix', label: 'Server Prefix', type: 'text', placeholder: 'us1 (last part of your API key)', required: false },
+    ],
     installCount: 5400,
     featured: false,
     badge: 'Popular',
     colorHex: '#FFE01B',
     logoLetter: 'M',
-    comingSoon: true,
   },
   {
     id: 'posthog',
@@ -1500,13 +1504,15 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Query events', 'Fetch funnel data', 'Read session replays', 'Toggle feature flags'],
     setupTimeMinutes: 4,
     bundleIds: ['analytics-stack'],
-    installMethod: 'oauth2',
+    installMethod: 'api_key',
+    requiredFields: [
+      { name: 'api_key', label: 'Personal API Key', type: 'password', placeholder: 'phx_...', required: true },
+    ],
     installCount: 1620,
     featured: false,
     badge: 'Verified',
     colorHex: '#1D4ED8',
     logoLetter: 'P',
-    comingSoon: true,
   },
 
   // ─── Finance (new) ──────────────────────────────────────────────────────────
@@ -2012,7 +2018,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#FF9900',
     logoLetter: 'A',
-    comingSoon: true,
   },
   {
     id: 'azure',
@@ -2054,7 +2059,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#4285F4',
     logoLetter: 'G',
-    comingSoon: true,
   },
 
   // ─── Compliance & Legal (new) ────────────────────────────────────────────────
@@ -2164,7 +2168,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'India Priority',
     colorHex: '#1B4F72',
     logoLetter: 'E',
-    comingSoon: true,
   },
   {
     id: 'aadhaar-api',
@@ -2187,7 +2190,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'India Priority',
     colorHex: '#FF6600',
     logoLetter: 'A',
-    comingSoon: true,
   },
   {
     id: 'digilocker',
@@ -2336,13 +2338,15 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Fetch knowledge base pages', 'Read project databases', 'Monitor task statuses', 'Surface overdue items'],
     setupTimeMinutes: 3,
     bundleIds: ['productivity-stack'],
-    installMethod: 'oauth2',
+    installMethod: 'api_key',
+    requiredFields: [
+      { name: 'token', label: 'Integration Token', type: 'password', placeholder: 'secret_...', required: true },
+    ],
     installCount: 5400,
     featured: false,
     badge: 'Verified',
     colorHex: '#000000',
     logoLetter: 'N',
-    comingSoon: true,
   },
   {
     id: 'canva',
