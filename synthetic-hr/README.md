@@ -1,13 +1,13 @@
-# SyntheticHR Frontend
+# Zapheit Dashboard
 
-SyntheticHR is the dashboard frontend for the RASI governance and operations platform.
+Frontend for the Zapheit AI agent governance platform (React + TypeScript + Vite).
 
 ## What this app does
 
-- Shows organization-scoped fleet, incidents, conversations, black box, API key, usage, and cost views
+- Shows organization-scoped fleet, incidents, conversations, API keys, usage, and cost views
 - Authenticates users with Supabase
-- Calls the backend API defined by `VITE_API_URL`
-- Displays RASI-observed usage and runtime spend, not provider-wide billing totals
+- Calls the backend API at `VITE_API_URL`
+- Displays Zapheit-observed usage and runtime spend, not provider-wide billing totals
 
 ## Requirements
 
@@ -35,9 +35,7 @@ pnpm install
 pnpm dev
 ```
 
-Default local frontend URL:
-
-- `http://localhost:5173`
+Default local frontend URL: `http://localhost:5173`
 
 ## Production build
 
@@ -48,10 +46,9 @@ pnpm preview
 
 ## Operational notes
 
-- Usage shown in `API Keys -> Usage` is based on RASI-observed API-key traffic.
-- Spend shown in `Costs` is based on provider usage observed through RASI.
-- Provider dashboards may show higher totals if traffic bypasses the RASI gateway or tracked connectors.
-- SyntheticHR subscription pricing should be presented separately from provider runtime spend.
+- Usage shown in **API Keys → Usage** is based on Zapheit-observed API-key traffic.
+- Spend shown in **Costs** is based on provider usage observed through Zapheit.
+- Provider dashboards may show higher totals if traffic bypasses the Zapheit gateway or tracked connectors.
 
 ## Related services
 
@@ -59,15 +56,15 @@ pnpm preview
 - Backend API: `/synthetic-hr-api`
 - Database schema and migration guide: `/synthetic-hr-database`
 
-## Deployment sequence
+## Deployment
 
 1. Deploy database schema from `/synthetic-hr-database/DEPLOYMENT_GUIDE.md`
 2. Configure and start the backend API
 3. Set frontend environment variables
-4. Build and host the frontend
-5. Verify sign-in, org scoping, and one tracked request through RASI
+4. Build and deploy to Vercel (see root `vercel.json`)
+5. Verify sign-in, org scoping, and one tracked request through Zapheit
 
-## Enterprise/self-host note
+## Runtime config override
 
 Production deployments can override frontend configuration **at runtime** (no rebuild) via `public/runtime-config.js`.
 When using Docker, set `SYNTHETICHR_API_URL`, `SYNTHETICHR_SUPABASE_URL`, and `SYNTHETICHR_SUPABASE_ANON_KEY` on the container.

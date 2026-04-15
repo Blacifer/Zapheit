@@ -1,4 +1,4 @@
-# SyntheticHR — unified self-host stack
+# Zapheit — unified self-host stack
 #
 # One-command launch:
 #   cp deploy/compose/stack.env.example deploy/compose/stack.env

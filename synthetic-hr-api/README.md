@@ -1,6 +1,6 @@
-# SyntheticHR API
+# Zapheit API
 
-Backend control-plane API for SyntheticHR (Express + TypeScript).
+Backend control-plane API for Zapheit (Express + TypeScript).
 
 ## Requirements
 
@@ -48,13 +48,13 @@ curl http://localhost:3001/health
 Build:
 
 ```bash
-docker build -t synthetic-hr-api .
+docker build -t zapheit-api .
 ```
 
 Run (expects your env file):
 
 ```bash
-docker run --rm -p 3001:3001 --env-file .env.local synthetic-hr-api
+docker run --rm -p 3001:3001 --env-file .env.local zapheit-api
 ```
 
 ## Docker Compose (API + Frontend)
@@ -66,3 +66,6 @@ cp deploy/compose/control-plane.env.example deploy/compose/control-plane.env
 docker compose -f deploy/compose/control-plane.yml up --build
 ```
 
+## Deploy to GCP Cloud Run
+
+See [`../deploy/gcp/README.md`](../deploy/gcp/README.md) for the full setup guide.

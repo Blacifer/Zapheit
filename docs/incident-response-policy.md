@@ -14,7 +14,7 @@ This policy defines how Rasi Cyber Solutions detects, responds to, documents, an
 
 ## 2. Scope
 
-This policy applies to all systems, services, and data managed by Rasi Cyber Solutions, including the RasiSyntheticHR platform and all third-party integrations.
+This policy applies to all systems, services, and data managed by Rasi Cyber Solutions, including the Zapheit platform and all third-party integrations.
 
 ---
 

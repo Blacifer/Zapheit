@@ -13,7 +13,7 @@ set -euo pipefail
 # ── Config ────────────────────────────────────────────────────────────────────
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID env var first}"
 REGION="${REGION:-asia-south1}"
-REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/rasi"
+REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/zapheit"
 COMMIT_SHA=$(git rev-parse --short HEAD)
 BILLING_ACCOUNT=$(gcloud billing projects describe "${PROJECT_ID}" --format="value(billingAccountName)" 2>/dev/null | sed 's|billingAccounts/||' || echo "")
 
@@ -37,8 +37,8 @@ gcloud services enable \
   --project="${PROJECT_ID}"
 
 # ── Step 2: Create Artifact Registry repo ────────────────────────────────────
-echo "[2/8] Creating Artifact Registry repository 'rasi'..."
-gcloud artifacts repositories create rasi \
+echo "[2/8] Creating Artifact Registry repository 'zapheit'..."
+gcloud artifacts repositories create zapheit \
   --repository-format=docker \
   --location="${REGION}" \
   --description="Zapheit container images" \
@@ -108,28 +108,28 @@ gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 # ── Step 6: Build & push images ──────────────────────────────────────────────
 echo "[6/8] Building and pushing images..."
 
-echo "  Building synthetic-hr-api..."
+echo "  Building zapheit-api..."
 docker build \
   --platform=linux/amd64 \
-  -t "${REGISTRY}/synthetic-hr-api:${COMMIT_SHA}" \
-  -t "${REGISTRY}/synthetic-hr-api:latest" \
+  -t "${REGISTRY}/zapheit-api:${COMMIT_SHA}" \
+  -t "${REGISTRY}/zapheit-api:latest" \
   ./synthetic-hr-api
-docker push --all-tags "${REGISTRY}/synthetic-hr-api"
+docker push --all-tags "${REGISTRY}/zapheit-api"
 
-echo "  Building synthetic-hr-runtime..."
+echo "  Building zapheit-runtime..."
 docker build \
   --platform=linux/amd64 \
-  -t "${REGISTRY}/synthetic-hr-runtime:${COMMIT_SHA}" \
-  -t "${REGISTRY}/synthetic-hr-runtime:latest" \
+  -t "${REGISTRY}/zapheit-runtime:${COMMIT_SHA}" \
+  -t "${REGISTRY}/zapheit-runtime:latest" \
   ./synthetic-hr-runtime
-docker push --all-tags "${REGISTRY}/synthetic-hr-runtime"
+docker push --all-tags "${REGISTRY}/zapheit-runtime"
 
 # ── Step 7: Deploy to Cloud Run ───────────────────────────────────────────────
 echo "[7/8] Deploying to Cloud Run..."
 
 echo "  Deploying synthetic-hr-api..."
 gcloud run deploy synthetic-hr-api \
-  --image="${REGISTRY}/synthetic-hr-api:${COMMIT_SHA}" \
+  --image="${REGISTRY}/zapheit-api:${COMMIT_SHA}" \
   --region="${REGION}" \
   --platform=managed \
   --allow-unauthenticated \
@@ -182,7 +182,7 @@ OTEL_ENABLED=OTEL_ENABLED:latest" \
 
 echo "  Deploying synthetic-hr-runtime..."
 gcloud run deploy synthetic-hr-runtime \
-  --image="${REGISTRY}/synthetic-hr-runtime:${COMMIT_SHA}" \
+  --image="${REGISTRY}/zapheit-runtime:${COMMIT_SHA}" \
   --region="${REGION}" \
   --platform=managed \
   --no-allow-unauthenticated \

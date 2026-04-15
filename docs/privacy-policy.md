@@ -12,7 +12,7 @@ website: www.zapheit.com
 
 ## 1. Introduction
 
-Rasi Cyber Solutions ("we", "us", "our") operates RasiSyntheticHR, an AI agent control plane for HR and workforce management ("Service"). This Privacy Policy explains how we collect, use, store, and protect personal data when you use our Service.
+Rasi Cyber Solutions ("we", "us", "our") operates Zapheit, an AI agent control plane for HR and workforce management ("Service"). This Privacy Policy explains how we collect, use, store, and protect personal data when you use our Service.
 
 By using our Service, you agree to the collection and use of information as described in this policy.
 

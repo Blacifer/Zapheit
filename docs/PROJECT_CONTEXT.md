@@ -1,12 +1,12 @@
-# SyntheticHR - Project Context
+# Zapheit - Project Context
 
 ## 1. High-Level Concept
-**SyntheticHR** is an Enterprise AI Workforce Management Platform designed to act as "HR for AI Agents." The platform empowers enterprise users to securely organize, deploy, and manage AI agents tailored for specific departments such as HR, IT, Sales, and Customer Support. By centralizing management, organizations can govern their AI workforce with the same oversight and structure as their human workforce.
+**Zapheit** is an Enterprise AI Workforce Management Platform designed to act as "HR for AI Agents." The platform empowers enterprise users to securely organize, deploy, and manage AI agents tailored for specific departments such as HR, IT, Sales, and Customer Support. By centralizing management, organizations can govern their AI workforce with the same oversight and structure as their human workforce.
 
 ## 2. Infrastructure & Deployment Architecture
 Our deployment architecture is built around enterprise security and data privacy:
 - **VPC / On-Premise Runtimes**: Agent runtimes sit securely inside a customer's Virtual Private Cloud (VPC) or on-premise infrastructure. This ensures that sensitive enterprise data processing remains securely within the customer's perimeter.
-- **Secure Polling Mechanism**: Instead of exposing inbound ports, the runtimes proactively pull approved jobs and configurations from the SyntheticHR central control plane using a secure polling mechanism.
+- **Secure Polling Mechanism**: Instead of exposing inbound ports, the runtimes proactively pull approved jobs and configurations from the Zapheit central control plane using a secure polling mechanism.
 - **Authentication**: Runtimes authenticate and register via unique Docker configurations, Runtime IDs, and securely issued Enrollment Tokens.
 
 ## 3. LLM Routing & Model Architecture
@@ -39,7 +39,7 @@ The immediate roadmap revolves around agent capability expansion and governance:
 3. **Structuring Agent-to-Agent Handoff Protocols**: Creating communication frameworks that enable seamless task delegation and collaboration between specialized agents.
 
 ## 6. Control Plane & Execution Flow
-At its core, SyntheticHR functions as a centralized control plane for your entire AI workforce. Executions map to the following concepts:
+At its core, Zapheit functions as a centralized control plane for your entire AI workforce. Executions map to the following concepts:
 - **Playbooks**: Standardized, defined operational templates outlining *how* an agent should solve specific departmental problems.
 - **Jobs**: Active runs or invocations generated from Playbooks.
 - **Approvals**: The human-in-the-loop (HITL) checkpoints routing high-risk operations for explicit oversight.
@@ -68,7 +68,7 @@ Quality and reliability are enforced using the following tools:
 - **CI/CD**: Uses standard GitHub actions / CI pipelines for quality, linting (ESLint), and TypeScript compilation.
 
 ## 10. Security & Encryption
-Given the sensitive nature of an enterprise AI workforce, SyntheticHR incorporates several layers of cryptographic security:
+Given the sensitive nature of an enterprise AI workforce, Zapheit incorporates several layers of cryptographic security:
 - **Authentication**: Managed via Supabase Auth, adhering to industry standards for secure password hashing and JWT issuance.
 - **Secrets Management (AES-256-GCM)**: All third-party integration credentials, OAuth tokens, and plugin API keys are symmetrically encrypted at rest using **AES-256-GCM**.
 - **Cryptographic Hashing**: Strong hashing algorithms (e.g., **SHA-256**) are actively used throughout the API layer for prompt cache deduplication, payload integrity, and reconciling events. 

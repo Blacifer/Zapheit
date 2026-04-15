@@ -1,10 +1,10 @@
-# RasiSyntheticHR — Organization Rollout (Agents)
+# Zapheit — Organization Rollout (Agents)
 
 This guide turns “Agent Management” into an organization-ready workflow: **standard playbooks → approvals → execution → audit**.
 
 ## 1) Define who can do what
 
-SyntheticHR already enforces RBAC on the backend:
+Zapheit already enforces RBAC on the backend:
 
 - **Viewer**: read-only (fleet, incidents, costs, conversations)
 - **Manager**: create/update agents, submit/approve jobs (recommended for TA/HR Ops leads)
@@ -32,14 +32,14 @@ Agents only execute approved jobs when deployed to a runtime:
 3. Deploy an agent to that runtime
 4. Enroll the runtime using the token in the UI
 
-Runtime pulls approved jobs and posts results back to SyntheticHR.
+Runtime pulls approved jobs and posts results back to Zapheit.
 
 ## 4) Day-to-day flow (recommended)
 
 1. HR user runs a Playbook → **Job created** (`pending_approval`)
 2. Manager approves in **Jobs & Approvals** → job becomes `queued`
 3. Runtime executes → job becomes `running` → `succeeded` / `failed`
-4. Outputs stay in SyntheticHR (and can be reviewed/audited)
+4. Outputs stay in Zapheit (and can be reviewed/audited)
 
 ## 5) Governance & safety defaults
 

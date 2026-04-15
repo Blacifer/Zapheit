@@ -16,7 +16,7 @@ This policy defines the security controls, standards, and responsibilities that 
 
 This policy applies to:
 - All employees, contractors, and third parties with access to company systems
-- All systems, applications, and infrastructure used to deliver the RasiSyntheticHR Service
+- All systems, applications, and infrastructure used to deliver the Zapheit Service
 - All customer and partner data processed by Rasi Cyber Solutions
 
 ---
@@ -48,7 +48,7 @@ All hosting providers are contractually bound to maintain equivalent security st
 All access to systems and data is granted based on job function. Users receive the minimum permissions necessary to perform their role.
 
 ### 4.2 Role-Based Access Control (RBAC)
-The RasiSyntheticHR platform enforces four access levels:
+The Zapheit platform enforces four access levels:
 - **super_admin** — full platform access
 - **admin** — organization-level administration
 - **manager** — operational access within their team

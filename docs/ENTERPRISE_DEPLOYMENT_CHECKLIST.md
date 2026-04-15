@@ -1,6 +1,6 @@
-# Enterprise / On‑Prem Deployment Checklist (SyntheticHR)
+# Enterprise / On‑Prem Deployment Checklist (Zapheit)
 
-SyntheticHR can be deployed as SaaS or into a company-managed environment. Today, both the frontend and API assume **Supabase** (Auth + PostgREST + Postgres), so an enterprise deployment requires either:
+Zapheit can be deployed as SaaS or into a company-managed environment. Today, both the frontend and API assume **Supabase** (Auth + PostgREST + Postgres), so an enterprise deployment requires either:
 
 - Supabase Cloud (customer-owned project), or
 - Supabase Self‑Hosted (customer infrastructure).

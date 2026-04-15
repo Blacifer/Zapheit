@@ -52,7 +52,7 @@ Or in the console: go to **APIs & Services** → **Enable APIs** → search and 
 ## Step 4 — Create Artifact Registry Repository
 
 ```bash
-gcloud artifacts repositories create rasi \
+gcloud artifacts repositories create zapheit \
   --repository-format=docker \
   --location=asia-south1 \
   --description="Zapheit container images" \
@@ -149,7 +149,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 1. Go to **Cloud Build** → **Triggers** in the GCP console
 2. Click **Connect Repository**
 3. Select **GitHub (Cloud Build GitHub App)**
-4. Authenticate with GitHub and choose your repo (`RasiSyntheticHR`)
+4. Authenticate with GitHub and choose your repo (`Zapheit`)
 5. Click **Connect**
 
 ### Create trigger for synthetic-hr-api

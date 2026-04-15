@@ -14,7 +14,7 @@ This policy defines how Rasi Cyber Solutions retains, archives, and permanently 
 
 ## 2. Scope
 
-This policy applies to all data collected, processed, or stored by Rasi Cyber Solutions in connection with the RasiSyntheticHR Service, including data from third-party integrations such as Gusto, Salesforce, Slack, and others.
+This policy applies to all data collected, processed, or stored by Rasi Cyber Solutions in connection with the Zapheit Service, including data from third-party integrations such as Gusto, Salesforce, Slack, and others.
 
 ---
 
