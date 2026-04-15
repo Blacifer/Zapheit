@@ -3024,11 +3024,11 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   const now = new Date().toISOString();
   const orgId = stateRow.organization_id as string;
 
-  // Create or update integration — handle waitlisted rows
+  // Create or update integration — match ANY existing row for this org+service to avoid
+  // UNIQUE(organization_id, service_type) constraint failures on INSERT.
   const existingRows = (await supabaseRestAsService('integrations', new URLSearchParams({
     organization_id: eq(orgId),
     service_type: eq(appId),
-    'metadata->>marketplace_app': eq('true'),
     select: 'id',
     limit: '1',
   }))) as Array<{ id: string }>;
@@ -3039,7 +3039,14 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
     integrationId = existingRows[0].id;
     await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
       method: 'PATCH',
-      body: { status: 'connected', ai_enabled: true, updated_at: now },
+      body: {
+        status: 'connected',
+        auth_type: 'oauth2',
+        service_name: app.name,
+        ai_enabled: true,
+        updated_at: now,
+        metadata: { marketplace_app: 'true', developer: app.developer },
+      },
     });
   } else {
     const created = (await supabaseRestAsService('integrations', '', {

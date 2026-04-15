@@ -42,13 +42,17 @@ export default function SlackWorkspace() {
     setLoadingChannels(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_channels', {});
-      if (res.success && res.data?.data) {
-        const list = Array.isArray(res.data.data) ? res.data.data
-          : res.data.data?.channels ?? [];
-        setChannels(list);
-        setConnected(true);
-      } else {
+      if (!res.success) {
+        // HTTP-level failure (401/403/400) — integration is not connected
         setConnected(false);
+      } else {
+        // Execute route succeeded — the integration IS connected even if channel list is empty
+        setConnected(true);
+        const inner = (res as any).data;
+        if (inner?.data) {
+          const list = Array.isArray(inner.data) ? inner.data : inner.data?.channels ?? [];
+          setChannels(list);
+        }
       }
     } catch {
       setConnected(false);
