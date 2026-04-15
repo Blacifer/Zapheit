@@ -21,6 +21,7 @@ export type ActionResult = {
   data?: any;
   error?: string;
   statusCode?: number;
+  nextPageToken?: string | null;
   idempotencyKey?: string; // set on write actions so callers can persist it for deduplication
 };
 
@@ -789,13 +790,14 @@ async function googleWorkspaceAction(
   switch (action) {
     case 'list_files': {
       const qs = new URLSearchParams({
-        pageSize: String(params.pageSize || params.limit || 20),
-        fields: 'files(id,name,mimeType,size,modifiedTime,owners,shared,webViewLink)',
+        pageSize: String(params.pageSize || params.limit || 50),
+        fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,owners,shared,webViewLink)',
       });
       if (params.query) qs.set('q', params.query);
+      if (params.pageToken) qs.set('pageToken', params.pageToken);
       const r = await jsonFetch(`https://www.googleapis.com/drive/v3/files?${qs}`, { headers: h });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
-      return { success: true, data: r.data.files };
+      return { success: true, data: r.data.files, nextPageToken: r.data.nextPageToken ?? null };
     }
     case 'share_file': {
       if (!params.fileId || !params.email) {
@@ -822,17 +824,18 @@ async function googleWorkspaceAction(
     }
     case 'list_emails': {
       const qs = new URLSearchParams({
-        maxResults: String(params.maxResults || params.limit || 20),
+        maxResults: String(params.maxResults || params.limit || 50),
         labelIds: 'INBOX',
       });
       if (params.q) qs.set('q', params.q);
+      if (params.pageToken) qs.set('pageToken', params.pageToken);
       const listR = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${qs}`, { headers: h });
       if (!listR.ok) return { success: false, error: listR.data?.error?.message || `HTTP ${listR.status}`, statusCode: listR.status };
       const ids: string[] = (listR.data.messages || []).map((m: any) => m.id);
       const details = await Promise.all(
-        ids.slice(0, 20).map(async (id: string) => {
+        ids.slice(0, 50).map(async (id: string) => {
           const r = await jsonFetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID`,
             { headers: h },
           );
           if (!r.ok) return { id };
@@ -841,6 +844,7 @@ async function googleWorkspaceAction(
           return {
             id,
             threadId: r.data.threadId,
+            messageId: get('Message-ID'),
             snippet: r.data.snippet,
             subject: get('Subject'),
             from: get('From'),
@@ -852,7 +856,100 @@ async function googleWorkspaceAction(
           };
         }),
       );
-      return { success: true, data: details };
+      return { success: true, data: details, nextPageToken: listR.data.nextPageToken ?? null };
+    }
+    case 'get_email': {
+      if (!params.id) return { success: false, error: 'get_email requires: id' };
+      const r = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${params.id}?format=full`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      const msg = r.data;
+      const hdrs: any[] = msg.payload?.headers || [];
+      const get = (name: string) => hdrs.find((hdr: any) => hdr.name?.toLowerCase() === name.toLowerCase())?.value;
+      // Recursively decode body parts
+      function extractBody(payload: any): { html?: string; text?: string } {
+        if (!payload) return {};
+        if (payload.mimeType === 'text/plain' && payload.body?.data)
+          return { text: Buffer.from(payload.body.data, 'base64url').toString('utf-8') };
+        if (payload.mimeType === 'text/html' && payload.body?.data)
+          return { html: Buffer.from(payload.body.data, 'base64url').toString('utf-8') };
+        if (payload.parts) {
+          let text: string | undefined; let html: string | undefined;
+          for (const p of payload.parts) {
+            const b = extractBody(p);
+            if (b.text) text = b.text;
+            if (b.html) html = b.html;
+          }
+          return { text, html };
+        }
+        return {};
+      }
+      const body = extractBody(msg.payload);
+      // Mark as read (remove UNREAD label)
+      if (msg.labelIds?.includes('UNREAD')) {
+        void jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${params.id}/modify`, {
+          method: 'POST', headers: h,
+          body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+        });
+      }
+      return {
+        success: true,
+        data: {
+          id: msg.id,
+          threadId: msg.threadId,
+          messageId: get('Message-ID'),
+          subject: get('Subject'),
+          from: get('From'),
+          to: get('To'),
+          cc: get('Cc'),
+          replyTo: get('Reply-To'),
+          date: get('Date'),
+          labelIds: msg.labelIds,
+          body: body.html || body.text || msg.snippet || '',
+          isHtml: !!body.html,
+          snippet: msg.snippet,
+        },
+      };
+    }
+    case 'reply_email': {
+      if (!params.threadId || !params.to || !params.subject || !params.body) {
+        return { success: false, error: 'reply_email requires: threadId, to, subject, body' };
+      }
+      const replyHeaders = [
+        `To: ${params.to}`,
+        `Subject: ${params.subject}`,
+        `Content-Type: text/plain`,
+        ...(params.messageId ? [`In-Reply-To: ${params.messageId}`, `References: ${params.messageId}`] : []),
+      ].join('\r\n');
+      const raw = Buffer.from(`${replyHeaders}\r\n\r\n${params.body}`).toString('base64url');
+      const r = await jsonFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ raw, threadId: params.threadId }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { message_id: r.data.id } };
+    }
+    case 'forward_email': {
+      if (!params.to || !params.subject || !params.body) {
+        return { success: false, error: 'forward_email requires: to, subject, body' };
+      }
+      const raw = Buffer.from(
+        `To: ${params.to}\r\nSubject: ${params.subject}\r\nContent-Type: text/plain\r\n\r\n${params.body}`
+      ).toString('base64url');
+      const r = await jsonFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ raw }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { message_id: r.data.id } };
+    }
+    case 'archive_email': {
+      if (!params.id) return { success: false, error: 'archive_email requires: id' };
+      const r = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${params.id}/modify`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { archived: true } };
     }
     case 'send_email': {
       if (!params.to || !params.subject || !params.body) {

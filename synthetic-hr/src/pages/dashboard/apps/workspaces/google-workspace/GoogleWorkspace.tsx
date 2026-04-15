@@ -43,6 +43,8 @@ export default function GoogleWorkspace() {
   const [emails, setEmails] = useState<GmailMessage[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
+  const [filesNextPageToken, setFilesNextPageToken] = useState<string | null>(null);
+  const [loadingMoreFiles, setLoadingMoreFiles] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
   /* Approvals */
@@ -86,10 +88,28 @@ export default function GoogleWorkspace() {
     setLoadingFiles(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50 });
-      if (res.success && res.data?.data) setFiles(res.data.data);
+      const payload = res.data as any;
+      if (res.success && payload?.data) {
+        setFiles(payload.data);
+        setFilesNextPageToken(payload.nextPageToken ?? null);
+      }
     } catch { /* empty */ }
     finally { setLoadingFiles(false); }
   }, []);
+
+  const loadMoreFiles = useCallback(async () => {
+    if (!filesNextPageToken || loadingMoreFiles) return;
+    setLoadingMoreFiles(true);
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50, pageToken: filesNextPageToken });
+      const payload = res.data as any;
+      if (res.success && payload?.data) {
+        setFiles((prev) => [...prev, ...payload.data]);
+        setFilesNextPageToken(payload.nextPageToken ?? null);
+      }
+    } catch { /* empty */ }
+    finally { setLoadingMoreFiles(false); }
+  }, [filesNextPageToken, loadingMoreFiles]);
 
   const loadApprovals = useCallback(async () => {
     try {
@@ -307,6 +327,9 @@ export default function GoogleWorkspace() {
             pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
             onApprovalResolved={handleApprovalResolved}
             agentActivity={agentActivity}
+            hasMore={!!filesNextPageToken}
+            loadingMore={loadingMoreFiles}
+            onLoadMore={loadMoreFiles}
           />
         </div>
       ) : activeTab === 'activity' ? (

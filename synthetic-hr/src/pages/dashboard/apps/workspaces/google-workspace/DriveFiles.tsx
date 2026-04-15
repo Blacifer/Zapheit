@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, HardDrive, FileText, Image, Film, Table, Share2, ExternalLink, Bot } from 'lucide-react';
+import { Search, HardDrive, FileText, Image, Film, Table, Share2, ExternalLink, Bot, ChevronDown, Loader2 } from 'lucide-react';
 import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 import { PendingApprovalRow } from '../shared';
 
@@ -31,6 +31,9 @@ interface DriveFilesProps {
   pendingApprovals?: ApprovalRequest[];
   onApprovalResolved?: (id: string) => void;
   agentActivity?: Record<string, AgentTouch[]>;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -73,6 +76,7 @@ function timeAgo(iso?: string): string {
 export function DriveFiles({
   files, loading, onShare,
   pendingApprovals = [], onApprovalResolved, agentActivity = {},
+  hasMore = false, loadingMore = false, onLoadMore,
 }: DriveFilesProps) {
   const [search, setSearch] = useState('');
   const [shareTarget, setShareTarget] = useState<string | null>(null);
@@ -114,7 +118,7 @@ export function DriveFiles({
       </div>
 
       {/* File list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {loading ? (
           <div className="animate-pulse space-y-1 p-4">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -213,6 +217,22 @@ export function DriveFiles({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Load more */}
+        {hasMore && !loading && (
+          <div className="px-4 py-3 border-t border-white/[0.04]">
+            <button
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.07] text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40"
+            >
+              {loadingMore
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</>
+                : <><ChevronDown className="w-3.5 h-3.5" />Load more files</>
+              }
+            </button>
           </div>
         )}
       </div>

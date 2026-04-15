@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Clock, MapPin, Users, Plus, ChevronDown, Mail, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, MapPin, Users, Plus, X, Mail, Calendar } from 'lucide-react';
 import { WriteForm, PendingApprovalRow, type WriteFormField } from '../shared';
 import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 
@@ -32,16 +32,12 @@ interface CalendarViewProps {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function formatDate(dt?: { dateTime?: string; date?: string }): string {
-  if (!dt) return '';
-  if (dt.dateTime) {
-    return new Date(dt.dateTime).toLocaleString(undefined, {
-      weekday: 'short', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  }
-  if (dt.date) return new Date(dt.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  return '';
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function eventDate(e: CalendarEvent): Date | null {
+  const dt = e.start?.dateTime || e.start?.date;
+  return dt ? new Date(dt) : null;
 }
 
 function formatTime(dt?: { dateTime?: string; date?: string }): string {
@@ -51,158 +47,213 @@ function formatTime(dt?: { dateTime?: string; date?: string }): string {
   return '';
 }
 
-function isUpcoming(dt?: { dateTime?: string; date?: string }): boolean {
-  if (!dt) return false;
-  const d = dt.dateTime || dt.date;
-  return !!d && new Date(d) >= new Date();
+function formatFull(dt?: { dateTime?: string; date?: string }): string {
+  if (!dt) return '';
+  if (dt.dateTime) return new Date(dt.dateTime).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (dt.date) return new Date(dt.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  return '';
 }
 
-function rsvpColor(status?: string) {
-  if (status === 'accepted') return 'text-emerald-400';
-  if (status === 'declined') return 'text-rose-400';
-  if (status === 'tentative') return 'text-amber-400';
-  return 'text-slate-500';
+function rsvpLabel(s?: string) {
+  if (s === 'accepted') return { label: 'Accepted', cls: 'text-emerald-400' };
+  if (s === 'declined') return { label: 'Declined', cls: 'text-rose-400' };
+  if (s === 'tentative') return { label: 'Tentative', cls: 'text-amber-400' };
+  return { label: 'Invited', cls: 'text-slate-500' };
 }
 
 /* ------------------------------------------------------------------ */
-/*  Event Card                                                         */
+/*  Event detail modal                                                 */
 /* ------------------------------------------------------------------ */
 
-function EventCard({ event }: { event: CalendarEvent }) {
-  const [open, setOpen] = useState(false);
-  const upcoming = isUpcoming(event.start);
-
+function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
   return (
-    <div
-      className={`rounded-xl border overflow-hidden transition-all cursor-pointer ${
-        open
-          ? 'border-blue-500/30 bg-blue-500/[0.05]'
-          : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.12]'
-      }`}
-      onClick={() => setOpen((v) => !v)}
-    >
-      {/* Summary row */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Date block */}
-        <div className={`w-10 text-center shrink-0 ${upcoming ? 'text-blue-400' : 'text-slate-600'}`}>
-          {event.start?.dateTime || event.start?.date ? (
-            <>
-              <p className="text-[10px] font-medium uppercase leading-none">
-                {new Date(event.start.dateTime || event.start.date!).toLocaleString(undefined, { month: 'short' })}
-              </p>
-              <p className="text-lg font-bold leading-tight">
-                {new Date(event.start.dateTime || event.start.date!).getDate()}
-              </p>
-            </>
-          ) : (
-            <Calendar className="w-5 h-5 mx-auto" />
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold truncate ${upcoming ? 'text-slate-100' : 'text-slate-400'}`}>
-            {event.summary || 'Untitled Event'}
-          </p>
-          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-slate-500 flex-wrap">
-            {event.start && (
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {formatTime(event.start)}
-                {event.end && ` – ${formatTime(event.end)}`}
-              </span>
-            )}
-            {event.location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" /> {event.location}
-              </span>
-            )}
-            {event.attendees && event.attendees.length > 0 && (
-              <span className="flex items-center gap-1">
-                <Users className="w-3 h-3" /> {event.attendees.length} people
-              </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#0f1117] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-white/[0.06]">
+          <div className="flex-1 min-w-0 pr-3">
+            <h2 className="text-base font-bold text-white leading-snug">{event.summary || 'Untitled Event'}</h2>
+            {event.status && event.status !== 'confirmed' && (
+              <span className="text-[10px] text-amber-400 mt-0.5">{event.status}</span>
             )}
           </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors shrink-0">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        <ChevronDown className={`w-4 h-4 text-slate-600 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </div>
-
-      {/* Expanded detail */}
-      {open && (
-        <div className="border-t border-white/[0.06] px-4 py-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-          {/* Full time */}
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Time */}
           {event.start && (
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">When</p>
-              <p className="text-sm text-slate-200">
-                {formatDate(event.start)}
-                {event.end && ` → ${formatDate(event.end)}`}
-              </p>
+            <div className="flex items-start gap-3">
+              <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-slate-200">{formatFull(event.start)}</p>
+                {event.end && <p className="text-xs text-slate-500">{formatFull(event.end)}</p>}
+              </div>
             </div>
           )}
 
           {/* Location */}
           {event.location && (
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">Where</p>
+            <div className="flex items-start gap-3">
+              <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
               <p className="text-sm text-slate-200">{event.location}</p>
+            </div>
+          )}
+
+          {/* Organizer */}
+          {event.organizer && (
+            <div className="flex items-start gap-3">
+              <Mail className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-slate-200">{event.organizer.displayName || event.organizer.email}</p>
             </div>
           )}
 
           {/* Description */}
           {event.description && (
             <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">Description</p>
-              <p className="text-sm text-slate-300 whitespace-pre-line">{event.description}</p>
-            </div>
-          )}
-
-          {/* Organizer */}
-          {event.organizer && (
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-1">Organizer</p>
-              <p className="text-sm text-slate-200 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-slate-500" />
-                {event.organizer.displayName || event.organizer.email}
-              </p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Description</p>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{event.description}</p>
             </div>
           )}
 
           {/* Attendees */}
           {event.attendees && event.attendees.length > 0 && (
             <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium mb-2">
-                Attendees ({event.attendees.length})
-              </p>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {event.attendees.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-white/[0.08] flex items-center justify-center text-[10px] font-semibold text-slate-300 shrink-0">
-                      {(a.displayName?.[0] || a.email[0]).toUpperCase()}
+              <div className="flex items-center gap-1.5 mb-2">
+                <Users className="w-4 h-4 text-slate-400" />
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  {event.attendees.length} Attendees
+                </p>
+              </div>
+              <div className="space-y-2">
+                {event.attendees.map((a, i) => {
+                  const { label, cls } = rsvpLabel(a.responseStatus);
+                  return (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-white/[0.08] flex items-center justify-center text-xs font-semibold text-slate-300 shrink-0">
+                        {(a.displayName?.[0] || a.email[0]).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-200 truncate">{a.displayName || a.email}</p>
+                        {a.displayName && <p className="text-[10px] text-slate-600 truncate">{a.email}</p>}
+                      </div>
+                      <span className={`text-[10px] font-medium shrink-0 ${cls}`}>{label}</span>
                     </div>
-                    <span className="text-xs text-slate-300 truncate">{a.displayName || a.email}</span>
-                    <span className={`text-[10px] font-medium ml-auto shrink-0 ${rsvpColor(a.responseStatus)}`}>
-                      {a.responseStatus ?? 'invited'}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
           {/* Open in Google Calendar */}
           {event.htmlLink && (
-            <a
-              href={event.htmlLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Open in Google Calendar
+            <a href={event.htmlLink} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              Open in Google Calendar →
             </a>
           )}
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Calendar grid                                                      */
+/* ------------------------------------------------------------------ */
+
+const EVENT_COLORS = [
+  'bg-blue-500/25 text-blue-200 hover:bg-blue-500/40',
+  'bg-violet-500/25 text-violet-200 hover:bg-violet-500/40',
+  'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/40',
+  'bg-amber-500/25 text-amber-200 hover:bg-amber-500/40',
+];
+
+function MonthGrid({ year, month, events, onEventClick }: {
+  year: number; month: number;
+  events: CalendarEvent[];
+  onEventClick: (e: CalendarEvent) => void;
+}) {
+  const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const startOffset = (firstDow + 6) % 7; // shift to Mon=0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (number | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  // Map events to day-of-month
+  const byDay = new Map<number, CalendarEvent[]>();
+  for (const ev of events) {
+    const d = eventDate(ev);
+    if (!d || d.getFullYear() !== year || d.getMonth() !== month) continue;
+    const day = d.getDate();
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day)!.push(ev);
+  }
+
+  const today = new Date();
+  const isToday = (d: number) =>
+    d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  return (
+    <div className="flex-1 overflow-auto">
+      {/* Day labels */}
+      <div className="grid grid-cols-7 border-b border-white/[0.06] sticky top-0 bg-[#0a0a0f] z-10">
+        {DAY_LABELS.map((d) => (
+          <div key={d} className="py-2 text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
+        ))}
+      </div>
+
+      {/* Weeks */}
+      {weeks.map((week, wi) => (
+        <div key={wi} className="grid grid-cols-7 border-b border-white/[0.04]" style={{ minHeight: 88 }}>
+          {week.map((day, di) => {
+            const dayEvs = day ? (byDay.get(day) ?? []) : [];
+            const past = day ? new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
+            return (
+              <div key={di} className={`border-r border-white/[0.03] last:border-r-0 p-1 ${!day ? 'bg-white/[0.01]' : ''}`}>
+                {day && (
+                  <>
+                    <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold mb-1 ${
+                      isToday(day) ? 'bg-blue-500 text-white' : past ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
+                      {day}
+                    </div>
+                    <div className="space-y-0.5">
+                      {dayEvs.slice(0, 3).map((ev, i) => (
+                        <button
+                          key={ev.id}
+                          onClick={() => onEventClick(ev)}
+                          className={`w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate transition-colors ${EVENT_COLORS[i % EVENT_COLORS.length]}`}
+                          title={ev.summary}
+                        >
+                          {formatTime(ev.start) && <span className="opacity-70 mr-1">{formatTime(ev.start)}</span>}
+                          {ev.summary || 'Event'}
+                        </button>
+                      ))}
+                      {dayEvs.length > 3 && (
+                        <p className="text-[9px] text-slate-500 px-1.5">+{dayEvs.length - 3} more</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -212,19 +263,34 @@ function EventCard({ event }: { event: CalendarEvent }) {
 /* ------------------------------------------------------------------ */
 
 export function CalendarView({ events, loading, onCreate, pendingApprovals = [], onApprovalResolved }: CalendarViewProps) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
+    else setViewMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
+    else setViewMonth((m) => m + 1);
+  };
 
   const createFields: WriteFormField[] = [
     { name: 'summary', label: 'Title', type: 'text', required: true, placeholder: 'Meeting title' },
     { name: 'startDateTime', label: 'Start', type: 'text', required: true, placeholder: 'YYYY-MM-DDTHH:mm:ss' },
     { name: 'endDateTime', label: 'End', type: 'text', required: true, placeholder: 'YYYY-MM-DDTHH:mm:ss' },
-    { name: 'location', label: 'Location', type: 'text', placeholder: 'Conference Room A' },
+    { name: 'location', label: 'Location', type: 'text', placeholder: 'Room / link' },
     { name: 'attendees', label: 'Attendees', type: 'text', placeholder: 'email1@co.com, email2@co.com' },
-    { name: 'description', label: 'Description', type: 'textarea', placeholder: 'Meeting notes…' },
+    { name: 'description', label: 'Description', type: 'textarea', placeholder: 'Agenda…' },
   ];
 
-  const upcoming = events.filter((e) => isUpcoming(e.start));
-  const past = events.filter((e) => !isUpcoming(e.start));
+  const totalThisMonth = events.filter((e) => {
+    const d = eventDate(e);
+    return d && d.getFullYear() === viewYear && d.getMonth() === viewMonth;
+  }).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -240,21 +306,32 @@ export function CalendarView({ events, loading, onCreate, pendingApprovals = [],
         </div>
       )}
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 shrink-0">
-        <span className="text-[11px] text-slate-500">{events.length} events</span>
-        <div className="flex-1" />
+      {/* Month nav */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] shrink-0">
+        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-white transition-colors">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1 text-center">
+          <span className="text-sm font-semibold text-white">{MONTHS[viewMonth]} {viewYear}</span>
+          {totalThisMonth > 0 && (
+            <span className="ml-2 text-[10px] text-slate-500">{totalThisMonth} events</span>
+          )}
+        </div>
+        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-400 hover:text-white transition-colors">
+          <ChevronRight className="w-4 h-4" />
+        </button>
         <button
           onClick={() => setShowCreate((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs font-medium hover:bg-blue-600/30 transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs font-medium hover:bg-blue-600/30 transition-colors"
         >
-          {showCreate ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          {showCreate ? 'Cancel' : 'New Event'}
+          {showCreate ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+          {showCreate ? 'Cancel' : 'New'}
         </button>
       </div>
 
+      {/* Create form */}
       {showCreate && (
-        <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02] shrink-0">
+        <div className="px-4 py-3 border-b border-white/[0.06] bg-white/[0.02] shrink-0">
           <WriteForm
             title="New Event"
             fields={createFields}
@@ -265,43 +342,27 @@ export function CalendarView({ events, loading, onCreate, pendingApprovals = [],
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="animate-pulse space-y-2 p-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-16 bg-white/[0.03] rounded-xl" />
-            ))}
+      {/* Grid or loading */}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Calendar className="w-8 h-8 text-slate-700 mx-auto mb-2 animate-pulse" />
+            <p className="text-xs text-slate-600">Loading events…</p>
           </div>
-        ) : events.length === 0 ? (
-          <div className="text-center py-16">
-            <Calendar className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">No events found</p>
-          </div>
-        ) : (
-          <div className="p-4 space-y-6">
-            {upcoming.length > 0 && (
-              <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">
-                  Upcoming · {upcoming.length}
-                </p>
-                <div className="space-y-2">
-                  {upcoming.map((e) => <EventCard key={e.id} event={e} />)}
-                </div>
-              </div>
-            )}
-            {past.length > 0 && (
-              <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">
-                  Past · {past.length}
-                </p>
-                <div className="space-y-2 opacity-60">
-                  {past.map((e) => <EventCard key={e.id} event={e} />)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <MonthGrid
+          year={viewYear}
+          month={viewMonth}
+          events={events}
+          onEventClick={setSelectedEvent}
+        />
+      )}
+
+      {/* Event modal */}
+      {selectedEvent && (
+        <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      )}
     </div>
   );
 }
