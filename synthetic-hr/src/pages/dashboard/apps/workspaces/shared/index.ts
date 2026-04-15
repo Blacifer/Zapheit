@@ -20,3 +20,7 @@ export type { WriteFormField, WriteFormProps } from './WriteForm';
 
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
+
+export { PendingApprovalRow } from './PendingApprovalRow';
+export { GovernanceActivityFeed } from './GovernanceActivityFeed';
+export type { GovernanceActivityFeedProps } from './GovernanceActivityFeed';

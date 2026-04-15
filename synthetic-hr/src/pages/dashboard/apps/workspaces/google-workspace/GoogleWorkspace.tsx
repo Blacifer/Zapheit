@@ -7,12 +7,15 @@ import {
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
-import { StatusBadge, EmptyState } from '../shared';
+import { StatusBadge } from '../shared';
+import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 import { EmailList, type GmailMessage } from './EmailList';
 import { CalendarView, type CalendarEvent } from './CalendarView';
-import { DriveFiles, type DriveFile } from './DriveFiles';
+import { DriveFiles, type DriveFile, type AgentTouch } from './DriveFiles';
 import { GoogleActivityTab } from './GoogleActivityTab';
 import { GoogleAutomationTab } from './GoogleAutomationTab';
+
+const CONNECTOR_ID = 'google-workspace';
 
 /* ------------------------------------------------------------------ */
 /*  Tab Config                                                         */
@@ -42,6 +45,12 @@ export default function GoogleWorkspace() {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
+  /* Approvals */
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
+
+  /* Agent activity map for Drive attribution: fileId → touches */
+  const [agentActivity, setAgentActivity] = useState<Record<string, AgentTouch[]>>({});
+
   /* Loading */
   const [loadingEmails, setLoadingEmails] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -54,7 +63,7 @@ export default function GoogleWorkspace() {
   const loadEmails = useCallback(async () => {
     setLoadingEmails(true);
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'list_emails', { maxResults: 50 });
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50 });
       if (res.success && res.data?.data) setEmails(res.data.data);
       setConnectionStatus('connected');
     } catch {
@@ -67,7 +76,7 @@ export default function GoogleWorkspace() {
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'list_events', { maxResults: 50 });
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_events', { maxResults: 50 });
       if (res.success && res.data?.data) setEvents(res.data.data);
     } catch { /* empty */ }
     finally { setLoadingEvents(false); }
@@ -76,10 +85,34 @@ export default function GoogleWorkspace() {
   const loadFiles = useCallback(async () => {
     setLoadingFiles(true);
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'list_files', { pageSize: 50 });
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50 });
       if (res.success && res.data?.data) setFiles(res.data.data);
     } catch { /* empty */ }
     finally { setLoadingFiles(false); }
+  }, []);
+
+  const loadApprovals = useCallback(async () => {
+    try {
+      const res = await api.approvals.list({ service: CONNECTOR_ID, status: 'pending', limit: 50 });
+      if (res.success && res.data) setPendingApprovals(res.data);
+    } catch { /* empty */ }
+  }, []);
+
+  const loadAgentActivity = useCallback(async () => {
+    try {
+      const res = await api.integrations.getGovernedActions({ service: CONNECTOR_ID, limit: 100 });
+      if (!res.success || !res.data) return;
+      const map: Record<string, AgentTouch[]> = {};
+      for (const row of res.data as any[]) {
+        const params = row.params as Record<string, any> | undefined;
+        const fileId = params?.fileId ?? params?.documentId;
+        if (!fileId) continue;
+        const actor = (row.governance as any)?.requested_by ?? row.requested_by ?? 'AI Agent';
+        if (!map[fileId]) map[fileId] = [];
+        map[fileId].push({ actor, action: row.action, ts: row.created_at });
+      }
+      setAgentActivity(map);
+    } catch { /* empty */ }
   }, []);
 
   /* --------------------------------------------------------------- */
@@ -88,7 +121,7 @@ export default function GoogleWorkspace() {
 
   const sendEmail = useCallback(async (data: Record<string, string>) => {
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'send_email', data);
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'send_email', data);
       if (res.success) {
         toast.success('Email sent');
         void loadEmails();
@@ -100,7 +133,7 @@ export default function GoogleWorkspace() {
 
   const createEvent = useCallback(async (data: Record<string, string>) => {
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'create_event', data);
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'create_event', data);
       if (res.success) {
         toast.success('Event created');
         void loadEvents();
@@ -112,7 +145,7 @@ export default function GoogleWorkspace() {
 
   const shareFile = useCallback(async (fileId: string, email: string, role: string) => {
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'share_file', { fileId, email, role });
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'share_file', { fileId, email, role });
       if (res.success) {
         toast.success('File shared');
       } else {
@@ -121,8 +154,28 @@ export default function GoogleWorkspace() {
     } catch { toast.error('Network error'); }
   }, []);
 
-  /* Auto-load on mount */
-  useEffect(() => { void loadEmails(); }, [loadEmails]);
+  /* --------------------------------------------------------------- */
+  /*  Approval resolution                                              */
+  /* --------------------------------------------------------------- */
+
+  const handleApprovalResolved = useCallback((id: string) => {
+    setPendingApprovals((prev) => prev.filter((a) => a.id !== id));
+    // Refresh underlying data so the action shows executed state
+    void loadEmails();
+    void loadEvents();
+    void loadFiles();
+  }, [loadEmails, loadEvents, loadFiles]);
+
+  /* --------------------------------------------------------------- */
+  /*  Lifecycle                                                        */
+  /* --------------------------------------------------------------- */
+
+  /* Initial load */
+  useEffect(() => {
+    void loadEmails();
+    void loadApprovals();
+    void loadAgentActivity();
+  }, [loadEmails, loadApprovals, loadAgentActivity]);
 
   /* Load tab data on switch */
   useEffect(() => {
@@ -135,12 +188,26 @@ export default function GoogleWorkspace() {
   /* --------------------------------------------------------------- */
 
   const refreshCurrent = useCallback(() => {
+    void loadApprovals();
     if (activeTab === 'email') void loadEmails();
     else if (activeTab === 'calendar') void loadEvents();
-    else if (activeTab === 'drive') void loadFiles();
-  }, [activeTab, loadEmails, loadEvents, loadFiles]);
+    else if (activeTab === 'drive') { void loadFiles(); void loadAgentActivity(); }
+  }, [activeTab, loadEmails, loadEvents, loadFiles, loadApprovals, loadAgentActivity]);
 
   const isLoading = loadingEmails || loadingEvents || loadingFiles;
+
+  /* Pending counts per tab */
+  const emailPendingCount  = pendingApprovals.filter((a) => a.action === 'send_email').length;
+  const calendarPendingCount = pendingApprovals.filter((a) => a.action === 'create_event').length;
+  const drivePendingCount  = pendingApprovals.filter((a) => a.action === 'share_file').length;
+  const totalPending = pendingApprovals.length;
+
+  const pendingCountFor = (tabId: TabId) => {
+    if (tabId === 'email') return emailPendingCount;
+    if (tabId === 'calendar') return calendarPendingCount;
+    if (tabId === 'drive') return drivePendingCount;
+    return 0;
+  };
 
   /* --------------------------------------------------------------- */
   /*  Render                                                           */
@@ -165,6 +232,11 @@ export default function GoogleWorkspace() {
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-bold text-white">Google Workspace</h1>
             <StatusBadge status={connectionStatus} />
+            {totalPending > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/25">
+                {totalPending} pending
+              </span>
+            )}
           </div>
           <p className="text-[10px] text-slate-500">Productivity — Email, Calendar &amp; Drive</p>
         </div>
@@ -181,38 +253,65 @@ export default function GoogleWorkspace() {
 
       {/* Tabs */}
       <div className="flex items-center gap-0.5 px-5 py-1.5 border-b border-white/5 shrink-0 overflow-x-auto">
-        {TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
-              activeTab === id
-                ? 'bg-white/[0.08] text-white'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
-            )}
-          >
-            <Icon className="w-3.5 h-3.5" /> {label}
-          </button>
-        ))}
+        {TABS.map(({ id, label, Icon }) => {
+          const count = pendingCountFor(id);
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={cn(
+                'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
+                activeTab === id
+                  ? 'bg-white/[0.08] text-white'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" /> {label}
+              {count > 0 && (
+                <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-400 font-bold leading-none">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}
       {activeTab === 'email' ? (
         <div className="flex-1 overflow-hidden">
-          <EmailList emails={emails} loading={loadingEmails} onSend={sendEmail} />
+          <EmailList
+            emails={emails}
+            loading={loadingEmails}
+            onSend={sendEmail}
+            pendingApprovals={pendingApprovals.filter((a) => a.action === 'send_email')}
+            onApprovalResolved={handleApprovalResolved}
+          />
         </div>
       ) : activeTab === 'calendar' ? (
         <div className="flex-1 overflow-hidden">
-          <CalendarView events={events} loading={loadingEvents} onCreate={createEvent} />
+          <CalendarView
+            events={events}
+            loading={loadingEvents}
+            onCreate={createEvent}
+            pendingApprovals={pendingApprovals.filter((a) => a.action === 'create_event')}
+            onApprovalResolved={handleApprovalResolved}
+          />
         </div>
       ) : activeTab === 'drive' ? (
         <div className="flex-1 overflow-hidden">
-          <DriveFiles files={files} loading={loadingFiles} onShare={shareFile} />
+          <DriveFiles
+            files={files}
+            loading={loadingFiles}
+            onShare={shareFile}
+            pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
+            onApprovalResolved={handleApprovalResolved}
+            agentActivity={agentActivity}
+          />
         </div>
       ) : activeTab === 'activity' ? (
         <div className="flex-1 overflow-y-auto">
-          <GoogleActivityTab />
+          <GoogleActivityTab onApprovalResolved={loadApprovals} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">

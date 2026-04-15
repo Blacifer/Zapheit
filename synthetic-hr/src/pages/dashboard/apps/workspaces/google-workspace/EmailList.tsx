@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Search, Mail, Star, Paperclip, Clock, Plus } from 'lucide-react';
+import { Search, Mail, Paperclip, Plus } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
-import { WriteForm, type WriteFormField } from '../shared';
+import { WriteForm, PendingApprovalRow, type WriteFormField } from '../shared';
+import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -24,6 +25,8 @@ interface EmailListProps {
   emails: GmailMessage[];
   loading: boolean;
   onSend: (data: Record<string, string>) => void;
+  pendingApprovals?: ApprovalRequest[];
+  onApprovalResolved?: (id: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -46,7 +49,7 @@ function timeAgo(iso?: string): string {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function EmailList({ emails, loading, onSend }: EmailListProps) {
+export function EmailList({ emails, loading, onSend, pendingApprovals = [], onApprovalResolved }: EmailListProps) {
   const [search, setSearch] = useState('');
   const [showCompose, setShowCompose] = useState(false);
 
@@ -68,6 +71,18 @@ export function EmailList({ emails, loading, onSend }: EmailListProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Pending approvals */}
+      {pendingApprovals.length > 0 && (
+        <div className="px-4 py-3 border-b border-amber-500/15 bg-amber-500/[0.03] space-y-1.5 shrink-0">
+          <p className="text-[10px] text-amber-400/80 font-semibold uppercase tracking-wider mb-2">
+            Awaiting your approval — {pendingApprovals.length} outbound email{pendingApprovals.length !== 1 ? 's' : ''}
+          </p>
+          {pendingApprovals.map((a) => (
+            <PendingApprovalRow key={a.id} approval={a} onResolved={onApprovalResolved ?? (() => {})} />
+          ))}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 shrink-0">
         <div className="relative flex-1 max-w-sm">

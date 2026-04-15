@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Calendar, Clock, MapPin, Users, Plus } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
-import { WriteForm, type WriteFormField } from '../shared';
+import { WriteForm, PendingApprovalRow, type WriteFormField } from '../shared';
+import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -23,6 +23,8 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   loading: boolean;
   onCreate: (data: Record<string, string>) => void;
+  pendingApprovals?: ApprovalRequest[];
+  onApprovalResolved?: (id: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -50,7 +52,7 @@ function isUpcoming(dt?: { dateTime?: string; date?: string }): boolean {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function CalendarView({ events, loading, onCreate }: CalendarViewProps) {
+export function CalendarView({ events, loading, onCreate, pendingApprovals = [], onApprovalResolved }: CalendarViewProps) {
   const [showCreate, setShowCreate] = useState(false);
 
   const createFields: WriteFormField[] = [
@@ -67,6 +69,18 @@ export function CalendarView({ events, loading, onCreate }: CalendarViewProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Pending approvals */}
+      {pendingApprovals.length > 0 && (
+        <div className="px-4 py-3 border-b border-amber-500/15 bg-amber-500/[0.03] space-y-1.5 shrink-0">
+          <p className="text-[10px] text-amber-400/80 font-semibold uppercase tracking-wider mb-2">
+            Awaiting your approval — {pendingApprovals.length} event{pendingApprovals.length !== 1 ? 's' : ''} to create
+          </p>
+          {pendingApprovals.map((a) => (
+            <PendingApprovalRow key={a.id} approval={a} onResolved={onApprovalResolved ?? (() => {})} />
+          ))}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 shrink-0">
         <span className="text-[11px] text-slate-600">{events.length} events</span>

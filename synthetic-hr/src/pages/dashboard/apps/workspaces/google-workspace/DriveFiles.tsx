@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Search, HardDrive, FileText, Image, Film, Table, Share2 } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
+import { Search, HardDrive, FileText, Image, Film, Table, Share2, ExternalLink, Bot } from 'lucide-react';
+import type { ApprovalRequest } from '../../../../../lib/api/approvals';
+import { PendingApprovalRow } from '../shared';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -17,10 +18,19 @@ export interface DriveFile {
   webViewLink?: string;
 }
 
+export interface AgentTouch {
+  actor: string;
+  action: string;
+  ts: string;
+}
+
 interface DriveFilesProps {
   files: DriveFile[];
   loading: boolean;
   onShare: (fileId: string, email: string, role: string) => void;
+  pendingApprovals?: ApprovalRequest[];
+  onApprovalResolved?: (id: string) => void;
+  agentActivity?: Record<string, AgentTouch[]>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -60,7 +70,10 @@ function timeAgo(iso?: string): string {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function DriveFiles({ files, loading, onShare }: DriveFilesProps) {
+export function DriveFiles({
+  files, loading, onShare,
+  pendingApprovals = [], onApprovalResolved, agentActivity = {},
+}: DriveFilesProps) {
   const [search, setSearch] = useState('');
   const [shareTarget, setShareTarget] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState('');
@@ -73,6 +86,18 @@ export function DriveFiles({ files, loading, onShare }: DriveFilesProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Pending approvals */}
+      {pendingApprovals.length > 0 && (
+        <div className="px-4 py-3 border-b border-amber-500/15 bg-amber-500/[0.03] space-y-1.5 shrink-0">
+          <p className="text-[10px] text-amber-400/80 font-semibold uppercase tracking-wider mb-2">
+            Awaiting your approval — {pendingApprovals.length} share request{pendingApprovals.length !== 1 ? 's' : ''}
+          </p>
+          {pendingApprovals.map((a) => (
+            <PendingApprovalRow key={a.id} approval={a} onResolved={onApprovalResolved ?? (() => {})} />
+          ))}
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 shrink-0">
         <div className="relative flex-1 max-w-sm">
@@ -105,19 +130,41 @@ export function DriveFiles({ files, loading, onShare }: DriveFilesProps) {
           <div className="divide-y divide-white/[0.04]">
             {filtered.map((f) => {
               const Icon = fileIcon(f.mimeType);
+              const touches = agentActivity[f.id];
               return (
                 <div key={f.id} className="px-4 py-3 hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 text-blue-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-slate-200 truncate">{f.name || 'Untitled'}</p>
-                      <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                      <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
                         {f.owners?.[0]?.displayName && <span>{f.owners[0].displayName}</span>}
                         {f.size && <span>{fmtSize(f.size)}</span>}
                         {f.modifiedTime && <span>{timeAgo(f.modifiedTime)}</span>}
                         {f.shared && <span className="text-blue-400">Shared</span>}
+                        {touches && touches.length > 0 && (
+                          <span
+                            className="flex items-center gap-0.5 text-violet-400"
+                            title={touches.map((t) => `${t.actor} — ${t.action.replace(/_/g, ' ')}`).join('\n')}
+                          >
+                            <Bot className="w-2.5 h-2.5" />
+                            {touches[0].actor}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    {f.webViewLink && (
+                      <a
+                        href={f.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-500 hover:text-slate-300 transition-colors"
+                        title="Open in Google Drive"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                     <button
                       onClick={() => setShareTarget(shareTarget === f.id ? null : f.id)}
                       className="p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-500 hover:text-blue-400 transition-colors"

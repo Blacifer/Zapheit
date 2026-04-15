@@ -788,11 +788,29 @@ async function googleWorkspaceAction(
 
   switch (action) {
     case 'list_files': {
-      const qs = new URLSearchParams({ pageSize: String(params.limit || 10) });
+      const qs = new URLSearchParams({
+        pageSize: String(params.pageSize || params.limit || 20),
+        fields: 'files(id,name,mimeType,size,modifiedTime,owners,shared,webViewLink)',
+      });
       if (params.query) qs.set('q', params.query);
       const r = await jsonFetch(`https://www.googleapis.com/drive/v3/files?${qs}`, { headers: h });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data.files };
+    }
+    case 'share_file': {
+      if (!params.fileId || !params.email) {
+        return { success: false, error: 'share_file requires: fileId, email' };
+      }
+      const r = await jsonFetch(`https://www.googleapis.com/drive/v3/files/${params.fileId}/permissions`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          type: 'user',
+          role: params.role || 'reader',
+          emailAddress: params.email,
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { permissionId: r.data.id } };
     }
     case 'create_document': {
       const r = await jsonFetch('https://docs.googleapis.com/v1/documents', {
@@ -801,6 +819,40 @@ async function googleWorkspaceAction(
       });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
+    }
+    case 'list_emails': {
+      const qs = new URLSearchParams({
+        maxResults: String(params.maxResults || params.limit || 20),
+        labelIds: 'INBOX',
+      });
+      if (params.q) qs.set('q', params.q);
+      const listR = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${qs}`, { headers: h });
+      if (!listR.ok) return { success: false, error: listR.data?.error?.message || `HTTP ${listR.status}`, statusCode: listR.status };
+      const ids: string[] = (listR.data.messages || []).map((m: any) => m.id);
+      const details = await Promise.all(
+        ids.slice(0, 20).map(async (id: string) => {
+          const r = await jsonFetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+            { headers: h },
+          );
+          if (!r.ok) return { id };
+          const hdrs: any[] = r.data.payload?.headers || [];
+          const get = (name: string) => hdrs.find((hdr: any) => hdr.name?.toLowerCase() === name.toLowerCase())?.value;
+          return {
+            id,
+            threadId: r.data.threadId,
+            snippet: r.data.snippet,
+            subject: get('Subject'),
+            from: get('From'),
+            to: get('To'),
+            date: get('Date'),
+            labelIds: r.data.labelIds,
+            isUnread: (r.data.labelIds as string[] | undefined)?.includes('UNREAD') ?? false,
+            hasAttachment: (r.data.payload?.parts as any[] | undefined)?.some((p: any) => p.filename) ?? false,
+          };
+        }),
+      );
+      return { success: true, data: details };
     }
     case 'send_email': {
       if (!params.to || !params.subject || !params.body) {
@@ -816,13 +868,35 @@ async function googleWorkspaceAction(
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: { message_id: r.data.id, thread_id: r.data.threadId } };
     }
+    case 'list_events':
     case 'list_calendar_events': {
-      const qs = new URLSearchParams({ maxResults: String(params.limit || 10) });
+      const qs = new URLSearchParams({ maxResults: String(params.maxResults || params.limit || 20) });
       if (params.time_min) qs.set('timeMin', params.time_min);
       if (params.time_max) qs.set('timeMax', params.time_max);
       const r = await jsonFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${qs}`, { headers: h });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data.items };
+    }
+    case 'create_event': {
+      if (!params.summary || !params.startDateTime || !params.endDateTime) {
+        return { success: false, error: 'create_event requires: summary, startDateTime, endDateTime' };
+      }
+      const tz = params.timezone || 'Asia/Kolkata';
+      const r = await jsonFetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          summary: params.summary,
+          description: params.description || '',
+          location: params.location || '',
+          start: { dateTime: params.startDateTime, timeZone: tz },
+          end: { dateTime: params.endDateTime, timeZone: tz },
+          attendees: params.attendees
+            ? String(params.attendees).split(',').map((e: string) => ({ email: e.trim() }))
+            : [],
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
     }
     default:
       return { success: false, error: `Google Workspace action "${action}" not supported`, statusCode: 400 };

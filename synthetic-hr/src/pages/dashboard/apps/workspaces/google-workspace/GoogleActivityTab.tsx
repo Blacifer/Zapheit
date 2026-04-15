@@ -1,58 +1,43 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../../../../lib/api-client';
-import { ActivityFeed } from '../shared';
-import type { ActivityItem } from '../shared';
+import { GovernanceActivityFeed } from '../shared';
 
 interface GoogleActivityTabProps {
   connectorId?: string;
+  onApprovalResolved?: () => void;
 }
 
-export function GoogleActivityTab({ connectorId = 'google-workspace' }: GoogleActivityTabProps) {
+export function GoogleActivityTab({ connectorId = 'google-workspace', onApprovalResolved }: GoogleActivityTabProps) {
   const [actions, setActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.integrations.getGovernedActions({ service: connectorId, limit: 50 });
-        if (!cancelled && res.success && res.data) {
-          setActions(res.data);
-        }
-      } catch {
-        // empty
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.integrations.getGovernedActions({ service: connectorId, limit: 50 });
+      if (res.success && res.data) setActions(res.data);
+    } catch {
+      // empty
+    } finally {
+      setLoading(false);
+    }
   }, [connectorId]);
 
-  const items: ActivityItem[] = useMemo(() =>
-    actions.map((a: any) => ({
-      id: a.id || a.governed_action_id || String(Math.random()),
-      actor: a.source === 'runtime' ? 'agent' as const : 'user' as const,
-      actorName: a.agent_name || a.user_email || a.source || 'Unknown',
-      action: a.action || a.service_action || '',
-      target: a.connector_id || a.service || connectorId,
-      timestamp: a.created_at || a.executed_at || new Date().toISOString(),
-      status: a.decision === 'executed' ? 'success' as const
-        : a.decision === 'pending_approval' ? 'pending' as const
-        : a.decision === 'blocked' ? 'failed' as const
-        : 'success' as const,
-      detail: a.result_summary || a.decision || undefined,
-    })),
-    [actions, connectorId],
-  );
+  useEffect(() => { void load(); }, [load]);
+
+  const handleResolved = useCallback(() => {
+    void load();
+    onApprovalResolved?.();
+  }, [load, onApprovalResolved]);
 
   return (
     <div className="p-4">
-      <ActivityFeed
-        items={items}
+      <GovernanceActivityFeed
+        actions={actions}
         loading={loading}
         maxItems={50}
         emptyMessage="No Google Workspace activity yet. Actions will appear here once the integration is active."
+        onApprovalResolved={handleResolved}
       />
     </div>
   );
