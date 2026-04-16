@@ -201,11 +201,11 @@ export function OutlookCalendar({ events, loading, onCreate, pendingApprovals = 
     setSelectedDate(null);
   };
 
-  const handleCreate = (data: Record<string, string>) => {
+  const handleCreate = async (data: Record<string, string>) => {
     const attendees = data.attendees
       ? data.attendees.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
-    onCreate({ ...data, ...(attendees.length ? { attendees: JSON.stringify(attendees) } : {}) });
+    await onCreate({ ...data, ...(attendees.length ? { attendees: JSON.stringify(attendees) } : {}) });
     setShowCreate(false);
   };
 
