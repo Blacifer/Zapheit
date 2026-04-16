@@ -9,6 +9,11 @@ import { auditLog } from '../lib/audit-logger';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { notifySlackApprovalRequestAsync } from '../lib/slack-approvals';
 import { evaluatePolicyConstraints, type PolicyConstraints } from '../lib/action-policy-constraints';
+import {
+  buildApprovalSummaryFromJobApproval,
+  buildGovernedExecutionSummary,
+  inferWorkflowEntrySource,
+} from '../lib/governed-workflow';
 
 const router = Router();
 
@@ -90,6 +95,34 @@ async function loadJobApproval(userJwt: string, jobId: string) {
   apprQ.set('limit', '1');
   const apprs = (await supabaseRestAsUser(userJwt, 'agent_job_approvals', apprQ)) as any[];
   return apprs?.[0] || null;
+}
+
+function decorateJob(job: any, approval: any = null) {
+  if (!approval && job?.approval) approval = job.approval;
+  if (!approval) {
+    const governedExecution = buildGovernedExecutionSummary({ job });
+    return {
+      ...job,
+      governed_execution: governedExecution,
+      cost_status: governedExecution.cost_status,
+      audit_ref: governedExecution.audit_ref,
+      incident_ref: governedExecution.incident_ref,
+    };
+  }
+  const approvalSummary = buildApprovalSummaryFromJobApproval(approval, job);
+  const governedExecution = buildGovernedExecutionSummary({ job, approval, approvalSummary });
+  return {
+    ...job,
+    approval,
+    approval_summary: approvalSummary,
+    governed_execution: governedExecution,
+    cost_status: governedExecution.cost_status,
+    audit_ref: governedExecution.audit_ref,
+    incident_ref: governedExecution.incident_ref,
+    source: approvalSummary.source,
+    source_ref: approvalSummary.source_ref,
+    governance_status: governedExecution.status,
+  };
 }
 
 async function getActionPolicy(
@@ -235,6 +268,10 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
       ...(deployment.execution_policy || { approvals: { required: true }, llm: { route: 'synthetichr_gateway' }, secrets: { mode: 'mixed' } }),
       ...(routedRole ? { required_role: routedRole } : { required_role: effectiveRequiredRole }),
       ...(routedAssignedTo ? { assigned_to: routedAssignedTo } : {}),
+      workflow: {
+        source: inferWorkflowEntrySource({ job: { type: data.type, input: data.input } as any }),
+        source_ref: data.parent_job_id || data.playbook_id || data.batch_id || null,
+      },
       connector_policy: {
         service: connectorService,
         action: connectorAction,
@@ -307,7 +344,7 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
       },
     });
 
-    return res.status(201).json({ success: true, data: { job, approval } });
+    return res.status(201).json({ success: true, data: { job: decorateJob(job, approval), approval } });
   } catch (err: any) {
     return safeError(res, err);
   }
@@ -336,6 +373,7 @@ router.get('/', requirePermission('agents.read'), async (req: Request, res: Resp
       try {
         const approval = await loadJobApproval(getUserJwt(req), job.id);
         if (!approval) return;
+        job.approval = approval;
         const history = Array.isArray(approval.approval_history) ? approval.approval_history : [];
         const approvalsRecorded = history.filter((entry: any) => entry?.decision === 'approved').length;
         job.required_approvals = Math.max(1, Number(approval.required_approvals || 1));
@@ -344,11 +382,13 @@ router.get('/', requirePermission('agents.read'), async (req: Request, res: Resp
         const snapshot = approval.policy_snapshot || {};
         if (snapshot.required_role) job.required_role = snapshot.required_role;
         if (snapshot.assigned_to) job.assigned_to = snapshot.assigned_to;
+        if (snapshot.workflow?.source) job.source = snapshot.workflow.source;
+        if (snapshot.workflow?.source_ref) job.source_ref = snapshot.workflow.source_ref;
       } catch {
         // non-fatal augmentation
       }
     }));
-    return res.json({ success: true, data, count: data.length || 0 });
+    return res.json({ success: true, data: data.map((job: any) => decorateJob(job, job.approval || null)), count: data.length || 0 });
   } catch (err: any) {
     return safeError(res, err);
   }
@@ -471,7 +511,7 @@ router.get('/:id', requirePermission('agents.read'), async (req: Request, res: R
       } catch { /* non-fatal */ }
     }
 
-    return res.json({ success: true, data: { job } });
+    return res.json({ success: true, data: { job: decorateJob(job, job.approval || null) } });
   } catch (err: any) {
     return safeError(res, err);
   }
@@ -610,7 +650,7 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
     return res.json({
       success: true,
       data: {
-        job: updatedJobs?.[0] || { ...job, status: newJobStatus },
+        job: decorateJob(updatedJobs?.[0] || { ...job, status: newJobStatus }, updatedApprovals?.[0] || approval),
         approval: updatedApprovals?.[0] || approval,
         awaiting_additional_approval: finalDecision === 'pending',
         approvals_remaining: Math.max(0, requiredApprovals - approvedCount),

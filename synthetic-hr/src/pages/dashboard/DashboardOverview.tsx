@@ -417,7 +417,7 @@ const hasData = agents.length > 0;
 
   if (!hasData) {
     const steps = [
-      { num: 1, label: 'Connect your first App', sub: 'Link Slack, Zendesk, or any integration', action: () => onNavigate?.('apps') },
+      { num: 1, label: 'Connect one app', sub: 'Link Slack, Jira, GitHub, or another governed app', action: () => onNavigate?.('apps') },
       { num: 2, label: 'Create your first Agent', sub: 'Pick a template or start from scratch', action: () => onAddAgent() },
       { num: 3, label: 'Set your first Safety Rule', sub: 'Control what your agent can and cannot do', action: () => onNavigate?.('action-policies') },
     ];
@@ -1452,21 +1452,21 @@ const hasData = agents.length > 0;
         </section>
       )}
 
-      {/* App Health widget */}
+      {/* Connected Apps widget */}
       {telemetry && telemetry.integrations.total > 0 ? (
         <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <SectionEyebrow label="Integration health" />
-              <h2 className="text-[1.75rem] font-bold leading-tight text-white">App Health</h2>
-              <p className="mt-1 text-sm text-slate-400">Live status of installed apps powering your agents.</p>
+              <h2 className="text-[1.75rem] font-bold leading-tight text-white">Connected Apps Health</h2>
+              <p className="mt-1 text-sm text-slate-400">Live status of the apps and business systems feeding governed actions, approvals, and runtime jobs.</p>
             </div>
             <button
               onClick={() => onNavigate?.('apps')}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-200 transition hover:text-white"
             >
               <ShoppingBag className="h-4 w-4" />
-              Open apps
+              Review apps
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -1490,10 +1490,10 @@ const hasData = agents.length > 0;
           {telemetry.integrations.degraded > 0 ? (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3">
               <p className="text-sm text-amber-200">
-                <span className="font-semibold">{telemetry.integrations.degraded} app{telemetry.integrations.degraded > 1 ? 's' : ''}</span> need attention — re-auth or check credentials.
+                <span className="font-semibold">{telemetry.integrations.degraded} connected app{telemetry.integrations.degraded > 1 ? 's' : ''}</span> need attention — re-auth or check credentials.
               </p>
               <button
-                onClick={() => onNavigate?.('integrations')}
+                onClick={() => onNavigate?.('apps')}
                 className="shrink-0 text-xs font-semibold text-amber-300 hover:text-amber-100 transition-colors inline-flex items-center gap-1"
               >
                 Fix now <ArrowRight className="w-3 h-3" />
@@ -1684,7 +1684,7 @@ const hasData = agents.length > 0;
                 {trendingTopics.map(({ word, count }) => (
                   <button
                     key={word}
-                    onClick={() => onNavigate?.('conversations')}
+                    onClick={() => onNavigate?.('chat')}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-700/60 border border-slate-600/50 text-xs font-medium text-slate-300 hover:border-cyan-500/40 hover:text-cyan-300 transition-colors capitalize"
                   >
                     {word}

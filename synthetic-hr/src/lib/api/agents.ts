@@ -460,6 +460,36 @@ export const conversationApi = {
     });
   },
 
+  async send(payload: {
+    agent_id: string;
+    prompt: string;
+    conversation_id?: string;
+    mode?: 'operator' | 'employee' | 'external';
+    template_id?: string;
+    template_context?: {
+      name?: string;
+      businessPurpose?: string;
+      riskLevel?: string;
+      approvalDefault?: string;
+      requiredSystems?: string[];
+    };
+    app_target?: {
+      service?: string;
+      label?: string;
+    };
+  }): Promise<ApiResponse<{
+    conversation: any;
+    message: any;
+    job: any;
+    approval: any;
+    session: any;
+  }>> {
+    return authenticatedFetch(`/conversations/chat`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   /**
    * Get reasoning traces for a conversation
    */

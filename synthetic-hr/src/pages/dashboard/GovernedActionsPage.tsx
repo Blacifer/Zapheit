@@ -66,6 +66,26 @@ type GovernedAction = {
     delegated_actor?: string | null;
     audit_ref?: string | null;
   } | null;
+  governed_execution?: {
+    source: 'apps' | 'chat' | 'template';
+    source_ref: string | null;
+    job_id: string | null;
+    status: 'initiated' | 'policy_evaluated' | 'pending_approval' | 'approved' | 'denied' | 'executing' | 'completed' | 'failed' | 'cancelled';
+    audit_ref: string | null;
+    cost_status: {
+      state: 'captured' | 'unavailable' | 'outside_scope';
+      amount: number | null;
+      currency: 'USD' | null;
+      reason: string | null;
+    };
+    incident_ref: string | null;
+  } | null;
+  cost_status?: {
+    state: 'captured' | 'unavailable' | 'outside_scope';
+    amount: number | null;
+    currency: 'USD' | null;
+    reason: string | null;
+  } | null;
 };
 
 const ROLE_ORDER: Record<'viewer' | 'manager' | 'admin' | 'super_admin', number> = {
@@ -354,8 +374,8 @@ export default function GovernedActionsPage({
     <div className="space-y-6">
       <PageHero
         eyebrow="Governed Actions"
-        title="Every controlled app action in one ledger"
-        subtitle="Track blocked writes, approval-gated operations, and completed governed actions across apps without digging through each app drawer separately."
+        title="Every controlled system action in one ledger"
+        subtitle="Track blocked writes, approval-gated operations, and completed governed actions across connected apps without digging through each workspace separately."
         recommendation={recommendation}
         stats={[
           { label: 'Total actions', value: `${counts.total}`, detail: 'Current filtered view' },
@@ -365,7 +385,7 @@ export default function GovernedActionsPage({
         ]}
         actions={[
           { label: 'Open approvals', onClick: () => onNavigate('approvals') },
-          { label: 'Open apps', onClick: () => onNavigate('apps'), variant: 'secondary' },
+          { label: 'Review apps', onClick: () => onNavigate('apps'), variant: 'secondary' },
         ]}
       />
 
@@ -441,8 +461,10 @@ export default function GovernedActionsPage({
             const governance = item.governance;
             const result = governance?.result || (item.success ? 'succeeded' : 'failed');
             const approvalId = item.approval_id;
-            const jobId = governance?.job_id ?? null;
+            const jobId = item.governed_execution?.job_id || governance?.job_id || null;
             const approval = approvalId ? approvalsById[approvalId] : undefined;
+            const workflowStatus = item.governed_execution?.status || governance?.decision || 'executed';
+            const costStatus = item.cost_status || item.governed_execution?.cost_status || null;
             const health = healthByService[item.connector_id];
             const approvalRole = approval?.required_role || governance?.required_role || 'viewer';
             const roleAllowed = approvalRole in ROLE_ORDER && currentRole
@@ -520,9 +542,11 @@ export default function GovernedActionsPage({
                       <p className="font-semibold">{item.connector_id}.{item.action}</p>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                      <span>Workflow: {workflowStatus.replace(/_/g, ' ')}</span>
                       <span>Decision: {governance?.decision?.replace(/_/g, ' ') || 'executed'}</span>
                       <span>Role: {governance?.required_role || 'n/a'}</span>
                       <span>Duration: {item.duration_ms ? `${item.duration_ms} ms` : 'n/a'}</span>
+                      {costStatus ? <span>Cost: {costStatus.state === 'captured' && costStatus.amount != null ? `$${costStatus.amount.toFixed(4)}` : costStatus.state.replace(/_/g, ' ')}</span> : null}
                       {approval?.assigned_to ? <span>Assigned reviewer: {truncateMiddle(approval.assigned_to)}</span> : null}
                       {approval?.expires_at ? <span>Expires: {fmtDeadline(approval.expires_at)}</span> : null}
                     </div>
@@ -631,6 +655,12 @@ export default function GovernedActionsPage({
                             <p className="text-sm text-slate-300">Allowed domains: <span className="text-white">{constraints.allowed_domains.slice(0, 2).join(', ')}</span></p>
                           ) : null}
                         </div>
+                      </div>
+                    ) : null}
+                    {costStatus?.reason ? (
+                      <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Cost coverage</p>
+                        <p className="mt-2 text-sm text-slate-300">{costStatus.reason}</p>
                       </div>
                     ) : null}
                     {approval ? (

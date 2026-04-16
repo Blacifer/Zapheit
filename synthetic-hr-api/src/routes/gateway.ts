@@ -574,7 +574,7 @@ const routeViaOpenRouter = async (
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:5173',
-      'X-Title': 'Rasi Synthetic HR Gateway',
+      'X-Title': 'Zapheit Gateway',
     },
     body: JSON.stringify({
       model,
@@ -1135,7 +1135,7 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
         const remaining = quota - newCount;
         sendTransactionalEmail({
           to: alertTo,
-          subject: `[Rasi] Gateway quota warning — ${percentUsed}% used this month`,
+          subject: `[Zapheit] Gateway quota warning — ${percentUsed}% used this month`,
           html: `
             <p>Hi,</p>
             <p>Your Zapheit gateway has used <strong>${percentUsed}%</strong> of your monthly quota
@@ -1748,7 +1748,7 @@ const fetchOpenRouterEmbeddings = async (
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:5173',
-      'X-Title': 'Rasi Synthetic HR Gateway',
+      'X-Title': 'Zapheit Gateway',
     },
     body: JSON.stringify({ model, input }),
   });
@@ -1803,7 +1803,7 @@ const transcribeViaProvider = async (params: {
 
   if (isOpenRouter) {
     headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'http://localhost:5173';
-    headers['X-Title'] = 'Rasi Synthetic HR Gateway';
+    headers['X-Title'] = 'Zapheit Gateway';
   }
 
   const response = await fetch(url, {

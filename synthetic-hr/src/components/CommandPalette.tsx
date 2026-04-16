@@ -4,7 +4,7 @@ import {
   BarChart3, Users, AlertTriangle, DollarSign, MessageSquare, Shield,
   Database, Key, Settings, CheckSquare, ScrollText,
   Server, PlugZap, ClipboardList, Sparkles, Search, ArrowRight,
-  Plus, Building2, ShieldCheck, Wand2, Layers, Loader2,
+  Plus, ShieldCheck, Wand2, Layers, Loader2, Building2,
 } from 'lucide-react';
 import { api } from '../lib/api-client';
 
@@ -16,18 +16,18 @@ interface CommandPaletteProps {
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'agents', label: 'Agents', icon: Users },
-  { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
   { id: 'apps', label: 'Apps', icon: Building2 },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'agent-studio', label: 'Templates', icon: Wand2 },
+  { id: 'action-policies', label: 'Policies', icon: Shield },
+  { id: 'approvals', label: 'Approvals', icon: CheckSquare },
+  { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
+  { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
+  { id: 'costs', label: 'Costs', icon: DollarSign },
   { id: 'hubs', label: 'Hubs', icon: Layers },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'getting-started', label: 'Getting Started', icon: Sparkles },
-  { id: 'conversations', label: 'Conversations', icon: MessageSquare },
-  { id: 'costs', label: 'Costs', icon: DollarSign },
   { id: 'governed-actions', label: 'Governed Actions', icon: ShieldCheck },
-  { id: 'action-policies', label: 'Policies', icon: Shield },
-  { id: 'approvals', label: 'Approvals', icon: CheckSquare },
-  { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
-  { id: 'agent-studio', label: 'Agent Studio', icon: Wand2 },
   { id: 'execution-history', label: 'Execution History', icon: ClipboardList },
   { id: 'blackbox', label: 'Black Box', icon: Database },
   { id: 'api-webhooks', label: 'API & Webhooks', icon: Key },
@@ -38,6 +38,7 @@ const NAV_ITEMS = [
 const QUICK_ACTIONS = [
   { id: 'agents', label: 'Add New Agent', icon: Plus, hint: 'Agents' },
   { id: 'apps', label: 'Connect an App', icon: Building2, hint: 'Apps' },
+  { id: 'agent-studio', label: 'Launch a Template', icon: Wand2, hint: 'Core' },
   { id: 'incidents', label: 'Review Incidents', icon: AlertTriangle, hint: 'Trust' },
   { id: 'getting-started', label: 'Finish Setup', icon: Sparkles, hint: 'Simple' },
 ];

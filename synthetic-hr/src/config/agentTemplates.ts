@@ -42,6 +42,7 @@ export interface AgentTemplate {
   type: string;
   industry: string;
   description: string;
+  businessPurpose?: string;
   features: string[];
   // Model id from the gateway (ex: "openai/gpt-4o"). This can be overridden at deploy-time.
   model: string;
@@ -52,6 +53,11 @@ export interface AgentTemplate {
   color: string;
   roi?: string;
   complexity?: 'Basic' | 'Advanced' | 'Expert';
+  maturity?: 'Core' | 'Beta' | 'Preview';
+  riskLevel?: 'Low' | 'Medium' | 'High';
+  approvalDefault?: string;
+  requiredSystems?: string[];
+  samplePrompts?: string[];
 }
 
 export const AGENT_TEMPLATE_INDUSTRIES = [
@@ -92,6 +98,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'hr_onboarding',
     industry: 'HR',
     description: 'Guides new hires through their entire first 30 days — paperwork, introductions, tool access, and manager check-ins — automatically.',
+    businessPurpose: 'Coordinate onboarding steps, collect documents, and trigger governed access requests with a clean audit trail.',
     features: ['Day-1 Checklist', 'Document Collection', 'Tool Access Requests', '30/60/90 Day Plans', 'Manager Nudges'],
     model: 'anthropic/claude-3-5-sonnet',
     platform: 'Anthropic',
@@ -101,6 +108,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'cyan',
     roi: 'Cuts onboarding admin time by 70%',
     complexity: 'Basic',
+    maturity: 'Core',
+    riskLevel: 'Medium',
+    approvalDefault: 'Manager approval for access changes; advisory-only for reminders and checklists',
+    requiredSystems: ['HRIS or employee directory', 'Email or chat', 'Access management'],
+    samplePrompts: [
+      'Create a day-one checklist for a new engineer joining next Monday.',
+      'Draft the access requests needed for a sales manager in Mumbai.',
+    ],
   },
   {
     id: 'hr-payroll',
@@ -140,6 +155,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'hr_policy',
     industry: 'HR',
     description: 'Gives employees instant, accurate answers to HR policy questions — code of conduct, expense claims, remote work rules — with full audit trail.',
+    businessPurpose: 'Deliver governed policy answers with escalation when the request goes beyond documented rules.',
     features: ['Policy Q&A', 'Expense Guidelines', 'Remote Work Rules', 'Code of Conduct FAQs', 'Audit Trail'],
     model: 'anthropic/claude-3-5-sonnet',
     platform: 'Anthropic',
@@ -149,6 +165,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'violet',
     roi: 'Reduces policy-related interruptions to HR by 50%',
     complexity: 'Basic',
+    maturity: 'Core',
+    riskLevel: 'Low',
+    approvalDefault: 'Answer directly; escalate only for policy exceptions or missing guidance',
+    requiredSystems: ['Policy repository', 'Employee directory'],
+    samplePrompts: [
+      'What is our reimbursement policy for home internet?',
+      'When does remote work need manager approval?',
+    ],
   },
   // ── Broader domain templates ───────────────────────────────────────────────
   {
@@ -157,6 +181,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'customer_support',
     industry: 'E-commerce',
     description: 'AI-powered customer support agent for handling inquiries, order tracking, and common questions.',
+    businessPurpose: 'Resolve routine support queries, keep risky credits behind approval, and leave evidence on every customer-facing answer.',
     features: ['Order Status Lookup', 'Refund Processing', 'Product Information', 'FAQ Automation', 'Escalation Routing'],
     model: 'openai/gpt-4o-mini',
     platform: 'OpenAI',
@@ -164,6 +189,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     price: '₹25,000/month',
     icon: Headphones,
     color: 'blue',
+    maturity: 'Core',
+    riskLevel: 'Medium',
+    approvalDefault: 'Auto-answer FAQs; require approval for refunds, credits, and policy exceptions',
+    requiredSystems: ['Helpdesk', 'Order management', 'Knowledge base'],
+    samplePrompts: [
+      'Where is order #84219 and when will it arrive?',
+      'Can you process a refund for a damaged shipment?',
+    ],
   },
   {
     id: '2',
@@ -171,6 +204,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'sales',
     industry: 'B2B',
     description: 'Intelligent sales assistant for lead qualification, demo scheduling, and product recommendations.',
+    businessPurpose: 'Qualify inbound leads, draft follow-ups, and enforce approval before discounting or commitments.',
     features: ['Lead Qualification', 'Demo Scheduling', 'Product Recommendations', 'CRM Integration', 'Follow-up Automation'],
     model: 'openai/gpt-4o',
     platform: 'OpenAI',
@@ -178,6 +212,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     price: '₹35,000/month',
     icon: Target,
     color: 'green',
+    maturity: 'Core',
+    riskLevel: 'Medium',
+    approvalDefault: 'Auto-draft outreach; require approval for pricing, discounts, and contract terms',
+    requiredSystems: ['CRM', 'Calendar', 'Email'],
+    samplePrompts: [
+      'Qualify this inbound lead and draft a follow-up email.',
+      'Prepare a demo handoff summary for the account executive.',
+    ],
   },
   {
     id: '3',
@@ -199,6 +241,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'legal',
     industry: 'Legal',
     description: 'Legal document assistant for contract review, compliance checking, and risk assessment.',
+    businessPurpose: 'Review clauses, surface legal risk, and prepare escalations without letting AI silently approve contract language.',
     features: ['Contract Review', 'Compliance Check', 'Risk Assessment', 'Document Summarization', 'Clause Analysis'],
     model: 'anthropic/claude-3-5-sonnet',
     platform: 'Anthropic',
@@ -206,6 +249,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     price: '₹50,000/month',
     icon: ShieldCheck,
     color: 'red',
+    maturity: 'Core',
+    riskLevel: 'High',
+    approvalDefault: 'Always require legal approval before any outward recommendation or contract action',
+    requiredSystems: ['Document repository', 'Clause library'],
+    samplePrompts: [
+      'Summarize the termination clause risks in this vendor agreement.',
+      'Highlight non-standard indemnity language that needs counsel review.',
+    ],
   },
   {
     id: '5',
@@ -213,6 +264,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     type: 'finance',
     industry: 'Banking',
     description: 'Financial services bot for account queries, loan applications, and transaction support.',
+    businessPurpose: 'Support finance operations with governed responses, cost visibility, and approvals around sensitive money movement.',
     features: ['Account Queries', 'Loan Applications', 'Transaction Support', 'Fraud Detection', 'Compliance Verification'],
     model: 'openai/gpt-4o',
     platform: 'OpenAI',
@@ -220,6 +272,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     price: '₹45,000/month',
     icon: Wallet,
     color: 'amber',
+    maturity: 'Core',
+    riskLevel: 'High',
+    approvalDefault: 'Require approval for payment actions, waivers, and high-risk customer decisions',
+    requiredSystems: ['Core finance system', 'Ticketing', 'Compliance records'],
+    samplePrompts: [
+      'Prepare a summary of failed payout attempts from the last 24 hours.',
+      'Draft the analyst notes for this flagged transaction.',
+    ],
   },
   {
     id: '6',

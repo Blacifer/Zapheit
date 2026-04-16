@@ -36,7 +36,7 @@ const SNIPPET_CURL = (baseUrl: string, apiKey: string) =>
   }'`;
 
 const SNIPPET_NODE = (baseUrl: string, apiKey: string) =>
-  `import { RasiClient } from '@rasi/sdk'; // coming soon
+  `import { ZapheitClient } from '@zapheit/sdk'; // coming soon
 // Or call the REST API directly:
 const res = await fetch('${baseUrl}/events/inbound', {
   method: 'POST',

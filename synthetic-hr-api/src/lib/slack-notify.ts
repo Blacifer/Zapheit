@@ -1,5 +1,5 @@
 /**
- * Slack notification service for Rasi governance events.
+ * Slack notification service for Zapheit governance events.
  *
  * Looks up the org's connected Slack integration, then posts formatted
  * Block Kit messages for incidents and HITL approval requests.
@@ -138,7 +138,7 @@ export async function notifySlackIncident(orgId: string, params: {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: 'View in Rasi', emoji: true },
+              text: { type: 'plain_text', text: 'View in Zapheit', emoji: true },
               url,
               style: 'primary',
             },

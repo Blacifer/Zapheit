@@ -10,6 +10,7 @@ import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { IMPLEMENTED_INTEGRATIONS, getIntegrationSpec } from '../lib/integrations/spec-registry';
 import { getAdapter } from '../lib/integrations/adapters';
 import { normalizeGovernedActionSummary } from '../lib/governed-actions';
+import { buildApprovalSummaryFromApprovalRequest, buildGovernedExecutionSummary } from '../lib/governed-workflow';
 import type {
   IntegrationActionOperation,
   IntegrationActionRisk,
@@ -1245,6 +1246,17 @@ const listGovernedActions = async (req: any, res: any) => {
     }
   }
 
+  const approvalIds = (rows || []).map((row) => String(row.approval_id || '')).filter(Boolean);
+  const approvalsById = new Map<string, any>();
+  if (approvalIds.length) {
+    const approvalQuery = new URLSearchParams();
+    approvalQuery.set('organization_id', eq(orgId));
+    approvalQuery.set('id', in_(approvalIds));
+    approvalQuery.set('select', '*');
+    const approvalRows = await safeQuery<any>(rest, 'approval_requests', approvalQuery);
+    for (const approvalRow of approvalRows || []) approvalsById.set(approvalRow.id, approvalRow);
+  }
+
   let data = (rows || []).map((row) => {
     const retry = queueByExecution.get(`${row.connector_id}:${row.action}`);
     const breaker = breakerByConnector.get(row.connector_id);
@@ -1312,6 +1324,14 @@ const listGovernedActions = async (req: any, res: any) => {
       };
     })();
 
+    const approval = row.approval_id ? approvalsById.get(row.approval_id) || null : null;
+    const approvalSummary = approval ? buildApprovalSummaryFromApprovalRequest(approval, null) : null;
+    const governedExecution = buildGovernedExecutionSummary({
+      approval,
+      execution: row,
+      approvalSummary,
+    });
+
     return {
       ...row,
       reliability_state: reliabilityState,
@@ -1323,6 +1343,13 @@ const listGovernedActions = async (req: any, res: any) => {
       delegated_actor: governed.delegated_actor ?? null,
       audit_ref: governed.audit_ref ?? null,
       governance: governed,
+      approval_summary: approvalSummary,
+      governed_execution: governedExecution,
+      cost_status: governedExecution.cost_status,
+      source: governedExecution.source,
+      source_ref: governedExecution.source_ref,
+      governance_status: governedExecution.status,
+      incident_ref: governedExecution.incident_ref,
     };
   });
   if (decision) data = data.filter((row) => row.governance?.decision === decision);

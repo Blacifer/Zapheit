@@ -308,7 +308,7 @@ async function callLLMWithTools(
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://rasi.ai', 'X-Title': 'Rasi Employee Portal' } : {}),
+      ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://zapheit.com', 'X-Title': 'Zapheit Employee Portal' } : {}),
     },
     body: JSON.stringify({
       model: upstreamModel,
@@ -343,7 +343,7 @@ async function streamOpenAICompat(
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://rasi.ai', 'X-Title': 'Rasi Employee Portal' } : {}),
+      ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://zapheit.com', 'X-Title': 'Zapheit Employee Portal' } : {}),
     },
     body: JSON.stringify({ model, messages, stream: true, max_tokens: 1024 }),
   });

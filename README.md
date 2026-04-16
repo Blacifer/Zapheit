@@ -35,6 +35,16 @@ cd synthetic-hr-runtime && npm install && npm run dev
 
 See `synthetic-hr/README.md` and `synthetic-hr-database/DEPLOYMENT_GUIDE.md` for full setup.
 
+## Production gate
+
+From the repository root:
+
+```bash
+npm run production:gate
+```
+
+This validates the required production builds for frontend, API, and runtime. For the release checklist and the manual governed workflow gate, use [`docs/PRODUCTION_READINESS_RUNBOOK.md`](docs/PRODUCTION_READINESS_RUNBOOK.md).
+
 ## Self-host / deploy to GCP
 
 ```bash

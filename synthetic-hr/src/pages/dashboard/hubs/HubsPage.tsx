@@ -72,8 +72,13 @@ export default function HubsPage() {
           <Layers className="w-5 h-5 text-cyan-300" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white">Hubs</h1>
-          <p className="text-sm text-slate-400">Domain-specific operational dashboards</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold text-white">Hubs</h1>
+            <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+              Beta
+            </span>
+          </div>
+          <p className="text-sm text-slate-400">Department-facing workspaces stay visible here while the launch story stays centered on governance, approvals, audit, and cost control.</p>
         </div>
       </div>
 

@@ -426,10 +426,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   }, []);
 
   const stats = [
-    { icon: Users, value: 500, label: 'AI Agents Governed' },
-    { icon: DollarSign, value: 15, label: 'Million Tokens Managed', suffix: 'M' },
-    { icon: TrendingDown, value: 40, label: 'Avg Cost Reduction', suffix: '%' },
-    { icon: Award, value: 50, label: 'Enterprise Clients' },
+    { icon: Users, value: 1, label: 'Control plane for your organization' },
+    { icon: DollarSign, value: 24, label: 'Hour cost visibility', suffix: '/7' },
+    { icon: TrendingDown, value: 4, label: 'Core operating loops' },
+    { icon: Award, value: 3, label: 'Launch-ready operator motions' },
   ];
 
   const pillars = [
@@ -444,10 +444,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       features: [
         'OpenAI-compatible proxy for any agent',
         'Every request & response logged',
-        'Multi-provider: OpenAI, Anthropic, 340+ models',
+        'Multi-provider routing across OpenAI, Anthropic, Google, and others',
         'Per-agent usage dashboards'
       ],
-      impact: '100% Visibility'
+      impact: 'Full visibility'
     },
     {
       id: 2,
@@ -495,7 +495,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         'Safe Harbor SLA & contract management',
         'DPDPA & NIST AI RMF compliance mapping'
       ],
-      impact: '100% Auditable'
+      impact: 'Evidence ready'
     },
     {
       id: 5,
@@ -527,28 +527,28 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         'Budget alerts & auto-throttling',
         'Model comparison: cost vs performance'
       ],
-      impact: '↓47% Avg Cost'
+      impact: 'Spend control'
     }
   ];
 
   const testimonials = [
     {
-      name: 'Sarah Chen',
-      role: 'CTO at FinTech Corp',
-      text: 'Reduced our AI operational costs by 47% in the first month. The governance framework is a game-changer.',
-      avatar: '👩‍💼'
+      name: 'Ops teams',
+      role: 'Start with one governed workflow',
+      text: 'Route risky actions into approval, keep everything logged, and give operators one place to intervene.',
+      avatar: '🧭'
     },
     {
-      name: 'Michael Rodriguez',
-      role: 'VP Ops at SaaS Platform',
-      text: 'Finally have visibility into what our 80+ AI agents are doing. This is infrastructure we should have built years ago.',
-      avatar: '👨‍💼'
+      name: 'Compliance teams',
+      role: 'Package evidence faster',
+      text: 'Move from scattered screenshots and ad hoc exports to one audit trail with incidents, approvals, and cost context attached.',
+      avatar: '🛡️'
     },
     {
-      name: 'Priya Patel',
-      role: 'Founder at AI Agency',
-      text: 'Our clients love the transparency and control. We charge more, deliver better, and sleep better at night.',
-      avatar: '👩‍💻'
+      name: 'Finance teams',
+      role: 'See observed spend earlier',
+      text: 'Track Zapheit-observed usage by agent and catch runaway prompts before they quietly become an end-of-month surprise.',
+      avatar: '📊'
     }
   ];
 
@@ -711,7 +711,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
             Zapheit gives your team one place to <span className="text-slate-100 font-semibold">see live activity, catch risky behavior, and stay in control</span> without slowing down delivery —
             <br className="hidden md:block" />
-            whether the agents run in your app, your support stack, or your internal workflows.
+            whether the agents run across connected apps, your support stack, or your internal workflows.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
@@ -736,9 +736,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           {/* Floating stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { value: '1 View', label: 'for agents, incidents, apps, and spend' },
+              { value: '1 View', label: 'for agents, incidents, approvals, and spend' },
               { value: '<10 min', label: 'to first useful signal' },
-              { value: '-47%', label: 'average cost reduction' },
+              { value: 'Audit', label: 'trail attached to governed actions' },
               { value: 'DPDPA', label: 'India-ready controls' }
             ].map((stat, i) => (
               <div
@@ -847,7 +847,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 step: 1,
                 icon: FileText,
                 title: 'Connect',
-                desc: 'Point any AI agent at the Zapheit gateway so traffic, cost, and risk all have one home.'
+                desc: 'Connect an app or point any AI agent at the Zapheit gateway so traffic, app actions, cost, and risk all have one home.'
               },
               {
                 step: 2,
@@ -948,8 +948,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center mb-12 md:mb-16">
-            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Trusted by Teams</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Real Results, Real Impact</h2>
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Common Operating Wins</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Where teams start seeing value first</h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
@@ -965,7 +965,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                     <p className="text-sm text-slate-400">{testimonial.role}</p>
                   </div>
                 </div>
-                <p className="text-slate-300 italic">"{testimonial.text}"</p>
+                <p className="text-slate-300">{testimonial.text}</p>
               </div>
             ))}
           </div>
@@ -977,7 +977,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Built for India</span>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">The Only AI Governance Platform That's India-Native</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Built with India-ready controls and workflows</h2>
             <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">INR pricing. DPDPA compliance. Aadhaar & PAN detection. India-specific integrations. No USD conversion surprises.</p>
           </div>
 
@@ -987,7 +987,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               { icon: Gauge, title: 'LLM Gateway Proxy', desc: 'OpenAI-compatible endpoint. One line of code to route any agent through Zapheit. Incident detection + cost tracking starts immediately.' },
               { icon: Shield, title: 'India-Specific PII', desc: 'Detects Aadhaar numbers, PAN cards, UPI IDs, and Indian bank accounts in real-time — not just generic SSN/credit card patterns.' },
               { icon: Target, title: 'DPDPA Compliance', desc: 'Mapping to India\'s Digital Personal Data Protection Act 2023. Built-in breach notification, data principal rights, and audit evidence.' },
-              { icon: TrendingUp, title: 'INR Pricing', desc: 'From ₹0 (free tier) to ₹15K–₹60K/month. No per-seat pricing. No USD conversion. Designed for Indian mid-market teams.' },
+              { icon: TrendingUp, title: 'INR Pricing', desc: 'Pilot, retainer, and enterprise pricing in INR. No per-seat surprises and no USD conversion for Indian teams.' },
               { icon: Award, title: 'VPC-Ready Runtime', desc: 'Run governance workers inside your own VPC. Secure outbound-only polling — no inbound ports, no data leaving your network.' },
             ].map((item, i) => (
               <div

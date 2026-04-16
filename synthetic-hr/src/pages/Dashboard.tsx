@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, DollarSign, Settings, X,
-  Layers, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, Menu,
+  Sparkles, ChevronLeft, MessageSquare, AlertTriangle, Menu, Building2,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -97,7 +97,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const location = useLocation();
   // Derive current page from URL path and normalize old route names.
   const rawCurrentPage = location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || 'overview';
-  const currentPage = rawCurrentPage === 'fleet' ? 'agents' : rawCurrentPage;
+  const currentPage = rawCurrentPage === 'fleet'
+    ? 'agents'
+    : rawCurrentPage === 'conversations'
+      ? 'chat'
+      : rawCurrentPage;
   const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
 
@@ -682,9 +686,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {([
                   { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
                   { id: 'agents', icon: Users, label: 'Agents', badge: null },
+                  { id: 'apps', icon: Building2, label: 'Apps', badge: null },
+                  { id: 'chat', icon: MessageSquare, label: 'Chat', badge: null },
+                  { id: 'agent-studio', icon: Sparkles, label: 'Templates', badge: null },
+                  { id: 'action-policies', icon: Sparkles, label: 'Policies', badge: null },
+                  { id: 'approvals', icon: Sparkles, label: 'Approvals', badge: null },
                   { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
-                  { id: 'apps', icon: Layers, label: 'Apps', badge: null },
-                  { id: 'settings', icon: Settings, label: 'Settings', badge: null },
+                  { id: 'audit-log', icon: Sparkles, label: 'Audit', badge: null },
+                  { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
                 ] as const).map((item) => (
                   <button key={item.id} data-tour={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -694,9 +703,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 ))}
 
                 <div className="my-2 border-t border-white/[0.06]" />
-                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Advanced</p>
-                {(['templates', 'agent-library', 'models', 'playbooks', 'action-policies', 'conversations', 'costs'] as const).map((id) => {
-                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', models: 'Model Catalog', playbooks: 'Playbooks', 'action-policies': 'Action Policies', conversations: 'Conversations', costs: 'Costs' };
+                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Business Workspaces</p>
+                {(['hubs', 'governed-actions', 'work-items', 'coverage', 'ctc-calculator', 'blackbox'] as const).map((id) => {
+                  const labels: Record<string, string> = { hubs: 'Hubs', 'governed-actions': 'Governed Actions', 'work-items': 'Work Items', coverage: 'Coverage', 'ctc-calculator': 'CTC Calculator', blackbox: 'Black Box' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -705,8 +714,10 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   );
                 })}
 
-                {(['governed-actions', 'approvals', 'audit-log', 'api-access', 'developer', 'jobs', 'blackbox', 'runtime-workers'] as const).map((id) => {
-                  const labels: Record<string, string> = { 'governed-actions': 'Governed Actions', approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access', developer: 'Developer', jobs: 'Run History', blackbox: 'Black Box', 'runtime-workers': 'Runtime Workers' };
+                <div className="my-2 border-t border-white/[0.06]" />
+                <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Admin & Developer</p>
+                {(['settings', 'api-webhooks', 'developer', 'execution-history', 'platform'] as const).map((id) => {
+                  const labels: Record<string, string> = { settings: 'Settings', 'api-webhooks': 'API & Webhooks', developer: 'Developer', 'execution-history': 'Execution History', platform: 'Platform' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -858,7 +869,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               <p className="mb-8 text-xs text-slate-500">The governance clock is running — costs, incidents, and policies are now active.</p>
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => { dismissAgentAlive(); navigateTo('conversations'); }}
+                  onClick={() => { dismissAgentAlive(); navigateTo('chat'); }}
                   className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
                 >
                   View First Conversation
@@ -1087,7 +1098,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="playbooks" element={<Navigate to="/dashboard/agent-studio?tab=playbooks" replace />} />
                   <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="apps" element={
-                    <SectionErrorBoundary fallbackMessage="Apps & integrations failed to load">
+                    <SectionErrorBoundary fallbackMessage="Apps failed to load">
                       <AppsPage onNavigate={navigateTo} agents={enrichedAgents} />
                     </SectionErrorBoundary>
                   } />
@@ -1118,11 +1129,12 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="identity-hub" element={<Navigate to="/dashboard/hubs?domain=identity" replace />} />
                   <Route path="marketplace" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="integrations" element={<Navigate to="/dashboard/apps" replace />} />
-                  <Route path="conversations" element={
-                    <SectionErrorBoundary fallbackMessage="Conversations failed to load">
+                  <Route path="chat" element={
+                    <SectionErrorBoundary fallbackMessage="Governed chat failed to load">
                       <ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />
                     </SectionErrorBoundary>
                   } />
+                  <Route path="conversations" element={<Navigate to="/dashboard/chat" replace />} />
                   <Route path="incidents" element={
                     <SectionErrorBoundary fallbackMessage="Incidents failed to load">
                       <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />

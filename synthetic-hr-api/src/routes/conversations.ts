@@ -1,11 +1,64 @@
 import express, { Request, Response } from 'express';
+import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
 import { supabaseRestAsUser, eq, in_ } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt } from '../lib/route-helpers';
 import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
+import {
+  buildApprovalSummaryFromJobApproval,
+  buildGovernedExecutionSummary,
+  inferWorkflowEntrySource,
+} from '../lib/governed-workflow';
 
 const router = express.Router();
+const getUserId = (req: Request): string | null => req.user?.id || null;
+
+const composeChatSchema = z.object({
+  agent_id: z.string().min(1),
+  prompt: z.string().min(1),
+  conversation_id: z.string().uuid().optional(),
+  mode: z.enum(['operator', 'employee', 'external']).optional().default('operator'),
+  template_id: z.string().min(1).optional(),
+  template_context: z.object({
+    name: z.string().optional(),
+    businessPurpose: z.string().optional(),
+    riskLevel: z.string().optional(),
+    approvalDefault: z.string().optional(),
+    requiredSystems: z.array(z.string()).optional(),
+  }).optional(),
+  app_target: z.object({
+    service: z.string().optional(),
+    label: z.string().optional(),
+  }).optional(),
+});
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function summarizePrompt(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return 'Conversation';
+  return trimmed.replace(/\s+/g, ' ').slice(0, 80);
+}
+
+function buildJobView(job: any, approval: any = null) {
+  const approvalSummary = approval ? buildApprovalSummaryFromJobApproval(approval, job) : null;
+  const governedExecution = buildGovernedExecutionSummary({ job, approval, approvalSummary });
+  return {
+    ...job,
+    approval,
+    approval_summary: approvalSummary,
+    governed_execution: governedExecution,
+    source: governedExecution.source,
+    source_ref: governedExecution.source_ref,
+    governance_status: governedExecution.status,
+    cost_status: governedExecution.cost_status,
+    audit_ref: governedExecution.audit_ref,
+    incident_ref: governedExecution.incident_ref,
+  };
+}
 
 // Get conversations list
 router.get('/conversations', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
@@ -40,6 +93,291 @@ router.get('/conversations', requirePermission('dashboard.read'), async (req: Re
     logger.info('Conversations fetched successfully', { count: paged.data?.length, org_id: orgId });
 
     res.json({ success: true, data: paged.data, count: paged.data?.length || 0, next_cursor: paged.next_cursor, has_more: paged.has_more });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
+router.post('/conversations/chat', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    const userId = getUserId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    if (!userId) return errorResponse(res, new Error('Authentication required'), 401);
+
+    const parsed = composeChatSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        errors: parsed.error.errors.map((error) => error.message),
+      });
+    }
+
+    const data = parsed.data;
+    const agentQuery = new URLSearchParams();
+    agentQuery.set('id', eq(data.agent_id));
+    agentQuery.set('organization_id', eq(orgId));
+    agentQuery.set('select', 'id,name,system_prompt,model_name,status');
+    agentQuery.set('limit', '1');
+    const agentRows = (await supabaseRestAsUser(jwt, 'ai_agents', agentQuery)) as any[];
+    const agent = agentRows?.[0];
+    if (!agent) {
+      return res.status(404).json({ success: false, error: 'Agent not found' });
+    }
+
+    if (String(agent.status || '').toLowerCase() === 'terminated') {
+      return res.status(409).json({ success: false, error: 'Agent is terminated' });
+    }
+
+    const deploymentQuery = new URLSearchParams();
+    deploymentQuery.set('organization_id', eq(orgId));
+    deploymentQuery.set('agent_id', eq(data.agent_id));
+    deploymentQuery.set('status', eq('active'));
+    deploymentQuery.set('select', '*');
+    deploymentQuery.set('limit', '1');
+    const deploymentRows = (await supabaseRestAsUser(jwt, 'agent_deployments', deploymentQuery)) as any[];
+    const deployment = deploymentRows?.[0];
+    if (!deployment) {
+      return res.status(409).json({ success: false, error: 'Agent is not deployed to an active runtime' });
+    }
+
+    const now = nowIso();
+
+    let conversation: any | null = null;
+    if (data.conversation_id) {
+      const conversationQuery = new URLSearchParams();
+      conversationQuery.set('id', eq(data.conversation_id));
+      conversationQuery.set('organization_id', eq(orgId));
+      conversationQuery.set('select', '*');
+      conversationQuery.set('limit', '1');
+      const existingConversation = (await supabaseRestAsUser(jwt, 'conversations', conversationQuery)) as any[];
+      conversation = existingConversation?.[0] || null;
+    }
+
+    if (!conversation) {
+      const createdConversations = (await supabaseRestAsUser(jwt, 'conversations', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          agent_id: data.agent_id,
+          platform: 'internal',
+          status: 'active',
+          started_at: now,
+          created_at: now,
+          metadata: {
+            topic: summarizePrompt(data.prompt),
+            preview: data.prompt.slice(0, 200),
+            last_user_message: data.prompt.slice(0, 200),
+            user_label: req.user?.email || 'Operator',
+            mode: data.mode,
+            template_id: data.template_id || null,
+            template_name: data.template_context?.name || null,
+            app_target: data.app_target || null,
+          },
+        },
+        headers: { Prefer: 'return=representation' },
+      })) as any[];
+      conversation = createdConversations?.[0] || null;
+    } else {
+      const patchConversationQuery = new URLSearchParams();
+      patchConversationQuery.set('id', eq(conversation.id));
+      patchConversationQuery.set('organization_id', eq(orgId));
+      const updatedConversations = (await supabaseRestAsUser(jwt, 'conversations', patchConversationQuery, {
+        method: 'PATCH',
+        body: {
+          status: 'active',
+          metadata: {
+            ...(conversation.metadata && typeof conversation.metadata === 'object' ? conversation.metadata : {}),
+            preview: data.prompt.slice(0, 200),
+            last_user_message: data.prompt.slice(0, 200),
+            mode: data.mode,
+            template_id: data.template_id || null,
+            template_name: data.template_context?.name || null,
+            app_target: data.app_target || null,
+          },
+        },
+        headers: { Prefer: 'return=representation' },
+      })) as any[];
+      conversation = updatedConversations?.[0] || conversation;
+    }
+
+    if (!conversation?.id) {
+      return res.status(500).json({ success: false, error: 'Failed to create conversation' });
+    }
+
+    const createdMessages = (await supabaseRestAsUser(jwt, 'messages', '', {
+      method: 'POST',
+      body: {
+        conversation_id: conversation.id,
+        role: 'user',
+        content: data.prompt,
+        token_count: 0,
+        created_at: now,
+      },
+      headers: { Prefer: 'return=representation' },
+    })) as any[];
+    const userMessage = createdMessages?.[0] || null;
+
+    const messageHistoryQuery = new URLSearchParams();
+    messageHistoryQuery.set('conversation_id', eq(conversation.id));
+    messageHistoryQuery.set('order', 'created_at.asc');
+    messageHistoryQuery.set('select', 'role,content');
+    const messageHistory = (await supabaseRestAsUser(jwt, 'messages', messageHistoryQuery)) as any[];
+
+    const systemSections = [
+      String(agent.system_prompt || '').trim(),
+      data.template_context?.name ? `Template: ${data.template_context.name}` : '',
+      data.template_context?.businessPurpose ? `Business purpose: ${data.template_context.businessPurpose}` : '',
+      data.template_context?.riskLevel ? `Risk level: ${data.template_context.riskLevel}` : '',
+      data.template_context?.approvalDefault ? `Approval default: ${data.template_context.approvalDefault}` : '',
+      Array.isArray(data.template_context?.requiredSystems) && data.template_context.requiredSystems.length > 0
+        ? `Required systems: ${data.template_context.requiredSystems.join(', ')}`
+        : '',
+      data.app_target?.label || data.app_target?.service
+        ? `Preferred app context: ${data.app_target.label || data.app_target.service}`
+        : '',
+      `Chat mode: ${data.mode}`,
+    ].filter((value) => value && value.length > 0);
+
+    const historyMessages = (messageHistory || []).map((message: any) => ({
+      role: String(message.role || 'user'),
+      content: String(message.content || ''),
+    }));
+
+    const workflowSource = data.template_id ? 'template' : 'chat';
+    const workflowMeta = {
+      source: workflowSource,
+      source_ref: conversation.id,
+    };
+
+    const jobType = data.template_id ? 'workflow_run' : 'chat_turn';
+    const jobInput = data.template_id
+      ? {
+          workflow: {
+            source: workflowMeta.source,
+            source_ref: workflowMeta.source_ref,
+            steps: [{
+              id: 'template-chat',
+              kind: 'llm',
+              model: agent.model_name || 'openai/gpt-4o-mini',
+              temperature: 0.3,
+              messages: [
+                { role: 'system', content: systemSections.join('\n\n') },
+                ...historyMessages,
+              ],
+            }],
+            final_step: 'template-chat',
+          },
+          fields: {
+            prompt: data.prompt,
+          },
+          conversation_id: conversation.id,
+          mode: data.mode,
+          template_id: data.template_id,
+          app_target: data.app_target || null,
+        }
+      : {
+          workflow: workflowMeta,
+          messages: [
+            { role: 'system', content: systemSections.join('\n\n') || 'You are a helpful assistant.' },
+            ...historyMessages,
+          ],
+          model: agent.model_name || 'openai/gpt-4o-mini',
+          temperature: 0.3,
+          conversation_id: conversation.id,
+          mode: data.mode,
+          template_id: data.template_id || null,
+          app_target: data.app_target || null,
+        };
+
+    const createdJobs = (await supabaseRestAsUser(jwt, 'agent_jobs', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id: data.agent_id,
+        runtime_instance_id: deployment.runtime_instance_id,
+        type: jobType,
+        status: 'queued',
+        input: jobInput,
+        output: {},
+        created_by: userId,
+        created_at: now,
+      },
+      headers: { Prefer: 'return=representation' },
+    })) as any[];
+    const job = createdJobs?.[0];
+    if (!job?.id) {
+      return res.status(500).json({ success: false, error: 'Failed to create chat job' });
+    }
+
+    const createdApprovals = (await supabaseRestAsUser(jwt, 'agent_job_approvals', '', {
+      method: 'POST',
+      body: {
+        job_id: job.id,
+        requested_by: userId,
+        approved_by: userId,
+        status: 'approved',
+        policy_snapshot: {
+          workflow: workflowMeta,
+          chat_mode: data.mode,
+          template_id: data.template_id || null,
+          template_name: data.template_context?.name || null,
+          app_target: data.app_target || null,
+        },
+        created_at: now,
+        decided_at: now,
+      },
+      headers: { Prefer: 'return=representation' },
+    })) as any[];
+    const approval = createdApprovals?.[0] || null;
+
+    const updatedConversationQuery = new URLSearchParams();
+    updatedConversationQuery.set('id', eq(conversation.id));
+    updatedConversationQuery.set('organization_id', eq(orgId));
+    const updatedConversations = (await supabaseRestAsUser(jwt, 'conversations', updatedConversationQuery, {
+      method: 'PATCH',
+      body: {
+        metadata: {
+          ...(conversation.metadata && typeof conversation.metadata === 'object' ? conversation.metadata : {}),
+          latest_job_id: job.id,
+          mode: data.mode,
+          template_id: data.template_id || null,
+          template_name: data.template_context?.name || null,
+          app_target: data.app_target || null,
+        },
+      },
+      headers: { Prefer: 'return=representation' },
+    })) as any[];
+    conversation = updatedConversations?.[0] || conversation;
+
+    const messagesQuery = new URLSearchParams();
+    messagesQuery.set('conversation_id', eq(conversation.id));
+    messagesQuery.set('order', 'created_at.asc');
+    const messages = (await supabaseRestAsUser(jwt, 'messages', messagesQuery)) as any[];
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        conversation: { ...conversation, messages: messages || [] },
+        message: userMessage,
+        job: buildJobView(job, approval),
+        approval,
+        session: {
+          session_id: conversation.id,
+          mode: data.mode,
+          agent_id: data.agent_id,
+          template_id: data.template_id || null,
+          source: inferWorkflowEntrySource({ job: { type: jobType, input: jobInput } as any }),
+          source_ref: conversation.id,
+          governed_execution: buildJobView(job, approval).governed_execution,
+          approval_summary: buildJobView(job, approval).approval_summary || null,
+          audit_ref: buildJobView(job, approval).audit_ref || null,
+          cost_status: buildJobView(job, approval).cost_status || null,
+          incident_ref: buildJobView(job, approval).incident_ref || null,
+        },
+      },
+    });
   } catch (error: any) {
     errorResponse(res, error);
   }

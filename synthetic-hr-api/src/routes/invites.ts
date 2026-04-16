@@ -47,10 +47,10 @@ const buildInviteLink = (token: string): string => {
 };
 
 const sendInviteEmail = async (to: string, inviteLink: string, role: string, message?: string) => {
-  const subject = 'You are invited to Synthetic HR';
+  const subject = 'You are invited to Zapheit';
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-      <h2 style="margin-bottom: 8px;">You have been invited to Synthetic HR</h2>
+      <h2 style="margin-bottom: 8px;">You have been invited to Zapheit</h2>
       <p style="margin: 0 0 12px 0;">Role: <strong>${role}</strong></p>
       ${message ? `<p style="margin: 0 0 12px 0;">Message: ${message}</p>` : ''}
       <p style="margin: 0 0 16px 0;">This invite expires in 7 days.</p>
@@ -65,7 +65,7 @@ const sendInviteEmail = async (to: string, inviteLink: string, role: string, mes
     to,
     subject,
     html,
-    text: `You have been invited to Synthetic HR as ${role}. Accept: ${inviteLink}`,
+    text: `You have been invited to Zapheit as ${role}. Accept: ${inviteLink}`,
   });
 };
 

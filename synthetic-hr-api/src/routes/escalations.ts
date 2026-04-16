@@ -705,7 +705,7 @@ async function escalateToPagerDuty(
               urgency: severity === 'critical' ? 'high' : 'low',
               body: {
                 type: 'incident_body',
-                details: notes || 'Escalated from Synthetic HR',
+                details: notes || 'Escalated from Zapheit',
               },
             },
           ],
@@ -761,7 +761,7 @@ async function escalateToEmail(
     throw new Error('No escalation email recipient configured (assignee, org.settings.incident_email_recipient, or ALERT_EMAIL_TO)');
   }
 
-  const subject = `[${severity.toUpperCase()}] Synthetic HR Incident: ${incident.incident_type}`;
+  const subject = `[${severity.toUpperCase()}] Zapheit Incident: ${incident.incident_type}`;
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
       <h2 style="margin-bottom: 8px;">Incident Escalation</h2>

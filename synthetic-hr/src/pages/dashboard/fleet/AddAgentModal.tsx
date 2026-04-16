@@ -264,7 +264,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
               </div>
               {selectedModelData && (
                 <div className="flex items-center justify-between text-xs bg-purple-500/10 p-2.5 rounded-lg border border-purple-500/20">
-                  <span className="text-purple-300/80 font-medium">RasiAI Gateway Pricing</span>
+                  <span className="text-purple-300/80 font-medium">Zapheit Gateway Pricing</span>
                   <span className="font-mono text-purple-300">{formatPrice(selectedModelData)}</span>
                 </div>
               )}

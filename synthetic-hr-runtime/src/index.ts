@@ -216,7 +216,7 @@ async function enroll(): Promise<void> {
     body: JSON.stringify({
       runtime_id: RUNTIME_ID,
       enrollment_token: ENROLLMENT_TOKEN,
-      version: 'synthetic-hr-runtime/0.1.0',
+      version: 'zapheit-runtime/0.1.0',
       capabilities: {
         jobTypes: ['chat_turn', 'workflow_run', 'connector_action'],
         modes: [STREAM_MODE],
@@ -244,7 +244,7 @@ async function heartbeat(): Promise<void> {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
     body: JSON.stringify({
       status: 'online',
-      version: 'synthetic-hr-runtime/0.1.0',
+      version: 'zapheit-runtime/0.1.0',
     }),
   });
   if (!response.ok) {
@@ -891,7 +891,7 @@ async function main() {
   const HEALTH_PORT = Number(env('HEALTH_PORT', '3002'));
   const healthServer = http.createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', service: 'synthetic-hr-runtime' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'zapheit-runtime' }));
   });
   healthServer.listen(HEALTH_PORT, () => {
     console.log(`[runtime] health server listening on :${HEALTH_PORT}`);

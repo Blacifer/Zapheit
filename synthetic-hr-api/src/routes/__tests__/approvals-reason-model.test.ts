@@ -60,6 +60,12 @@ describe('Approvals Routes - normalized reason model', () => {
     mockUserRest.mockReset();
     mockServiceRest.mockReset();
     mockServiceRest.mockResolvedValue([]);
+    mockUserRest.mockImplementation(async (_jwt: string, table: string) => {
+      if (table === 'approval_requests') return [];
+      if (table === 'agent_jobs') return [];
+      if (table === 'agent_job_approvals') return [];
+      return [];
+    });
   });
 
   async function invokeApprovalsListRoute() {
@@ -108,29 +114,36 @@ describe('Approvals Routes - normalized reason model', () => {
   }
 
   it('maps approval statuses to reason fields for operator clarity', async () => {
-    mockUserRest.mockResolvedValue([
-      {
-        id: 'pending-1',
-        status: 'pending',
-      },
-      {
-        id: 'denied-1',
-        status: 'denied',
-        reviewer_note: 'Denied due to destination policy.',
-      },
-      {
-        id: 'expired-1',
-        status: 'expired',
-      },
-      {
-        id: 'cancelled-1',
-        status: 'cancelled',
-      },
-      {
-        id: 'approved-1',
-        status: 'approved',
-      },
-    ] as any);
+    mockUserRest.mockImplementation(async (_jwt: string, table: string) => {
+      if (table === 'approval_requests') {
+        return [
+          {
+            id: 'pending-1',
+            status: 'pending',
+          },
+          {
+            id: 'denied-1',
+            status: 'denied',
+            reviewer_note: 'Denied due to destination policy.',
+          },
+          {
+            id: 'expired-1',
+            status: 'expired',
+          },
+          {
+            id: 'cancelled-1',
+            status: 'cancelled',
+          },
+          {
+            id: 'approved-1',
+            status: 'approved',
+          },
+        ] as any;
+      }
+      if (table === 'agent_jobs') return [];
+      if (table === 'agent_job_approvals') return [];
+      return [];
+    });
 
     const res = await invokeApprovalsListRoute();
     expect(res.statusCode).toBe(200);
@@ -151,5 +164,57 @@ describe('Approvals Routes - normalized reason model', () => {
     expect(byId.get('approved-1')?.reason_category).toBeNull();
     expect(byId.get('approved-1')?.reason_message).toBeNull();
     expect(byId.get('approved-1')?.recommended_next_action).toBeNull();
+  });
+
+  it('merges governed job approvals into the approvals inbox with normalized metadata', async () => {
+    mockUserRest.mockImplementation(async (_jwt: string, table: string) => {
+      if (table === 'approval_requests') return [];
+      if (table === 'agent_jobs') {
+        return [{
+          id: 'job-1',
+          organization_id: '22222222-2222-4222-8222-222222222222',
+          agent_id: 'agent-1',
+          type: 'connector_action',
+          status: 'pending_approval',
+          input: {
+            connector: {
+              service: 'slack',
+              action: 'comms.message.send',
+              params: { channel: '#ops' },
+            },
+          },
+          output: {},
+          created_at: '2026-04-16T10:00:00.000Z',
+        }] as any;
+      }
+      if (table === 'agent_job_approvals') {
+        return [{
+          id: 'job-approval-1',
+          job_id: 'job-1',
+          status: 'pending',
+          requested_by: 'user-1',
+          policy_snapshot: {
+            required_role: 'manager',
+            workflow: { source: 'apps', source_ref: 'job-1' },
+          },
+          created_at: '2026-04-16T10:00:00.000Z',
+        }] as any;
+      }
+      return [];
+    });
+
+    const res = await invokeApprovalsListRoute();
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const item = (res.body.data || [])[0];
+    expect(item.id).toBe('job-approval-1');
+    expect(item.approval_source).toBe('job_approval');
+    expect(item.service).toBe('slack');
+    expect(item.action).toBe('comms.message.send');
+    expect(item.source).toBe('apps');
+    expect(item.job_id).toBe('job-1');
+    expect(item.governed_execution?.status).toBe('pending_approval');
+    expect(item.cost_status?.state).toBe('outside_scope');
   });
 });

@@ -1,7 +1,7 @@
 # Service Level Objectives (SLOs)
 
 ## Overview
-This document defines the Service Level Objectives (SLOs) for the Rasi Synthetic HR Gateway API. These targets ensure enterprise-grade reliability, performance, and consistency for production deployments.
+This document defines the Service Level Objectives (SLOs) for the Zapheit Gateway API. These targets ensure enterprise-grade reliability, performance, and consistency for production deployments.
 
 ## SLO Targets
 

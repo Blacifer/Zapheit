@@ -47,7 +47,7 @@ This playbook enables **5-minute incident detection**, 15-minute resolution for 
 
 Users can report incidents via:
 - **Slack**: #incidents channel (monitored 24/7)
-- **Email**: incidents@rasihr.com (PagerDuty auto-creates ticket)
+- **Email**: incidents@zapheit.com (PagerDuty auto-creates ticket)
 - **In-app**: Settings → Report Issue (sends email)
 
 ---
@@ -64,7 +64,7 @@ Users can report incidents via:
 - User reports via Slack or email  
 - Run diagnostic command:
   ```bash
-  curl https://api.rasihr.com/health
+  curl https://api.zapheit.com/health
   # Expected response should show all dependencies healthy
   # If any dependency shows "unhealthy", continue with Section 2 matching that service
   ```
@@ -130,7 +130,7 @@ curl -X POST https://api.pagerduty.com/incidents \
    - Affected users: All
    - Estimated impact: $250/min revenue loss
    
-   Incident Commander: @alice (alice@rasihr.com)
+   Incident Commander: @alice (alice@zapheit.com)
    Roles needed:
    - [ ] Primary responder (diagnosing root cause)
    - [ ] Secondary responder (executing fixes)
@@ -149,7 +149,7 @@ Run diagnostic in priority order:
 
 **A. Check API Health**
 ```bash
-curl -v https://api.rasihr.com/health 2>&1 | grep -A 20 "HTTP\|dependencies"
+curl -v https://api.zapheit.com/health 2>&1 | grep -A 20 "HTTP\|dependencies"
 # Expected:
 # HTTP/1.1 200 OK
 # {
@@ -173,7 +173,7 @@ curl -v https://api.rasihr.com/health 2>&1 | grep -A 20 "HTTP\|dependencies"
 
 ```bash
 # 1. Check database
-curl -s https://api.rasihr.com/health | jq '.dependencies.supabase'
+curl -s https://api.zapheit.com/health | jq '.dependencies.supabase'
 # Expected: "healthy"
 
 # 2. Check API logs
@@ -241,7 +241,7 @@ kubectl rollout status deployment/synthetic-hr-api -n production
 **If Authentication/JWT Issue:**
 ```bash
 # Clear JWKS cache
-curl -X POST https://api.rasihr.com/admin/clear-cache \
+curl -X POST https://api.zapheit.com/admin/clear-cache \
   -H "Authorization: Bearer $ADMIN_TOKEN"
   
 # Restart API
@@ -262,25 +262,25 @@ echo "=== P1 Incident Recovery Validation ==="
 
 # 1. Health check
 echo "1. Checking API health..."
-curl -s https://api.rasihr.com/health | jq '.status'
+curl -s https://api.zapheit.com/health | jq '.status'
 # Expected: "healthy"
 
 # 2. Database connectivity
 echo "2. Testing database query..."
-curl -s https://api.rasihr.com/admin/health/db \
+curl -s https://api.zapheit.com/admin/health/db \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.db_connections'
 # Expected: > 0
 
 # 3. Authentication test
 echo "3. Testing login flow..."
-curl -X POST https://api.rasihr.com/auth/login \
+curl -X POST https://api.zapheit.com/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"demo@rasihr.com","password":"demo123"}' | jq '.token'
+  -d '{"email":"demo@zapheit.com","password":"demo123"}' | jq '.token'
 # Expected: token string
 
 # 4. Sample API call
 echo "4. Testing API call..."
-curl -s https://api.rasihr.com/api/conversations \
+curl -s https://api.zapheit.com/api/conversations \
   -H "Authorization: Bearer $USER_TOKEN" | jq '.conversations[0].id'
 # Expected: conversation ID (not error)
 
@@ -337,9 +337,9 @@ Resolution:
 What we're doing:
 [E.g., "We've implemented additional monitoring to detect similar issues faster"]
 
-We apologize for any inconvenience. Questions? Contact support@rasihr.com.
+We apologize for any inconvenience. Questions? Contact support@zapheit.com.
 
--The RasiHR Team
+-The Zapheit Team
 ```
 
 **Slack #general Announcement** (if major impact)
@@ -494,7 +494,7 @@ kubectl rollout status deployment/synthetic-hr-api -n production
 
 **Validation (2 min):**
 ```bash
-curl https://api.rasihr.com/health
+curl https://api.zapheit.com/health
 # Expected: 200 OK, status: healthy
 ```
 
@@ -531,7 +531,7 @@ curl https://status.supabase.com/api/v2/summary.json
 curl https://status.stripe.com
 
 # Check webhook endpoint
-curl -X POST https://api.rasihr.com/webhooks/stripe \
+curl -X POST https://api.zapheit.com/webhooks/stripe \
   -H "Content-Type: application/json" \
   -d '{"type": "test"}'
 # Expected: 200 OK
@@ -553,7 +553,7 @@ curl -X POST https://api.rasihr.com/webhooks/stripe \
 **Diagnosis (5 min):**
 ```bash
 # Identify slow endpoint
-curl -s https://api.rasihr.com/admin/slow-queries \
+curl -s https://api.zapheit.com/admin/slow-queries \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 # Look for: Endpoint with highest latency
 

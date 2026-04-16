@@ -602,7 +602,7 @@ router.post('/batches/process-line', requirePermission('dashboard.read'), async 
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:5173',
-          'X-Title': 'Rasi Synthetic HR Batch Processor',
+          'X-Title': 'Zapheit Batch Processor',
         },
         body: JSON.stringify({
           model: normalizedModel,

@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "production:gate": "node scripts/production-gate.js",
+    "production:gate:full": "node scripts/production-gate.js --with-route-tests --with-rest-smoke --with-ui-smoke"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.13.6"

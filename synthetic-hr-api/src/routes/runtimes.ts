@@ -597,6 +597,60 @@ router.post('/jobs/:id/complete', requireRuntimeAuth(), async (req: Request, res
 
     const completedJob = patched[0];
 
+    if (completedJob?.type === 'chat_turn' || completedJob?.type === 'workflow_run') {
+      const input = completedJob.input && typeof completedJob.input === 'object' ? completedJob.input : {};
+      const conversationId = typeof input.conversation_id === 'string' ? input.conversation_id.trim() : '';
+      if (conversationId) {
+        const output = data.output && typeof data.output === 'object' ? data.output : {};
+        const usage = output?.raw?.usage && typeof output.raw.usage === 'object' ? output.raw.usage : {};
+        const assistantText =
+          typeof output?.final?.message === 'string' && output.final.message.trim().length > 0
+            ? output.final.message
+            : typeof output?.message === 'string' && output.message.trim().length > 0
+              ? output.message
+              : data.status === 'failed'
+                ? `I could not complete this request: ${data.error || 'Execution failed.'}`
+                : '';
+
+        if (assistantText) {
+          await supabaseRestAsService('messages', '', {
+            method: 'POST',
+            body: {
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: assistantText,
+              token_count: Number(usage.completion_tokens || usage.output_tokens || 0) || 0,
+              cost_usd: Number(usage.cost_usd || output?.raw?.usage?.cost_usd || 0) || 0,
+              created_at: now,
+            },
+          }).catch(() => void 0);
+        }
+
+        const conversationQuery = new URLSearchParams();
+        conversationQuery.set('id', eq(conversationId));
+        conversationQuery.set('organization_id', eq(ctx.organization_id));
+        conversationQuery.set('select', 'id,metadata');
+        conversationQuery.set('limit', '1');
+        const conversationRows = (await supabaseRestAsService('conversations', conversationQuery).catch(() => [])) as any[];
+        const conversation = conversationRows?.[0] || null;
+        const conversationPatchQuery = new URLSearchParams();
+        conversationPatchQuery.set('id', eq(conversationId));
+        conversationPatchQuery.set('organization_id', eq(ctx.organization_id));
+        await supabaseRestAsService('conversations', conversationPatchQuery, {
+          method: 'PATCH',
+          body: {
+            status: data.status === 'failed' ? 'error' : 'active',
+            ended_at: data.status === 'failed' ? now : null,
+            metadata: {
+              ...(conversation?.metadata && typeof conversation.metadata === 'object' ? conversation.metadata : {}),
+              latest_job_id: completedJob.id,
+              latest_job_status: data.status,
+            },
+          },
+        }).catch(() => void 0);
+      }
+    }
+
     // Fire job.completed triggers when a playbook job succeeds.
     if (data.status === 'succeeded' && completedJob?.playbook_id) {
       firePlaybookTriggers(ctx.organization_id, 'job.completed', {

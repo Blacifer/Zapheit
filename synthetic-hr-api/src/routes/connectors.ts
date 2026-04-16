@@ -520,7 +520,7 @@ async function runProviderActionTest(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Rasi-Event': event,
+          'X-Zapheit-Event': event,
         },
         body: JSON.stringify(payload),
       });

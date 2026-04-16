@@ -1,13 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  MessageSquare, Search, Filter, Bot, User, Clock,
-  CheckCircle, AlertTriangle, Eye, Download, X, Loader2,
-  Activity, Cpu, Wrench, ShieldCheck, ThumbsUp, ThumbsDown
+  Activity,
+  ArrowUpRight,
+  Bot,
+  Brain,
+  Clock,
+  Cpu,
+  Download,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Search,
+  Send,
+  ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
+  User,
+  Wand2,
+  Wrench,
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
-import { loadFromStorage, removeFromStorage } from '../../utils/storage';
 import { toast } from '../../lib/toast';
+import { loadFromStorage, removeFromStorage } from '../../utils/storage';
+import { AGENT_TEMPLATES, type AgentTemplate } from '../../config/agentTemplates';
 
 type ReasoningTrace = {
   id: string;
@@ -56,6 +72,27 @@ type ConversationDetail = ConversationRecord & {
   messages: ConversationMessage[];
 };
 
+type ConnectedAppOption = {
+  id: string;
+  label: string;
+  service: string;
+};
+
+type ChatSession = {
+  session_id: string;
+  mode: 'operator' | 'employee' | 'external';
+  agent_id: string;
+  template_id: string | null;
+  source: 'apps' | 'chat' | 'template';
+  source_ref: string | null;
+  job_id: string | null;
+  governed_execution: any | null;
+  approval_summary: any | null;
+  audit_ref: string | null;
+  cost_status: any | null;
+  incident_ref: string | null;
+};
+
 const INCIDENT_CONTEXT_STORAGE_KEY = 'synthetic_hr_incident_context';
 const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
 
@@ -67,7 +104,7 @@ function summarizeTopic(text: string) {
   const trimmed = text.trim();
   if (!trimmed) return 'Conversation';
   const firstSentence = trimmed.split(/[.!?]/)[0] || trimmed;
-  return firstSentence.slice(0, 48);
+  return firstSentence.slice(0, 60);
 }
 
 function deriveSentiment(status?: string, messages: any[] = []) {
@@ -91,7 +128,7 @@ function normalizeConversation(raw: any, agents: AIAgent[]): ConversationRecord 
     agentName: getAgentName(agents, raw.agent_id),
     user: metadata.user_email || metadata.customer_email || metadata.user_label || metadata.api_key_name || metadata.platform_label || raw.user_id || 'Unknown user',
     topic: metadata.topic || summarizeTopic(preview),
-    sentiment: deriveSentiment(raw.status, metadata.messages || []),
+    sentiment: deriveSentiment(raw.status, raw.messages || metadata.messages || []),
     timestamp: raw.started_at || raw.created_at || new Date().toISOString(),
     tokens: Number(metadata.total_tokens || metadata.tokens || 0),
     preview,
@@ -100,29 +137,19 @@ function normalizeConversation(raw: any, agents: AIAgent[]): ConversationRecord 
   };
 }
 
-function isSparseConversation(conversation: ConversationRecord) {
-  return (
-    conversation.user === 'Unknown user' ||
-    conversation.tokens === 0 ||
-    conversation.preview.startsWith('Conversation on ') ||
-    conversation.topic === 'Conversation'
-  );
-}
-
 function normalizeConversationDetail(raw: any, agents: AIAgent[]): ConversationDetail {
   const base = normalizeConversation(raw, agents);
   const messages: ConversationMessage[] = Array.isArray(raw?.messages)
     ? raw.messages.map((message: any) => ({
-      id: message.id,
-      role: message.role || 'user',
-      content: message.content || '',
-      tokenCount: Number(message.token_count || 0),
-      createdAt: message.created_at || raw.started_at || new Date().toISOString(),
-    }))
+        id: message.id,
+        role: message.role || 'user',
+        content: message.content || '',
+        tokenCount: Number(message.token_count || 0),
+        createdAt: message.created_at || raw.started_at || new Date().toISOString(),
+      }))
     : [];
 
   const firstUserMessage = messages.find((message) => message.role === 'user')?.content;
-  const firstAssistantMessage = messages.find((message) => message.role === 'assistant')?.content;
 
   return {
     ...base,
@@ -136,207 +163,367 @@ function normalizeConversationDetail(raw: any, agents: AIAgent[]): ConversationD
   };
 }
 
+function mapConnectedApp(item: any): ConnectedAppOption | null {
+  const status = String(item?.status || item?.connection_status || item?.state || '').toLowerCase();
+  const isConnected = ['connected', 'active', 'healthy', 'ok'].includes(status) || item?.connected === true;
+  if (!isConnected) return null;
+  const service = String(item?.service || item?.appId || item?.provider || item?.id || '').trim();
+  if (!service) return null;
+  return {
+    id: String(item?.id || item?.appId || service),
+    label: String(item?.name || item?.label || item?.display_name || service),
+    service,
+  };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function governanceLabel(status?: string | null) {
+  if (!status) return 'No governed run yet';
+  return status.replace(/_/g, ' ');
+}
+
+function formatCost(costStatus: any) {
+  if (!costStatus) return 'Not available yet';
+  if (costStatus.state === 'captured' && typeof costStatus.amount === 'number') {
+    return `${costStatus.amount.toFixed(4)} ${costStatus.currency || 'USD'}`;
+  }
+  return costStatus.reason || costStatus.state || 'Not available yet';
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function starterPromptSet(template: AgentTemplate | null) {
+  if (template?.samplePrompts?.length) {
+    return template.samplePrompts.slice(0, 4);
+  }
+  return [
+    'Summarize the latest customer issue and suggest the safest next step.',
+    'Draft an internal approval-ready action plan for a manager.',
+    'Review this request for policy risk before anyone acts on it.',
+    'Prepare a concise handoff note for the operations team.',
+  ];
+}
+
+function isTerminalJobStatus(status?: string | null) {
+  return ['succeeded', 'failed', 'canceled', 'cancelled', 'pending_approval'].includes(String(status || '').toLowerCase());
+}
+
 export default function ConversationsPage({ agents, onNavigate, initialAgentId }: ConversationsPageProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterAgent, setFilterAgent] = useState('all');
-  const [filterSentiment, setFilterSentiment] = useState('all');
-  const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
   const [conversationList, setConversationList] = useState<ConversationRecord[]>([]);
   const [conversationCache, setConversationCache] = useState<Record<string, ConversationDetail>>({});
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [incidentContext, setIncidentContext] = useState<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(null);
   const [detailTab, setDetailTab] = useState<'transcript' | 'trace'>('transcript');
   const [traces, setTraces] = useState<ReasoningTrace[]>([]);
   const [tracesLoading, setTracesLoading] = useState(false);
   const [conversationRating, setConversationRating] = useState<1 | -1 | null>(null);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [incidentContext, setIncidentContext] = useState<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(null);
+  const [connectedApps, setConnectedApps] = useState<ConnectedAppOption[]>([]);
+  const [composeText, setComposeText] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(initialAgentId || '');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedAppService, setSelectedAppService] = useState<string>('');
+  const [chatMode, setChatMode] = useState<'operator' | 'employee' | 'external'>('operator');
+  const [sending, setSending] = useState(false);
+  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [freshStart, setFreshStart] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadConversations = async () => {
-      setLoading(true);
-      setError(null);
-
-      const response = await api.conversations.getAll({ limit: 100 });
-      if (cancelled) return;
-
-      if (!response.success || !Array.isArray(response.data)) {
-        setConversationList([]);
-        setError(response.error || 'Failed to load conversations.');
-        setLoading(false);
-        return;
-      }
-
-      const normalizedList = response.data.map((item) => normalizeConversation(item, agents));
-      setConversationList(normalizedList);
-      setLoading(false);
-
-      const sparseIds = normalizedList
-        .filter(isSparseConversation)
-        .slice(0, 20)
-        .map((conversation) => conversation.id);
-
-      if (sparseIds.length === 0) {
-        return;
-      }
-
-      const detailResponses = await Promise.all(sparseIds.map((id) => api.conversations.getById(id)));
-      if (cancelled) return;
-
-      const detailMap: Record<string, ConversationDetail> = {};
-      for (const detailResponse of detailResponses) {
-        if (!detailResponse.success || !detailResponse.data?.id) continue;
-        const detail = normalizeConversationDetail(detailResponse.data, agents);
-        detailMap[detail.id] = detail;
-      }
-
-      if (Object.keys(detailMap).length > 0) {
-        setConversationCache((current) => ({ ...current, ...detailMap }));
-        setConversationList((current) => current.map((conversation) => detailMap[conversation.id] || conversation));
-      }
-    };
-
-    void loadConversations();
-    return () => {
-      cancelled = true;
-    };
-  }, [agents]);
+  const selectedConversation = selectedConversationId ? conversationCache[selectedConversationId] || null : null;
+  const selectedTemplate = useMemo(
+    () => AGENT_TEMPLATES.find((template) => template.id === selectedTemplateId) || null,
+    [selectedTemplateId],
+  );
+  const starterPrompts = useMemo(() => starterPromptSet(selectedTemplate), [selectedTemplate]);
 
   const filteredConversations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return conversationList.filter((conversation) => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        !q ||
-        conversation.user.toLowerCase().includes(q) ||
-        conversation.topic.toLowerCase().includes(q) ||
-        conversation.preview.toLowerCase().includes(q) ||
-        conversation.agentName.toLowerCase().includes(q);
-      const matchesAgent = filterAgent === 'all' || conversation.agentId === filterAgent;
-      const matchesSentiment = filterSentiment === 'all' || conversation.sentiment === filterSentiment;
-      return matchesSearch && matchesAgent && matchesSentiment;
+      if (!query) return true;
+      return [
+        conversation.user,
+        conversation.topic,
+        conversation.preview,
+        conversation.agentName,
+      ].some((value) => value.toLowerCase().includes(query));
     });
-  }, [conversationList, filterAgent, filterSentiment, searchQuery]);
+  }, [conversationList, searchQuery]);
 
-  useEffect(() => {
-    const context = loadFromStorage<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(INCIDENT_CONTEXT_STORAGE_KEY, null);
-    setIncidentContext(context);
-    if (context) {
-      removeFromStorage(INCIDENT_CONTEXT_STORAGE_KEY);
-    }
-    if (!context) return;
+  const selectedApp = useMemo(
+    () => connectedApps.find((app) => app.service === selectedAppService) || null,
+    [connectedApps, selectedAppService],
+  );
 
-    if (context.agentId) {
-      setFilterAgent(context.agentId);
-    }
-
-    if (context.incidentType === 'escalation' || context.incidentType === 'toxicity' || context.incidentType === 'legal_risk') {
-      setFilterSentiment('negative');
-    }
+  const loadConnectedApps = useCallback(async () => {
+    const response = await api.integrations.getAppsInventory();
+    if (!response.success || !Array.isArray(response.data)) return;
+    const apps = response.data.map(mapConnectedApp).filter(Boolean) as ConnectedAppOption[];
+    setConnectedApps(apps);
   }, []);
 
+  const loadConversationList = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const response = await api.conversations.getAll({ limit: 100 });
+    if (!response.success || !Array.isArray(response.data)) {
+      setConversationList([]);
+      setError(response.error || 'Failed to load conversations.');
+      setLoading(false);
+      return;
+    }
+
+    const normalizedList = response.data.map((item) => normalizeConversation(item, agents));
+    setConversationList(normalizedList);
+    setLoading(false);
+
+    if (!selectedConversationId && !freshStart && normalizedList.length > 0) {
+      setSelectedConversationId(normalizedList[0].id);
+    }
+  }, [agents, freshStart, selectedConversationId]);
+
+  const openConversation = useCallback(async (id: string) => {
+    setSelectedConversationId(id);
+    setActiveSession(null);
+    if (conversationCache[id]) {
+      setConversationRating((conversationCache[id] as any)?.rating ?? null);
+      return;
+    }
+
+    const response = await api.conversations.getById(id);
+    if (!response.success || !response.data) {
+      toast.error(response.error || 'Failed to load conversation');
+      return;
+    }
+
+    const detail = normalizeConversationDetail(response.data, agents);
+    setConversationCache((current) => ({ ...current, [id]: detail }));
+    setConversationList((current) => current.map((conversation) => conversation.id === id ? detail : conversation));
+    setConversationRating((response.data as any)?.rating ?? null);
+  }, [agents, conversationCache]);
+
+  const refreshSelectedConversation = useCallback(async (conversationId: string) => {
+    const response = await api.conversations.getById(conversationId);
+    if (!response.success || !response.data) return;
+    const detail = normalizeConversationDetail(response.data, agents);
+    setConversationCache((current) => ({ ...current, [conversationId]: detail }));
+    setConversationList((current) => {
+      const updated = current.some((conversation) => conversation.id === conversationId)
+        ? current.map((conversation) => conversation.id === conversationId ? detail : conversation)
+        : [detail, ...current];
+      return updated.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
+    });
+    setConversationRating((response.data as any)?.rating ?? null);
+  }, [agents]);
+
   useEffect(() => {
+    void loadConversationList();
+    void loadConnectedApps();
+  }, [loadConnectedApps, loadConversationList]);
+
+  useEffect(() => {
+    if (agents.length === 0) return;
     if (initialAgentId) {
-      setFilterAgent(initialAgentId);
+      setSelectedAgentId(initialAgentId);
       return;
     }
 
     const workspaceFocus = loadFromStorage<{ agentId?: string } | null>(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, null);
     if (workspaceFocus?.agentId) {
-      setFilterAgent(workspaceFocus.agentId);
-    }
-  }, [initialAgentId]);
-
-  const openConversation = useCallback(async (id: string) => {
-    const cached = conversationCache[id];
-    if (cached) {
-      setSelectedConversation(cached);
+      setSelectedAgentId(workspaceFocus.agentId);
       return;
     }
 
-    setDetailLoading(true);
-    const response = await api.conversations.getById(id);
-    setDetailLoading(false);
-
-    if (!response.success || !response.data) {
-      toast.error(response.error || 'Failed to load conversation transcript');
-      return;
-    }
-
-    const detail = normalizeConversationDetail(response.data, agents);
-    setConversationCache((current) => ({ ...current, [detail.id]: detail }));
-    setConversationList((current) => current.map((conversation) => conversation.id === detail.id ? detail : conversation));
-    setSelectedConversation(detail);
-    setConversationRating((response.data as any)?.rating ?? null);
-  }, [agents, conversationCache]);
+    setSelectedAgentId((current) => current || agents[0]?.id || '');
+  }, [agents, initialAgentId]);
 
   useEffect(() => {
-    if (!incidentContext?.agentId || filteredConversations.length === 0 || selectedConversation) return;
-    const matchingConversation = filteredConversations.find((conversation) => conversation.agentId === incidentContext.agentId);
-    if (matchingConversation) {
-      void openConversation(matchingConversation.id);
-    }
-  }, [filteredConversations, incidentContext, openConversation, selectedConversation]);
+    const context = loadFromStorage<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(INCIDENT_CONTEXT_STORAGE_KEY, null);
+    setIncidentContext(context);
+    if (context) removeFromStorage(INCIDENT_CONTEXT_STORAGE_KEY);
+  }, []);
 
-  const closeDetail = () => {
-    setSelectedConversation(null);
+  useEffect(() => {
+    if (!selectedConversationId && !freshStart && filteredConversations.length > 0) {
+      setSelectedConversationId(filteredConversations[0].id);
+    }
+  }, [filteredConversations, freshStart, selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    void openConversation(selectedConversationId);
+  }, [openConversation, selectedConversationId]);
+
+  useEffect(() => {
+    if (detailTab !== 'trace' || !selectedConversationId) return;
+    let cancelled = false;
+    const loadTraces = async () => {
+      setTracesLoading(true);
+      const response = await api.conversations.getTrace(selectedConversationId);
+      if (cancelled) return;
+      if (response.success && Array.isArray(response.data)) {
+        setTraces(response.data as ReasoningTrace[]);
+      }
+      setTracesLoading(false);
+    };
+    void loadTraces();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTab, selectedConversationId]);
+
+  const handleNewConversation = () => {
+    setSelectedConversationId(null);
+    setComposeText('');
+    setActiveSession(null);
     setDetailTab('transcript');
     setTraces([]);
     setConversationRating(null);
+    setFreshStart(true);
+  };
+
+  const pollJobUntilSettled = useCallback(async (jobId: string, conversationId: string) => {
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      await sleep(1500);
+      const response = await api.jobs.get(jobId);
+      if (!response.success || !response.data?.job) continue;
+      const job = response.data.job;
+      setActiveSession((current) => current ? {
+        ...current,
+        job_id: job.id,
+        source: job.source || current.source,
+        source_ref: job.source_ref || current.source_ref,
+        governed_execution: job.governed_execution || current.governed_execution,
+        approval_summary: job.approval_summary || current.approval_summary,
+        audit_ref: job.audit_ref || current.audit_ref,
+        cost_status: job.cost_status || current.cost_status,
+        incident_ref: job.incident_ref || current.incident_ref,
+      } : current);
+
+      if (!isTerminalJobStatus(job.status)) continue;
+
+      await refreshSelectedConversation(conversationId);
+      if (String(job.status).toLowerCase() === 'failed') {
+        toast.error(job.error || 'Chat run failed');
+      }
+      if (String(job.status).toLowerCase() === 'pending_approval') {
+        toast.info('This run is waiting for approval before it can continue.');
+      }
+      return;
+    }
+
+    toast.info('Chat run is still processing. You can refresh the conversation in a moment.');
+  }, [refreshSelectedConversation]);
+
+  const handleSend = async () => {
+    const prompt = composeText.trim();
+    if (!prompt) return;
+    if (!selectedAgentId) {
+      toast.error('Select an agent first');
+      return;
+    }
+
+    const template = selectedTemplateId
+      ? AGENT_TEMPLATES.find((item) => item.id === selectedTemplateId) || null
+      : null;
+
+    setSending(true);
+    const response = await api.conversations.send({
+      agent_id: selectedAgentId,
+      prompt,
+      conversation_id: selectedConversationId || undefined,
+      mode: chatMode,
+      template_id: template?.id,
+      template_context: template ? {
+        name: template.name,
+        businessPurpose: template.businessPurpose,
+        riskLevel: template.riskLevel,
+        approvalDefault: template.approvalDefault,
+        requiredSystems: template.requiredSystems,
+      } : undefined,
+      app_target: selectedApp ? {
+        service: selectedApp.service,
+        label: selectedApp.label,
+      } : undefined,
+    });
+    setSending(false);
+
+    if (!response.success || !response.data) {
+      toast.error(response.error || 'Failed to send chat turn');
+      return;
+    }
+
+    const detail = normalizeConversationDetail(response.data.conversation, agents);
+    setFreshStart(false);
+    setConversationCache((current) => ({ ...current, [detail.id]: detail }));
+    setConversationList((current) => {
+      const next = current.some((conversation) => conversation.id === detail.id)
+        ? current.map((conversation) => conversation.id === detail.id ? detail : conversation)
+        : [detail, ...current];
+      return next.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
+    });
+    setSelectedConversationId(detail.id);
+    setComposeText('');
+    setDetailTab('transcript');
+    setActiveSession({
+      session_id: response.data.session?.session_id || detail.id,
+      mode: response.data.session?.mode || chatMode,
+      agent_id: selectedAgentId,
+      template_id: template?.id || null,
+      source: response.data.job?.source || response.data.session?.source || (template ? 'template' : 'chat'),
+      source_ref: response.data.job?.source_ref || detail.id,
+      job_id: response.data.job?.id || null,
+      governed_execution: response.data.job?.governed_execution || response.data.session?.governed_execution || null,
+      approval_summary: response.data.job?.approval_summary || response.data.session?.approval_summary || null,
+      audit_ref: response.data.job?.audit_ref || response.data.session?.audit_ref || null,
+      cost_status: response.data.job?.cost_status || response.data.session?.cost_status || null,
+      incident_ref: response.data.job?.incident_ref || response.data.session?.incident_ref || null,
+    });
+
+    if (response.data.job?.id) {
+      void pollJobUntilSettled(response.data.job.id, detail.id);
+    }
   };
 
   const handleRate = async (rating: 1 | -1) => {
-    if (!selectedConversation || ratingSubmitting) return;
+    if (!selectedConversationId || ratingSubmitting) return;
     setRatingSubmitting(true);
-    const response = await api.conversations.rate(selectedConversation.id, rating);
+    const response = await api.conversations.rate(selectedConversationId, rating);
     setRatingSubmitting(false);
     if (response.success) {
       setConversationRating(rating);
-      toast.success(rating === 1 ? 'Thanks for the positive feedback!' : 'Thanks for your feedback.');
+      toast.success(rating === 1 ? 'Thanks for the positive feedback.' : 'Thanks for the feedback.');
     } else {
       toast.error('Could not save rating.');
     }
   };
 
-  const handleTabChange = async (tab: 'transcript' | 'trace') => {
-    setDetailTab(tab);
-    if (tab === 'trace' && selectedConversation && traces.length === 0 && !tracesLoading) {
-      setTracesLoading(true);
-      try {
-        const res = await api.conversations.getTrace(selectedConversation.id);
-        if (res.success && Array.isArray(res.data)) setTraces(res.data as ReasoningTrace[]);
-      } catch {
-        toast.error('Failed to load trace data');
-      } finally {
-        setTracesLoading(false);
-      }
-    }
-  };
-
-  const clearIncidentFocus = () => {
-    setIncidentContext(null);
-    setFilterAgent('all');
-    setFilterSentiment('all');
-    setSearchQuery('');
-    closeDetail();
-  };
-
   const exportCSV = () => {
     const rows = filteredConversations.map((conversation) =>
-      `${conversation.id},${conversation.timestamp},${conversation.user},${conversation.agentName},${conversation.sentiment},${conversation.tokens}`
+      `${conversation.id},${conversation.timestamp},${conversation.user},${conversation.agentName},${conversation.sentiment},${conversation.tokens}`,
     );
     const csvContent = ['ID,Date,User,Agent,Sentiment,Tokens'].concat(rows).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `conversations_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `chat_export_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 relative z-10 w-full max-w-7xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-300 relative z-10 w-full max-w-[1600px] mx-auto">
       {incidentContext?.incidentId && (
         <div className="flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -347,399 +534,461 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
             </p>
           </div>
           <button
-            onClick={clearIncidentFocus}
+            onClick={() => onNavigate?.('incidents')}
             className="rounded-xl border border-cyan-500/20 bg-slate-950/60 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-400/40"
           >
-            Clear focus
+            Back to incident
           </button>
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-700/60 pb-5">
+      <div className="flex flex-col gap-4 border-b border-slate-700/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            <MessageSquare className="w-8 h-8 text-cyan-400" /> Conversations
-          </h1>
-          <p className="text-slate-400 mt-1.5">Review real conversation history, transcript evidence, and runtime interaction patterns.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+              <MessageSquare className="w-8 h-8 text-cyan-400" /> Chat
+            </h1>
+            <span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
+              Core
+            </span>
+          </div>
+          <p className="text-slate-400 mt-1.5">Use Chat like a familiar AI workspace, with Zapheit tracking governed execution, linked apps, approvals, audit trail, incidents, and Zapheit-observed cost.</p>
         </div>
-        <div className="flex items-center gap-3">
-          {incidentContext?.incidentId && (
-            <button
-              onClick={() => onNavigate?.('incidents')}
-              className="px-4 py-2.5 bg-slate-800 text-slate-300 border border-slate-700 font-semibold rounded-xl flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all shadow-lg"
-            >
-              <AlertTriangle className="w-4 h-4" /> Back to incident
-            </button>
-          )}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleNewConversation}
+            className="px-4 py-2.5 bg-cyan-500 text-slate-950 font-semibold rounded-xl flex items-center gap-2 hover:bg-cyan-400 transition-all shadow-lg"
+          >
+            <Plus className="w-4 h-4" /> New chat
+          </button>
           <button
             onClick={exportCSV}
             disabled={filteredConversations.length === 0}
             className="px-4 py-2.5 bg-slate-800 text-slate-300 border border-slate-700 font-semibold rounded-xl flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all shadow-lg disabled:opacity-40"
           >
-            <Download className="w-4 h-4" /> Export CSV
+            <Download className="w-4 h-4" /> Export
           </button>
         </div>
       </div>
 
-      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <input
-            id="conversations-search"
-            name="conversations_search"
-            type="text"
-            placeholder="Search by user, topic, content, or agent..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none focus:border-cyan-500 text-sm transition-colors"
-          />
-        </div>
-
-        <select
-          id="conversations-agent"
-          name="conversations_agent"
-          value={filterAgent}
-          onChange={(event) => setFilterAgent(event.target.value)}
-          className="bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none hover:border-slate-600 focus:border-cyan-500"
-        >
-          <option value="all">All Agents</option>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>{agent.name}</option>
-          ))}
-        </select>
-
-        <select
-          id="conversations-sentiment"
-          name="conversations_sentiment"
-          value={filterSentiment}
-          onChange={(event) => setFilterSentiment(event.target.value)}
-          className="bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl px-4 py-2.5 outline-none hover:border-slate-600 focus:border-cyan-500"
-        >
-          <option value="all">Any Sentiment</option>
-          <option value="positive">Positive</option>
-          <option value="neutral">Neutral</option>
-          <option value="negative">Negative</option>
-        </select>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-          <Loader2 className="w-10 h-10 text-cyan-400 mx-auto mb-4 animate-spin" />
-          <p className="text-slate-400">Loading live conversations...</p>
-        </div>
-      ) : error ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-rose-500/20">
-          <AlertTriangle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">Conversation data unavailable</h3>
-          <p className="text-slate-400">{error}</p>
-        </div>
-      ) : agents.length === 0 ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-          <Bot className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">No active agents</h3>
-          <p className="text-slate-400">Add an agent to fleet before expecting governed conversation telemetry here.</p>
-        </div>
-      ) : conversationList.length === 0 ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-          <MessageSquare className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">No conversation records yet</h3>
-          <p className="text-slate-400">Live conversations will appear here as governed agents start handling requests.</p>
-        </div>
-      ) : filteredConversations.length === 0 ? (
-        <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-          <Filter className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">No conversation records found</h3>
-          <p className="text-slate-400">There are no live conversations for the current filters yet.</p>
-        </div>
-      ) : (
-        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden backdrop-blur-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="bg-slate-900/50 text-slate-400 border-b border-slate-700/50 uppercase tracking-wider text-xs">
-                  <th className="px-6 py-4 font-medium">User & Topic</th>
-                  <th className="px-6 py-4 font-medium">Agent</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium">Sentiment</th>
-                  <th className="px-6 py-4 font-medium">Date & Tokens</th>
-                  <th className="px-6 py-4 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/30">
-                {filteredConversations.map((conversation) => (
-                  <tr key={conversation.id} className="hover:bg-slate-700/20 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-slate-400" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white">{conversation.user}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{conversation.topic}</p>
-                          <p className="text-xs text-slate-600 mt-1 line-clamp-1">{conversation.preview}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
-                        <Bot className="w-3.5 h-3.5 text-cyan-400" />
-                        <span className="text-slate-300 font-medium text-xs">{conversation.agentName}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-1">
-                        <span className="inline-flex rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-                          {conversation.status}
-                        </span>
-                        <p className="text-xs text-slate-500">{conversation.platform}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${conversation.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        conversation.sentiment === 'negative' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                          'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                        }`}>
-                        {conversation.sentiment === 'positive' ? <CheckCircle className="w-3 h-3" /> :
-                          conversation.sentiment === 'negative' ? <AlertTriangle className="w-3 h-3" /> : null}
-                        <span className="capitalize">{conversation.sentiment}</span>
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-slate-300 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        {new Date(conversation.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">{conversation.tokens} tokens</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => void openConversation(conversation.id)}
-                        className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 px-3 py-1.5 rounded-lg transition-colors bg-transparent border border-transparent hover:border-cyan-400/20"
-                      >
-                        <Eye className="w-4 h-4" /> View log
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="grid gap-6 xl:grid-cols-[280px,minmax(0,1fr),320px]">
+        <aside className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              id="chat-search"
+              name="chat_search"
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search recent chats"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 pl-9 pr-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+            />
           </div>
-        </div>
-      )}
 
-      {(selectedConversation || detailLoading) && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !detailLoading && closeDetail()} />
-          <div className="relative w-full max-w-2xl bg-slate-900 border-l border-slate-700/60 h-full flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
-            <div className="px-6 py-5 border-b border-slate-700/60 flex items-center justify-between bg-slate-800/50">
-              <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                  <MessageSquare className="w-5 h-5 text-cyan-400" />
-                  Conversation Transcript
-                </h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  Session ID: <span className="font-mono text-slate-300">{selectedConversation?.id || 'Loading...'}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => closeDetail()}
-                disabled={detailLoading}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-colors disabled:opacity-40"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Recent chats</p>
+              <span className="text-xs text-slate-500">{filteredConversations.length}</span>
             </div>
-
-            {/* Tab bar */}
-            {!detailLoading && selectedConversation && (
-              <div className="flex border-b border-slate-700/60 bg-slate-800/30 px-6">
-                {(['transcript', 'trace'] as const).map(tab => (
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {loading ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-center text-slate-400">
+                  <Loader2 className="w-5 h-5 mx-auto mb-2 animate-spin text-cyan-400" />
+                  Loading chats…
+                </div>
+              ) : error ? (
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-4 text-sm text-rose-200">{error}</div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-center text-slate-400">
+                  No recent chats yet.
+                </div>
+              ) : (
+                filteredConversations.map((conversation) => (
                   <button
-                    key={tab}
-                    onClick={() => handleTabChange(tab)}
-                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors capitalize ${
-                      detailTab === tab
-                        ? 'border-cyan-400 text-cyan-400'
-                        : 'border-transparent text-slate-400 hover:text-slate-200'
+                    key={conversation.id}
+                    onClick={() => {
+                      setFreshStart(false);
+                      setActiveSession(null);
+                      setSelectedConversationId(conversation.id);
+                    }}
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+                      selectedConversationId === conversation.id
+                        ? 'border-cyan-500/30 bg-cyan-500/10'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900'
                     }`}
                   >
-                    {tab === 'transcript' ? <MessageSquare className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-                    {tab}
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-white truncate">{conversation.topic}</p>
+                      <span className="text-[11px] text-slate-500 shrink-0">{conversation.tokens}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400 truncate">{conversation.agentName}</p>
+                    <p className="mt-2 text-xs text-slate-500 line-clamp-2">{conversation.preview}</p>
                   </button>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {detailLoading || !selectedConversation ? (
-                <div className="py-20 text-center">
-                  <Loader2 className="w-10 h-10 text-cyan-400 mx-auto mb-4 animate-spin" />
-                  <p className="text-slate-400">Loading transcript...</p>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Pinned templates</p>
+            <div className="space-y-2">
+              {AGENT_TEMPLATES.filter((template) => template.maturity === 'Core').slice(0, 4).map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => setSelectedTemplateId(template.id)}
+                  className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+                    selectedTemplateId === template.id
+                      ? 'border-violet-500/30 bg-violet-500/10'
+                      : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Wand2 className="w-4 h-4 text-violet-300" />
+                    <p className="text-sm font-semibold text-white truncate">{template.name}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400 line-clamp-2">{template.businessPurpose || template.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden min-h-[760px] flex flex-col">
+          <div className="border-b border-slate-800 px-5 py-4 space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="space-y-2 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Agent</span>
+                <select
+                  value={selectedAgentId}
+                  onChange={(event) => setSelectedAgentId(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="">Select agent</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>{agent.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Template</span>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="">No template context</option>
+                  {AGENT_TEMPLATES.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Connected app context</span>
+                <select
+                  value={selectedAppService}
+                  onChange={(event) => setSelectedAppService(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="">No app context</option>
+                  {connectedApps.map((app) => (
+                    <option key={app.id} value={app.service}>{app.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {starterPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => setComposeText(prompt)}
+                  className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-500/30 hover:text-white"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-4">
+            {selectedConversation ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">{selectedConversation.topic}</h2>
+                    <p className="text-sm text-slate-400">
+                      {selectedConversation.agentName} · {formatDateTime(selectedConversation.timestamp)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setDetailTab('transcript')}
+                      className={`rounded-lg px-3 py-1.5 text-sm ${detailTab === 'transcript' ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Transcript
+                    </button>
+                    <button
+                      onClick={() => setDetailTab('trace')}
+                      className={`rounded-lg px-3 py-1.5 text-sm ${detailTab === 'trace' ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Trace
+                    </button>
+                  </div>
                 </div>
-              ) : detailTab === 'transcript' ? (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3">
-                      <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Agent</p>
-                      <p className="text-sm font-semibold text-white truncate">{selectedConversation.agentName}</p>
-                    </div>
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3">
-                      <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Tokens</p>
-                      <p className="text-sm font-semibold text-white truncate">{selectedConversation.tokens} used</p>
-                    </div>
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3">
-                      <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Time</p>
-                      <p className="text-sm font-semibold text-white truncate">
-                        {new Date(selectedConversation.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex flex-col justify-center">
-                      <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${selectedConversation.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        selectedConversation.sentiment === 'negative' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                          'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                        }`}>
-                        <span className="capitalize">{selectedConversation.sentiment}</span>
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/50 pb-2">Transcript</h3>
-
-                    {selectedConversation.messages.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
-                        No message records are attached to this conversation yet.
-                      </div>
-                    ) : (
-                      selectedConversation.messages.map((message) => (
-                        <div key={message.id} className={`flex gap-4 ${message.role === 'assistant' ? 'flex-row-reverse' : ''}`}>
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${message.role === 'assistant' ? 'bg-cyan-500/20 border border-cyan-500/30' : 'bg-slate-700'}`}>
-                            {message.role === 'assistant' ? <Bot className="w-4 h-4 text-cyan-400" /> : <User className="w-4 h-4 text-slate-300" />}
-                          </div>
-                          <div className={`max-w-[85%] rounded-2xl p-4 text-sm ${message.role === 'assistant' ? 'bg-cyan-500/10 rounded-tr-sm border border-cyan-500/20 text-cyan-100' : 'bg-slate-800 rounded-tl-sm border border-slate-700/50 text-slate-200'}`}>
-                            <p className={`mb-1 text-xs font-semibold ${message.role === 'assistant' ? 'text-cyan-400' : 'text-slate-400'}`}>
-                              {message.role === 'assistant' ? selectedConversation.agentName : selectedConversation.user}
-                            </p>
-                            <p>{message.content}</p>
-                            <p className="mt-3 text-[11px] text-slate-500">
-                              {new Date(message.createdAt).toLocaleString()} · {message.tokenCount} tokens
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Rate this conversation */}
-                  <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Was this conversation helpful?</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleRate(1)}
-                        disabled={ratingSubmitting}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === 1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-emerald-500/40 hover:text-emerald-400'}`}
-                      >
-                        <ThumbsUp className="w-3.5 h-3.5" />
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => handleRate(-1)}
-                        disabled={ratingSubmitting}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === -1 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-rose-500/40 hover:text-rose-400'}`}
-                      >
-                        <ThumbsDown className="w-3.5 h-3.5" />
-                        No
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* ── Trace Tab ── */
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/50 pb-2 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-cyan-400" /> Reasoning Traces
-                  </h3>
-                  {tracesLoading ? (
-                    <div className="py-16 text-center">
-                      <Loader2 className="w-8 h-8 text-cyan-400 mx-auto mb-3 animate-spin" />
-                      <p className="text-slate-400 text-sm">Loading traces…</p>
+                {detailTab === 'trace' ? (
+                  tracesLoading ? (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center text-slate-400">
+                      <Loader2 className="w-6 h-6 mx-auto mb-3 animate-spin text-cyan-400" />
+                      Loading reasoning traces…
                     </div>
                   ) : traces.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
-                      No reasoning traces recorded for this conversation.
-                      <p className="text-xs mt-2 text-slate-500">Traces are captured for requests routed through the Zapheit gateway.</p>
+                      No reasoning traces recorded for this conversation yet.
                     </div>
                   ) : (
-                    traces.map((trace, i) => (
-                      <div key={trace.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono text-slate-400">Turn {i + 1} · {new Date(trace.created_at).toLocaleTimeString()}</span>
-                          <span className="text-xs text-slate-500 font-medium">{trace.model}</span>
+                    traces.map((trace) => (
+                      <div key={trace.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-white">{trace.model}</p>
+                          <p className="text-xs text-slate-500">{formatDateTime(trace.created_at)}</p>
                         </div>
-
-                        {/* Metrics row */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {[
-                            { icon: <Cpu className="w-3 h-3" />, label: 'Tokens', value: trace.total_tokens?.toLocaleString() ?? '—' },
-                            { icon: <Clock className="w-3 h-3" />, label: 'Latency', value: trace.latency_ms != null ? `${trace.latency_ms}ms` : '—' },
-                            { icon: <Activity className="w-3 h-3" />, label: 'Risk', value: trace.risk_score != null ? (trace.risk_score * 100).toFixed(0) + '%' : '—' },
-                            { icon: <ShieldCheck className="w-3 h-3" />, label: 'Entropy', value: trace.response_entropy != null ? trace.response_entropy.toFixed(2) : '—' },
-                          ].map(m => (
-                            <div key={m.label} className="bg-slate-900/60 rounded-lg p-2 text-center">
-                              <div className="flex items-center justify-center gap-1 text-slate-500 mb-1">{m.icon}<span className="text-[10px] uppercase tracking-wider">{m.label}</span></div>
-                              <p className="text-sm font-semibold text-white">{m.value}</p>
-                            </div>
-                          ))}
+                        <div className="grid gap-3 sm:grid-cols-4">
+                          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                            <p className="text-xs text-slate-500 uppercase tracking-[0.16em]">Tokens</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{trace.total_tokens}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                            <p className="text-xs text-slate-500 uppercase tracking-[0.16em]">Latency</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{trace.latency_ms}ms</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                            <p className="text-xs text-slate-500 uppercase tracking-[0.16em]">Risk</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{trace.risk_score != null ? `${Math.round(trace.risk_score * 100)}%` : '—'}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                            <p className="text-xs text-slate-500 uppercase tracking-[0.16em]">Entropy</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{trace.response_entropy != null ? trace.response_entropy.toFixed(2) : '—'}</p>
+                          </div>
                         </div>
-
-                        {/* Tool calls */}
-                        {trace.tool_calls?.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Wrench className="w-3 h-3" /> Tool Calls ({trace.tool_calls.length})</p>
-                            <div className="space-y-1.5">
-                              {trace.tool_calls.map((tc, j) => (
-                                <div key={j} className="bg-slate-900/50 rounded-lg p-2.5 text-xs">
-                                  <span className="font-mono text-cyan-400">{tc.name}</span>
-                                  {tc.latency_ms != null && <span className="ml-2 text-slate-500">{tc.latency_ms}ms</span>}
-                                  {tc.result && <p className="mt-1 text-slate-400 truncate">{tc.result}</p>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Policy violations */}
-                        {trace.policy_violations?.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-rose-400 mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Policy Violations</p>
-                            <div className="space-y-1">
-                              {trace.policy_violations.map((v, j) => (
-                                <div key={j} className="flex items-start gap-2 text-xs bg-rose-500/5 border border-rose-500/20 rounded-lg p-2">
-                                  <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 mt-0.5" />
-                                  <span className="text-rose-300">{v.policy_name} — {v.rule} <span className="text-slate-500">({v.action_taken})</span></span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ))
-                  )}
-                </div>
-              )}
-            </div>
+                  )
+                ) : selectedConversation.messages.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
+                    No messages recorded for this conversation yet.
+                  </div>
+                ) : (
+                  selectedConversation.messages.map((message) => (
+                    <div key={message.id} className={`flex gap-3 ${message.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
+                      {message.role === 'assistant' && (
+                        <div className="w-9 h-9 rounded-full border border-cyan-500/20 bg-cyan-500/10 flex items-center justify-center shrink-0">
+                          <Bot className="w-4 h-4 text-cyan-300" />
+                        </div>
+                      )}
+                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                        message.role === 'assistant'
+                          ? 'bg-slate-950 border border-slate-800 text-slate-100 rounded-tl-sm'
+                          : 'bg-cyan-500 text-slate-950 rounded-tr-sm'
+                      }`}>
+                        <p className={`text-xs font-semibold mb-1 ${message.role === 'assistant' ? 'text-cyan-300' : 'text-slate-900/75'}`}>
+                          {message.role === 'assistant' ? selectedConversation.agentName : selectedConversation.user}
+                        </p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                        <p className={`mt-3 text-[11px] ${message.role === 'assistant' ? 'text-slate-500' : 'text-slate-900/70'}`}>
+                          {formatDateTime(message.createdAt)} · {message.tokenCount} tokens
+                        </p>
+                      </div>
+                      {message.role !== 'assistant' && (
+                        <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-900 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-slate-300" />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </>
+            ) : (
+              <div className="h-full rounded-2xl border border-dashed border-slate-700 p-8 flex flex-col items-center justify-center text-center text-slate-400">
+                <Brain className="w-12 h-12 text-cyan-400 mb-4" />
+                <h2 className="text-xl font-semibold text-white">Start a governed chat</h2>
+                <p className="mt-2 max-w-xl">Choose an agent, optionally pin a template or connected app, then send a prompt. Zapheit will create a real conversation, dispatch a governed run, and keep the execution state attached to the thread.</p>
+              </div>
+            )}
+          </div>
 
-            <div className="p-6 border-t border-slate-700/60 bg-slate-800/30">
-              <button
-                onClick={closeDetail}
-                className="w-full xl:w-auto px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-colors"
-              >
-                Close Transcript
-              </button>
+          <div className="border-t border-slate-800 p-5 space-y-4">
+            {selectedConversationId && detailTab === 'transcript' && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Was this conversation helpful?</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRate(1)}
+                    disabled={ratingSubmitting}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === 1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-emerald-500/40 hover:text-emerald-400'}`}
+                  >
+                    <ThumbsUp className="w-3.5 h-3.5" />
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => handleRate(-1)}
+                    disabled={ratingSubmitting}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === -1 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-rose-500/40 hover:text-rose-400'}`}
+                  >
+                    <ThumbsDown className="w-3.5 h-3.5" />
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+              <textarea
+                id="chat-compose"
+                name="chat_compose"
+                value={composeText}
+                onChange={(event) => setComposeText(event.target.value)}
+                placeholder="Ask a question, draft governed work, or prepare an approval-ready request…"
+                rows={4}
+                className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="rounded-full border border-slate-700 px-2.5 py-1">Mode: {chatMode}</span>
+                  {selectedTemplate ? <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-violet-200">Template: {selectedTemplate.name}</span> : null}
+                  {selectedApp ? <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-200">App: {selectedApp.label}</span> : null}
+                </div>
+                <button
+                  onClick={() => void handleSend()}
+                  disabled={sending || !composeText.trim() || !selectedAgentId}
+                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </section>
+
+        <aside className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Launch mode</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['operator', 'employee', 'external'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setChatMode(mode)}
+                  className={`rounded-xl border px-3 py-2 text-sm capitalize ${
+                    chatMode === mode
+                      ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-cyan-300" />
+              <p className="text-sm font-semibold text-white">Governance state</p>
+            </div>
+            {activeSession ? (
+              <div className="space-y-3 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Lifecycle</p>
+                    <p className="mt-1 text-white capitalize">{governanceLabel(activeSession.governed_execution?.status)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Source</p>
+                    <p className="mt-1 text-white capitalize">{activeSession.source}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Approval</p>
+                    <p className="mt-1 text-white capitalize">{activeSession.approval_summary?.status || 'Not required'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Cost</p>
+                    <p className="mt-1 text-white">{formatCost(activeSession.cost_status)}</p>
+                  </div>
+                </div>
+
+                {activeSession.governed_execution?.policy_result?.reasons?.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Policy result</p>
+                    <div className="mt-2 space-y-2">
+                      {activeSession.governed_execution.policy_result.reasons.map((reason: string) => (
+                        <div key={reason} className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">
+                          {reason}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => onNavigate?.('apps')}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-left text-sm text-slate-200 hover:border-cyan-500/30"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2"><Wrench className="w-4 h-4 text-cyan-300" /> Open linked apps</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500" />
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => onNavigate?.('approvals')}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-left text-sm text-slate-200 hover:border-cyan-500/30"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-cyan-300" /> Open approvals</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500" />
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => onNavigate?.('execution-history')}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-left text-sm text-slate-200 hover:border-cyan-500/30"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2"><Activity className="w-4 h-4 text-cyan-300" /> Open job history</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500" />
+                    </span>
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3 text-xs text-slate-400 space-y-1">
+                  <p>Session: <span className="font-mono text-slate-300">{activeSession.session_id}</span></p>
+                  {activeSession.job_id ? <p>Run: <span className="font-mono text-slate-300">{activeSession.job_id}</span></p> : null}
+                  {activeSession.audit_ref ? <p>Audit: <span className="font-mono text-slate-300">{activeSession.audit_ref}</span></p> : null}
+                  {activeSession.incident_ref ? <p>Incident: <span className="font-mono text-slate-300">{activeSession.incident_ref}</span></p> : null}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">Send a prompt to create a governed chat run. The current session state, approval requirement, cost capture, and links to the surrounding control plane will appear here.</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-violet-300" />
+              <p className="text-sm font-semibold text-white">Context</p>
+            </div>
+            <div className="space-y-2 text-sm text-slate-300">
+              <p><span className="text-slate-500">Agent:</span> {getAgentName(agents, selectedAgentId || null)}</p>
+              <p><span className="text-slate-500">Template:</span> {selectedTemplate?.name || 'None selected'}</p>
+              <p><span className="text-slate-500">App target:</span> {selectedApp?.label || 'None selected'}</p>
+              {selectedTemplate?.approvalDefault ? <p><span className="text-slate-500">Approval default:</span> {selectedTemplate.approvalDefault}</p> : null}
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

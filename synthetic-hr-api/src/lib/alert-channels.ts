@@ -90,11 +90,11 @@ async function sendPagerDuty(config: Record<string, string>, incident: IncidentP
   const body = {
     routing_key: routingKey,
     event_action: 'trigger',
-    dedup_key: `rasi-incident-${incident.incidentId}`,
+    dedup_key: `zapheit-incident-${incident.incidentId}`,
     payload: {
       summary: incident.title,
       severity: PD_SEVERITY_MAP[incident.severity] || 'warning',
-      source: 'Rasi AI Governance',
+      source: 'Zapheit AI Governance',
       custom_details: {
         incident_type: incident.incidentType,
         agent_id: incident.agentId || 'unknown',
@@ -103,7 +103,7 @@ async function sendPagerDuty(config: Record<string, string>, incident: IncidentP
       },
     },
     links: incident.dashboardUrl
-      ? [{ href: incident.dashboardUrl, text: 'View in Rasi' }]
+      ? [{ href: incident.dashboardUrl, text: 'View in Zapheit' }]
       : [],
   };
 
@@ -175,7 +175,7 @@ async function sendTeams(config: Record<string, string>, incident: IncidentPaylo
               : []),
           ],
           actions: url
-            ? [{ type: 'Action.OpenUrl', title: 'View in Rasi', url }]
+            ? [{ type: 'Action.OpenUrl', title: 'View in Zapheit', url }]
             : [],
         },
       },
@@ -217,11 +217,11 @@ async function sendOpsgenie(config: Record<string, string>, incident: IncidentPa
 
   const body = {
     message: `[${incident.severity.toUpperCase()}] ${incident.title}`,
-    alias: `rasi-incident-${incident.incidentId}`,
+    alias: `zapheit-incident-${incident.incidentId}`,
     description: incident.description?.slice(0, 500) || '',
     priority: OG_PRIORITY_MAP[incident.severity] || 'P3',
-    source: 'Rasi AI Governance',
-    tags: ['rasi', incident.severity, incident.incidentType],
+    source: 'Zapheit AI Governance',
+    tags: ['zapheit', incident.severity, incident.incidentType],
     details: {
       incident_type: incident.incidentType,
       agent_id: incident.agentId || '',
@@ -278,14 +278,14 @@ async function sendEmailAlert(config: Record<string, string>, incident: Incident
           <tr><td style="padding:6px 0;color:#94a3b8">Time</td><td style="padding:6px 0">${new Date().toLocaleString()}</td></tr>
         </table>
         ${incident.description ? `<p style="margin-top:16px;font-size:13px;color:#94a3b8;line-height:1.6">${incident.description.slice(0, 400)}</p>` : ''}
-        <a href="${url}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View in Rasi</a>
+        <a href="${url}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View in Zapheit</a>
       </div>
     </div>`;
 
   for (const recipient of recipients) {
     await sendTransactionalEmail({
       to: recipient,
-      subject: `[Rasi] ${incident.severity.toUpperCase()} Incident: ${incident.title}`,
+      subject: `[Zapheit] ${incident.severity.toUpperCase()} Incident: ${incident.title}`,
       html,
       text: `${incident.severity.toUpperCase()} Incident: ${incident.title}\nType: ${incident.incidentType}\nAgent: ${incident.agentId || 'unknown'}\n${incident.description || ''}\n\n${url}`,
     }).catch((err: any) => {

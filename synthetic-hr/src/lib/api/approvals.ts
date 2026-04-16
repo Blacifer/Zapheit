@@ -23,6 +23,63 @@ export type ApprovalRequest = {
   reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
   reason_message?: string | null;
   recommended_next_action?: string | null;
+  approval_source?: 'approval_request' | 'job_approval';
+  decision_at?: string | null;
+  approver?: string | null;
+  job_id?: string | null;
+  source?: 'apps' | 'chat' | 'template' | null;
+  source_ref?: string | null;
+  governance_status?: 'initiated' | 'policy_evaluated' | 'pending_approval' | 'approved' | 'denied' | 'executing' | 'completed' | 'failed' | 'cancelled' | null;
+  approval_summary?: {
+    approval_source: 'approval_request' | 'job_approval';
+    approval_id: string;
+    status: 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
+    required_role: string | null;
+    decision_at: string | null;
+    approver: string | null;
+    job_id: string | null;
+    source: 'apps' | 'chat' | 'template';
+    source_ref: string | null;
+  } | null;
+  governed_execution?: {
+    source: 'apps' | 'chat' | 'template';
+    source_ref: string | null;
+    job_id: string | null;
+    status: 'initiated' | 'policy_evaluated' | 'pending_approval' | 'approved' | 'denied' | 'executing' | 'completed' | 'failed' | 'cancelled';
+    policy_result: {
+      policy_id: string | null;
+      required_role: string | null;
+      approval_required: boolean;
+      reasons: string[];
+    };
+    approval: {
+      approval_source: 'approval_request' | 'job_approval';
+      approval_id: string;
+      status: 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
+      required_role: string | null;
+      decision_at: string | null;
+      approver: string | null;
+      job_id: string | null;
+      source: 'apps' | 'chat' | 'template';
+      source_ref: string | null;
+    } | null;
+    audit_ref: string | null;
+    cost_status: {
+      state: 'captured' | 'unavailable' | 'outside_scope';
+      amount: number | null;
+      currency: 'USD' | null;
+      reason: string | null;
+    };
+    incident_ref: string | null;
+  } | null;
+  cost_status?: {
+    state: 'captured' | 'unavailable' | 'outside_scope';
+    amount: number | null;
+    currency: 'USD' | null;
+    reason: string | null;
+  } | null;
+  audit_ref?: string | null;
+  incident_ref?: string | null;
   created_at: string;
   updated_at: string;
 };

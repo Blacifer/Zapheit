@@ -1120,7 +1120,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                     Open in Black Box
                   </button>
                   <button
-                    onClick={() => navigateWithContext('conversations')}
+                    onClick={() => navigateWithContext('chat')}
                     className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500"
                   >
                     Open Related Conversations

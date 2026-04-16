@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
-import { eq, supabaseRestAsUser, supabaseRestAsService } from '../lib/supabase-rest'; // supabaseRestAsService used for routing rule policy lookup
+import { eq, in_, supabaseRestAsUser, supabaseRestAsService } from '../lib/supabase-rest'; // supabaseRestAsService used for routing rule policy lookup
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
@@ -11,6 +11,13 @@ import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { storeCorrection } from '../lib/correction-memory';
 import { markApprovalDeniedExecution, resumeApprovedToolCall } from '../lib/agentic-tool-execution';
 import { sendTransactionalEmail } from '../lib/email';
+import {
+  buildApprovalSummaryFromApprovalRequest,
+  buildApprovalSummaryFromJobApproval,
+  buildGovernedExecutionSummary,
+  mapJobStatusToGovernedStatus,
+  normalizeApprovalStatus,
+} from '../lib/governed-workflow';
 
 const router = Router();
 
@@ -188,6 +195,159 @@ function approvalReasonModel(row: any): {
   };
 }
 
+function jobApprovalReasonModel(row: any): {
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
+} {
+  const status = normalizeApprovalStatus(row.status);
+  if (status === 'pending') {
+    return {
+      reason_category: 'approval_required',
+      reason_message: 'Human approval is required before this governed execution can continue.',
+      recommended_next_action: 'Review the request details, then approve or deny the governed job.',
+    };
+  }
+  if (status === 'denied') {
+    return {
+      reason_category: 'policy_blocked',
+      reason_message: row.reviewer_note || 'The governed job was denied by a reviewer.',
+      recommended_next_action: 'Adjust the payload or policy and submit a new governed execution if needed.',
+    };
+  }
+  return {
+    reason_category: null,
+    reason_message: null,
+    recommended_next_action: null,
+  };
+}
+
+function decorateApprovalRequest(row: any, execution: any = null) {
+  const approvalSummary = buildApprovalSummaryFromApprovalRequest(row, null);
+  const governedExecution = buildGovernedExecutionSummary({
+    approval: row,
+    execution,
+    approvalSummary,
+  });
+  return {
+    ...row,
+    ...approvalReasonModel(row),
+    approval_source: approvalSummary.approval_source,
+    decision_at: approvalSummary.decision_at,
+    approver: approvalSummary.approver,
+    job_id: approvalSummary.job_id,
+    source: approvalSummary.source,
+    source_ref: approvalSummary.source_ref,
+    governance_status: governedExecution.status,
+    approval_summary: approvalSummary,
+    governed_execution: governedExecution,
+    audit_ref: governedExecution.audit_ref,
+    cost_status: governedExecution.cost_status,
+    incident_ref: governedExecution.incident_ref,
+  };
+}
+
+function decorateJobApproval(job: any, approval: any) {
+  const connector = job?.input?.connector && typeof job.input.connector === 'object' ? job.input.connector : {};
+  const approvalSummary = buildApprovalSummaryFromJobApproval(approval, job);
+  const governedExecution = buildGovernedExecutionSummary({
+    job,
+    approval,
+    approvalSummary,
+  });
+  const history = Array.isArray(approval?.approval_history) ? approval.approval_history : [];
+  const latestDecision = history.length ? history[history.length - 1] : null;
+  return {
+    id: approval.id,
+    organization_id: job.organization_id,
+    agent_id: job.agent_id || null,
+    conversation_id: null,
+    action_policy_id: approval?.policy_snapshot?.connector_policy?.policy_id || null,
+    service: String(connector.service || '').trim() || 'connector',
+    action: String(connector.action || '').trim() || 'connector_action',
+    action_payload: connector.params && typeof connector.params === 'object' ? connector.params : {},
+    requested_by: approval.requested_by || job.created_by || 'agent',
+    status: approvalSummary.status,
+    required_role: approvalSummary.required_role || 'manager',
+    assigned_to: approval?.policy_snapshot?.assigned_to || null,
+    risk_score: null,
+    sla_deadline: null,
+    reviewer_id: approval.approved_by || latestDecision?.reviewer_id || null,
+    reviewer_note: null,
+    expires_at: approval.created_at || job.created_at,
+    reviewed_at: approval.decided_at || latestDecision?.decided_at || null,
+    created_at: approval.created_at || job.created_at,
+    updated_at: approval.decided_at || job.finished_at || job.started_at || job.created_at,
+    ...jobApprovalReasonModel(approval),
+    approval_source: approvalSummary.approval_source,
+    decision_at: approvalSummary.decision_at,
+    approver: approvalSummary.approver,
+    job_id: approvalSummary.job_id,
+    source: approvalSummary.source,
+    source_ref: approvalSummary.source_ref,
+    governance_status: governedExecution.status,
+    approval_summary: approvalSummary,
+    governed_execution: governedExecution,
+    audit_ref: governedExecution.audit_ref,
+    cost_status: governedExecution.cost_status,
+    incident_ref: governedExecution.incident_ref,
+  };
+}
+
+async function loadApprovalExecutions(orgId: string, approvalIds: string[]) {
+  if (!approvalIds.length) return new Map<string, any>();
+  const executionQuery = new URLSearchParams();
+  executionQuery.set('organization_id', eq(orgId));
+  executionQuery.set('approval_id', in_(approvalIds));
+  executionQuery.set('select', 'id,approval_id,connector_id,action,policy_snapshot,result,requested_by,success,error_message');
+  executionQuery.set('order', 'created_at.desc');
+  const rows = (await supabaseRestAsService('connector_action_executions', executionQuery).catch(() => [])) as any[];
+  const byApprovalId = new Map<string, any>();
+  for (const row of rows || []) {
+    if (row?.approval_id && !byApprovalId.has(row.approval_id)) {
+      byApprovalId.set(row.approval_id, row);
+    }
+  }
+  return byApprovalId;
+}
+
+async function loadJobApprovalsForOrg(req: Request, orgId: string, status?: string, limit = 100, filters?: { service?: string; action?: string }) {
+  const jobsQuery = new URLSearchParams();
+  jobsQuery.set('organization_id', eq(orgId));
+  jobsQuery.set('type', eq('connector_action'));
+  jobsQuery.set('select', '*');
+  jobsQuery.set('order', 'created_at.desc');
+  jobsQuery.set('limit', String(limit));
+  if (status === 'pending') jobsQuery.set('status', eq('pending_approval'));
+  if (status === 'denied') jobsQuery.set('status', eq('canceled'));
+
+  const jobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobsQuery).catch(() => [])) as any[];
+  if (!jobs.length) return [];
+
+  const approvalsQuery = new URLSearchParams();
+  approvalsQuery.set('job_id', in_(jobs.map((job: any) => job.id)));
+  approvalsQuery.set('select', '*');
+  approvalsQuery.set('order', 'created_at.desc');
+  const approvals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', approvalsQuery).catch(() => [])) as any[];
+  const approvalByJobId = new Map<string, any>();
+  for (const approval of approvals || []) {
+    if (approval?.job_id && !approvalByJobId.has(approval.job_id)) approvalByJobId.set(approval.job_id, approval);
+  }
+
+  return jobs
+    .map((job: any) => {
+      const approval = approvalByJobId.get(job.id);
+      if (!approval) return null;
+      const normalizedStatus = normalizeApprovalStatus(approval.status);
+      if (status && normalizedStatus !== status) return null;
+      const decorated = decorateJobApproval(job, approval);
+      if (filters?.service && decorated.service !== filters.service) return null;
+      if (filters?.action && decorated.action !== filters.action) return null;
+      return decorated;
+    })
+    .filter(Boolean);
+}
+
 // GET / — list approval requests
 router.get('/', requirePermission('policies.manage'), async (req: Request, res: Response) => {
   try {
@@ -207,11 +367,19 @@ router.get('/', requirePermission('policies.manage'), async (req: Request, res: 
     if (parsed.data?.action) q.set('action', eq(parsed.data.action));
 
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
-    const enriched = (rows || []).map((row: any) => ({
-      ...row,
-      ...approvalReasonModel(row),
-    }));
-    return res.json({ success: true, data: enriched, count: enriched.length });
+    const executionsByApprovalId = await loadApprovalExecutions(
+      orgId,
+      (rows || []).map((row: any) => String(row.id || '')).filter(Boolean),
+    );
+    const enriched = (rows || []).map((row: any) => decorateApprovalRequest(row, executionsByApprovalId.get(row.id) || null));
+    const jobApprovals = await loadJobApprovalsForOrg(req, orgId, parsed.data?.status, safeLimit(parsed.data?.limit ?? 100), {
+      service: parsed.data?.service,
+      action: parsed.data?.action,
+    });
+    const merged = [...enriched, ...jobApprovals]
+      .sort((a: any, b: any) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))
+      .slice(0, safeLimit(parsed.data?.limit ?? 100));
+    return res.json({ success: true, data: merged, count: merged.length });
   } catch (err: any) {
     return errorResponse(res, err);
   }
@@ -229,10 +397,30 @@ router.get('/:id', requirePermission('policies.manage'), async (req: Request, re
     q.set('id', eq(id));
     q.set('organization_id', eq(orgId));
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
-    if (!rows?.length) return res.status(404).json({ success: false, error: 'Approval request not found' });
+    if (rows?.length) {
+      const executionsByApprovalId = await loadApprovalExecutions(orgId, [id]);
+      const row = decorateApprovalRequest(rows[0], executionsByApprovalId.get(id) || null);
+      return res.json({ success: true, data: row });
+    }
 
-    const row = { ...rows[0], ...approvalReasonModel(rows[0]) };
-    return res.json({ success: true, data: row });
+    const jobApprovalQuery = new URLSearchParams();
+    jobApprovalQuery.set('id', eq(id));
+    jobApprovalQuery.set('select', '*');
+    jobApprovalQuery.set('limit', '1');
+    const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+    const approval = jobApprovalRows?.[0];
+    if (!approval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+    const jobQuery = new URLSearchParams();
+    jobQuery.set('id', eq(approval.job_id));
+    jobQuery.set('organization_id', eq(orgId));
+    jobQuery.set('select', '*');
+    jobQuery.set('limit', '1');
+    const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+    const job = jobRows?.[0];
+    if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+    return res.json({ success: true, data: decorateJobApproval(job, approval) });
   } catch (err: any) {
     return errorResponse(res, err);
   }
@@ -390,7 +578,82 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
     const row = rows?.[0];
 
-    if (!row) return res.status(404).json({ success: false, error: 'Approval request not found' });
+    if (!row) {
+      const jobApprovalQuery = new URLSearchParams();
+      jobApprovalQuery.set('id', eq(id));
+      jobApprovalQuery.set('select', '*');
+      jobApprovalQuery.set('limit', '1');
+      const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+      const jobApproval = jobApprovalRows?.[0];
+      if (!jobApproval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+      const jobQuery = new URLSearchParams();
+      jobQuery.set('id', eq(jobApproval.job_id));
+      jobQuery.set('organization_id', eq(orgId));
+      jobQuery.set('select', '*');
+      jobQuery.set('limit', '1');
+      const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+      const job = jobRows?.[0];
+      if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+      const approvalHistory = Array.isArray(jobApproval.approval_history) ? jobApproval.approval_history : [];
+      const requiredApprovals = Math.max(1, Number(jobApproval.required_approvals || 1));
+      const snapshotAssignedTo: string | null = jobApproval.policy_snapshot?.assigned_to || null;
+      const priorApprovals = approvalHistory.filter((entry: any) => entry?.decision === 'approved');
+      const awaitingAdditionalApproval = priorApprovals.length > 0 && priorApprovals.length < requiredApprovals;
+
+      if (normalizeApprovalStatus(jobApproval.status) !== 'pending') {
+        return res.status(409).json({ success: false, error: `Cannot approve a request with status "${jobApproval.status}"` });
+      }
+      if (snapshotAssignedTo && snapshotAssignedTo !== userId && !awaitingAdditionalApproval) {
+        return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can approve it' });
+      }
+      const requiredRole = String(jobApproval.policy_snapshot?.required_role || job.required_role || 'manager');
+      if (!canReview(userRole, requiredRole)) {
+        return res.status(403).json({ success: false, error: `Approving this request requires role "${requiredRole}" or higher` });
+      }
+      if (approvalHistory.some((entry: any) => entry?.reviewer_id === userId && entry?.decision === 'approved')) {
+        return res.status(409).json({ success: false, error: 'This approver has already approved the job' });
+      }
+
+      const now = new Date().toISOString();
+      const nextHistory = [
+        ...approvalHistory,
+        { reviewer_id: userId, decision: 'approved', decided_at: now },
+      ];
+      const approvedCount = nextHistory.filter((entry: any) => entry?.decision === 'approved').length;
+      const finalDecision = approvedCount < requiredApprovals ? 'pending' : 'approved';
+
+      const updatedApprovals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', new URLSearchParams([['id', eq(jobApproval.id)]]), {
+        method: 'PATCH',
+        body: {
+          status: finalDecision,
+          approved_by: finalDecision === 'approved' ? userId : null,
+          approval_history: nextHistory,
+          ...(finalDecision === 'pending' ? {} : { decided_at: now }),
+        },
+      })) as any[];
+
+      let updatedJob = job;
+      if (finalDecision === 'approved') {
+        const updatedJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', new URLSearchParams([['id', eq(job.id)], ['organization_id', eq(orgId)]]), {
+          method: 'PATCH',
+          body: { status: 'queued' },
+        })) as any[];
+        updatedJob = updatedJobs?.[0] || { ...job, status: 'queued' };
+      }
+
+      const normalized = decorateJobApproval(updatedJob, updatedApprovals?.[0] || { ...jobApproval, status: finalDecision, approval_history: nextHistory, decided_at: finalDecision === 'approved' ? now : null, approved_by: finalDecision === 'approved' ? userId : null });
+      return res.json({
+        success: true,
+        data: normalized,
+        execution: {
+          resumed: finalDecision === 'approved',
+          state: mapJobStatusToGovernedStatus(updatedJob.status, finalDecision),
+          job_id: job.id,
+        },
+      });
+    }
     if (row.status !== 'pending') return res.status(409).json({ success: false, error: `Cannot approve a request with status "${row.status}"` });
     if (row.assigned_to && row.assigned_to !== userId) {
       return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can approve it' });
@@ -483,7 +746,7 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       }
       return res.json({
         success: true,
-        data: updated?.[0] || row,
+        data: decorateApprovalRequest(updated?.[0] || row),
         execution: { resumed: true, connector_id: 'email', action: 'send_email', result: { sent: true }, audit_ref: null },
       });
     }
@@ -510,7 +773,7 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
 
     return res.json({
       success: true,
-      data: updated?.[0] || row,
+      data: decorateApprovalRequest(updated?.[0] || row),
       execution: {
         resumed: true,
         connector_id: resumed?.connectorId || row.service,
@@ -545,7 +808,67 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
     const row = rows?.[0];
 
-    if (!row) return res.status(404).json({ success: false, error: 'Approval request not found' });
+    if (!row) {
+      const jobApprovalQuery = new URLSearchParams();
+      jobApprovalQuery.set('id', eq(id));
+      jobApprovalQuery.set('select', '*');
+      jobApprovalQuery.set('limit', '1');
+      const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+      const jobApproval = jobApprovalRows?.[0];
+      if (!jobApproval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+      const jobQuery = new URLSearchParams();
+      jobQuery.set('id', eq(jobApproval.job_id));
+      jobQuery.set('organization_id', eq(orgId));
+      jobQuery.set('select', '*');
+      jobQuery.set('limit', '1');
+      const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+      const job = jobRows?.[0];
+      if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
+
+      const approvalHistory = Array.isArray(jobApproval.approval_history) ? jobApproval.approval_history : [];
+      const snapshotAssignedTo: string | null = jobApproval.policy_snapshot?.assigned_to || null;
+      const requiredRole = String(jobApproval.policy_snapshot?.required_role || job.required_role || 'manager');
+      if (normalizeApprovalStatus(jobApproval.status) !== 'pending') {
+        return res.status(409).json({ success: false, error: `Cannot deny a request with status "${jobApproval.status}"` });
+      }
+      if (snapshotAssignedTo && snapshotAssignedTo !== userId) {
+        return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can deny it' });
+      }
+      if (!canReview(userRole, requiredRole)) {
+        return res.status(403).json({ success: false, error: `Denying this request requires role "${requiredRole}" or higher` });
+      }
+
+      const now = new Date().toISOString();
+      const nextHistory = [
+        ...approvalHistory,
+        { reviewer_id: userId, decision: 'rejected', decided_at: now },
+      ];
+      const updatedApprovals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', new URLSearchParams([['id', eq(jobApproval.id)]]), {
+        method: 'PATCH',
+        body: {
+          status: 'rejected',
+          approved_by: null,
+          approval_history: nextHistory,
+          decided_at: now,
+        },
+      })) as any[];
+      const updatedJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', new URLSearchParams([['id', eq(job.id)], ['organization_id', eq(orgId)]]), {
+        method: 'PATCH',
+        body: { status: 'canceled' },
+      })) as any[];
+      const updatedJob = updatedJobs?.[0] || { ...job, status: 'canceled' };
+      const normalized = decorateJobApproval(updatedJob, updatedApprovals?.[0] || { ...jobApproval, status: 'rejected', approval_history: nextHistory, decided_at: now });
+      return res.json({
+        success: true,
+        data: normalized,
+        execution: {
+          resumed: false,
+          state: 'denied',
+          job_id: job.id,
+        },
+      });
+    }
     if (row.status !== 'pending') return res.status(409).json({ success: false, error: `Cannot deny a request with status "${row.status}"` });
     if (row.assigned_to && row.assigned_to !== userId) {
       return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can deny it' });
@@ -614,7 +937,7 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
 
     return res.json({
       success: true,
-      data: updated?.[0] || row,
+      data: decorateApprovalRequest(updated?.[0] || row),
       execution: {
         resumed: false,
         state: 'denied',

@@ -146,17 +146,17 @@ export default function PricingPage() {
             </span>
           </h1>
           <p className="text-slate-400 text-lg leading-relaxed">
-            Start with a health scan. Scale to continuous governance. Every plan includes India-native PII detection, INR billing, and no per-seat surprises.
+            Start with a health scan. Scale to continuous governance across your agents and connected apps. Every plan includes India-native PII detection, INR billing, and no per-seat surprises.
           </p>
         </div>
 
-        {/* Trust bar */}
+        {/* Positioning bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl overflow-hidden border border-slate-800/50">
           {[
-            { value: '2.4M+', label: 'Gateway requests monitored' },
-            { value: '1,200+', label: 'Incidents auto-detected' },
-            { value: '40+', label: 'Agent fleets governed' },
-            { value: '100%', label: 'INR billing, no conversion' },
+            { value: 'INR', label: 'India-first billing' },
+            { value: 'Pilot', label: 'Start with one governed workflow' },
+            { value: 'Audit', label: 'Evidence and export oriented' },
+            { value: 'Control', label: 'Approvals and kill switch workflows' },
           ].map(({ value, label }) => (
             <div key={label} className="bg-slate-900/60 px-6 py-5 text-center space-y-1">
               <p className="text-2xl font-bold font-mono text-white">{value}</p>

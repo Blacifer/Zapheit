@@ -234,8 +234,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         <div className="px-6 pt-6 pb-3 shrink-0">
           <PageHero
             eyebrow="Connect useful capabilities"
-            title="Connect apps once, then work from Zapheit"
-            subtitle="Every connected app becomes one governed workspace for your operators and agents, so work can be read, updated, and supervised without hopping across tools."
+            title="Connect apps once, then govern work from Zapheit"
+            subtitle="Every connected app becomes one governed workspace for operators and agents, so work can be read, updated, and supervised without hopping across tools."
             recommendation={recommendedAction}
             actions={[
               ...(activeTab === 'my' && connectedList.length > 0

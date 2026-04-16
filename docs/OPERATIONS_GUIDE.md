@@ -44,7 +44,7 @@ Expected response:
 {
   "status": "ok",
   "timestamp": "2026-03-05T15:17:21.009Z",
-  "service": "Synthetic HR API",
+  "service": "Zapheit API",
   "version": "1.0.0",
   "metrics": {
     "latency_p95_ms": 18,

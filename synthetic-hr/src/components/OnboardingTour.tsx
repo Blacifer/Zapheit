@@ -23,9 +23,17 @@ const TOUR_STEPS: Step[] = [
   {
     target: '[data-tour="apps"]',
     placement: 'right',
-    title: 'App Marketplace',
+    title: 'Apps',
     content:
-      'Browse and install 100+ pre-built AI app integrations — from Slack and Gmail to Jira, Salesforce, and more.',
+      'Connect Slack, GitHub, Jira, finance tools, and other business apps here. Zapheit uses these app connections to govern real work, approvals, and audit trails.',
+    skipBeacon: true,
+  },
+  {
+    target: '[data-tour="agent-studio"]',
+    placement: 'right',
+    title: 'Templates',
+    content:
+      'Start from governed templates instead of building from scratch. This is the fastest way to launch a safe first agent or workflow.',
     skipBeacon: true,
   },
   {
@@ -39,9 +47,9 @@ const TOUR_STEPS: Step[] = [
   {
     target: '[data-tour="hubs"]',
     placement: 'right',
-    title: 'Hubs & Workflows',
+    title: 'Business Workspaces',
     content:
-      'Access specialized hubs for HR, Sales, Finance, IT, and Support. Build playbooks with the visual drag-and-drop builder, and manage approval workflows with risk scoring.',
+      'Explore HR, Sales, Finance, IT, and other workspaces here. They stay visible, but Zapheit’s launch focus remains governance, approvals, audit, and cost control.',
     skipBeacon: true,
   },
   {

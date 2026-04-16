@@ -228,5 +228,75 @@ describe('Approval flow', () => {
 
       expect(res.status).toBe(404);
     });
+
+    it('approves a governed job approval through the approvals endpoint when the id belongs to agent_job_approvals', async () => {
+      mockedRestUser.mockImplementation(async (_jwt: string, table: string, _query: any, options?: any) => {
+        const method = options?.method || 'GET';
+        if (table === 'approval_requests' && method === 'GET') return [];
+        if (table === 'agent_job_approvals' && method === 'GET') {
+          return [{
+            id: APPROVAL_ID,
+            job_id: 'job-1',
+            status: 'pending',
+            requested_by: TEST_USER_ID,
+            required_approvals: 1,
+            approval_history: [],
+            policy_snapshot: { required_role: 'manager', workflow: { source: 'apps', source_ref: 'job-1' } },
+            created_at: new Date().toISOString(),
+          }];
+        }
+        if (table === 'agent_jobs' && method === 'GET') {
+          return [{
+            id: 'job-1',
+            organization_id: TEST_ORG_ID,
+            agent_id: null,
+            type: 'connector_action',
+            status: 'pending_approval',
+            input: { connector: { service: 'slack', action: 'comms.message.send', params: { channel: '#ops' } } },
+            output: {},
+            created_at: new Date().toISOString(),
+          }];
+        }
+        if (table === 'agent_job_approvals' && method === 'PATCH') {
+          return [{
+            id: APPROVAL_ID,
+            job_id: 'job-1',
+            status: 'approved',
+            requested_by: TEST_USER_ID,
+            approved_by: TEST_USER_ID,
+            required_approvals: 1,
+            approval_history: [{ reviewer_id: TEST_USER_ID, decision: 'approved', decided_at: new Date().toISOString() }],
+            policy_snapshot: { required_role: 'manager', workflow: { source: 'apps', source_ref: 'job-1' } },
+            created_at: new Date().toISOString(),
+            decided_at: new Date().toISOString(),
+          }];
+        }
+        if (table === 'agent_jobs' && method === 'PATCH') {
+          return [{
+            id: 'job-1',
+            organization_id: TEST_ORG_ID,
+            agent_id: null,
+            type: 'connector_action',
+            status: 'queued',
+            input: { connector: { service: 'slack', action: 'comms.message.send', params: { channel: '#ops' } } },
+            output: {},
+            created_at: new Date().toISOString(),
+          }];
+        }
+        return [];
+      });
+
+      const res = await request(server)
+        .post(`/api/approvals/${APPROVAL_ID}/approve`)
+        .set('Authorization', 'Bearer token')
+        .send({ note: 'Ship it' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.approval_source).toBe('job_approval');
+      expect(res.body.data.status).toBe('approved');
+      expect(res.body.data.job_id).toBe('job-1');
+      expect(res.body.execution.resumed).toBe(true);
+    });
   });
 });

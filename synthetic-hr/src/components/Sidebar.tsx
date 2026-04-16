@@ -16,7 +16,7 @@ import {
   Brain, BarChart3, Users, AlertTriangle, MessageSquare, DollarSign,
   Layers, Settings, Sparkles, Wand2, CheckSquare, Shield, ScrollText,
   Key, PlugZap, ClipboardList, Database, Server,
-  User, LogOut, Sun, Moon, Bell, ChevronRight, Search,
+  User, LogOut, Sun, Moon, Bell, ChevronRight, Search, Building2,
   LifeBuoy, ShieldCheck, Calculator, Box,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -52,32 +52,32 @@ type NavGroup = {
 const CORE_ITEMS: NavItem[] = [
   { id: 'overview', icon: BarChart3, label: 'Overview' },
   { id: 'agents', icon: Users, label: 'Agents' },
+  { id: 'apps', icon: Building2, label: 'Apps' },
+  { id: 'chat', icon: MessageSquare, label: 'Chat' },
+  { id: 'agent-studio', icon: Wand2, label: 'Templates' },
+  { id: 'action-policies', icon: Shield, label: 'Policies' },
+  { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
   { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-  { id: 'apps', icon: Layers, label: 'Apps' },
-  { id: 'hubs', icon: Sparkles, label: 'Hubs' },
-  { id: 'settings', icon: Settings, label: 'Settings' },
+  { id: 'audit-log', icon: ScrollText, label: 'Audit' },
+  { id: 'costs', icon: DollarSign, label: 'Costs' },
 ];
 
 const GROUPS: NavGroup[] = [
   {
-    label: 'Platform',
+    label: 'Business Workspaces',
     items: [
-      { id: 'agent-studio', icon: Wand2, label: 'Agent Studio' },
-      { id: 'action-policies', icon: Shield, label: 'Policies' },
       { id: 'governed-actions', icon: Shield, label: 'Governed Actions' },
-      { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
-      { id: 'costs', icon: DollarSign, label: 'Costs' },
-      { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
+      { id: 'hubs', icon: Layers, label: 'Hubs' },
       { id: 'work-items', icon: LifeBuoy, label: 'Work Items' },
       { id: 'coverage', icon: ShieldCheck, label: 'Coverage' },
       { id: 'ctc-calculator', icon: Calculator, label: 'CTC Calculator' },
       { id: 'blackbox', icon: Box, label: 'Black Box' },
-      { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
     ],
   },
   {
-    label: 'Developer Tools',
+    label: 'Admin & Developer',
     items: [
+      { id: 'settings', icon: Settings, label: 'Settings' },
       { id: 'api-webhooks', icon: Key, label: 'API & Webhooks' },
       { id: 'developer', icon: PlugZap, label: 'Developer' },
       { id: 'execution-history', icon: ClipboardList, label: 'Execution History' },

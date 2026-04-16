@@ -746,7 +746,7 @@ export async function handlePublicPlaybookRun(req: Request, res: Response) {
       messages: [
         {
           role: 'system',
-          content: `You are running the "${setting.playbook_id}" playbook via the Rasi API.`,
+          content: `You are running the "${setting.playbook_id}" playbook via the Zapheit API.`,
         },
         {
           role: 'user',

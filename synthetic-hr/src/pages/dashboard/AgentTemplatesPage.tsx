@@ -276,16 +276,52 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                   <div className={`p-3 rounded-lg ${colors.light}`}>
                     <Icon className={`w-6 h-6 ${colors.text}`} />
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${colors.light} ${colors.text}`}>
-                    {template.industry}
-                  </span>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${colors.light} ${colors.text}`}>
+                      {template.industry}
+                    </span>
+                    {template.maturity ? (
+                      <span className={`px-2 py-1 rounded text-xs font-medium border ${
+                        template.maturity === 'Core'
+                          ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+                          : template.maturity === 'Beta'
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                            : 'border-slate-600 bg-slate-700/40 text-slate-300'
+                      }`}>
+                        {template.maturity}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <h3 className="text-lg font-semibold text-white mb-2">{template.name}</h3>
                 <p className="text-slate-400 text-sm mb-3 line-clamp-2">{template.description}</p>
+                {template.businessPurpose ? (
+                  <p className="text-xs text-slate-500 mb-3 line-clamp-2">
+                    Purpose: <span className="text-slate-300">{template.businessPurpose}</span>
+                  </p>
+                ) : null}
                 <p className="text-xs text-slate-500 mb-3">
                   Default model: <span className="text-slate-300">{baseModelLabel}</span>
                 </p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {template.riskLevel ? (
+                    <span className={`px-2 py-1 rounded text-[11px] font-semibold ${
+                      template.riskLevel === 'High'
+                        ? 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
+                        : template.riskLevel === 'Medium'
+                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                          : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                    }`}>
+                      {template.riskLevel} risk
+                    </span>
+                  ) : null}
+                  {template.approvalDefault ? (
+                    <span className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-700/60 text-slate-200 border border-slate-600/60">
+                      Approval defaults set
+                    </span>
+                  ) : null}
+                </div>
 
                 {template.roi && (
                   <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-2 mb-4">
@@ -376,6 +412,68 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
               </div>
 
               <p className="text-slate-300 mb-6">{selectedTemplate.description}</p>
+              <div className="grid gap-3 md:grid-cols-2 mb-6">
+                {selectedTemplate.businessPurpose ? (
+                  <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Business purpose</p>
+                    <p className="mt-2 text-sm text-slate-200">{selectedTemplate.businessPurpose}</p>
+                  </div>
+                ) : null}
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Governance defaults</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedTemplate.maturity ? (
+                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">
+                        {selectedTemplate.maturity}
+                      </span>
+                    ) : null}
+                    {selectedTemplate.riskLevel ? (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        selectedTemplate.riskLevel === 'High'
+                          ? 'border border-rose-500/20 bg-rose-500/10 text-rose-300'
+                          : selectedTemplate.riskLevel === 'Medium'
+                            ? 'border border-amber-500/20 bg-amber-500/10 text-amber-300'
+                            : 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                      }`}>
+                        {selectedTemplate.riskLevel} risk
+                      </span>
+                    ) : null}
+                  </div>
+                  {selectedTemplate.approvalDefault ? (
+                    <p className="mt-3 text-sm text-slate-300">{selectedTemplate.approvalDefault}</p>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-500">Add approval defaults for this template before rolling it into higher-risk workflows.</p>
+                  )}
+                </div>
+              </div>
+              {(selectedTemplate.requiredSystems?.length || selectedTemplate.samplePrompts?.length) ? (
+                <div className="grid gap-3 md:grid-cols-2 mb-6">
+                  {selectedTemplate.requiredSystems?.length ? (
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Required systems</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedTemplate.requiredSystems.map((system) => (
+                          <span key={system} className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200">
+                            {system}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {selectedTemplate.samplePrompts?.length ? (
+                    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Sample prompts</p>
+                      <ul className="mt-2 space-y-2 text-sm text-slate-300">
+                        {selectedTemplate.samplePrompts.slice(0, 2).map((prompt) => (
+                          <li key={prompt} className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+                            {prompt}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* Tabs */}
               <div className="flex gap-4 border-b border-slate-700/50 mb-6">

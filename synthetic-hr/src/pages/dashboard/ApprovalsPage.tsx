@@ -218,6 +218,9 @@ function PendingCard({
             <span>From: <span className="text-slate-300">{request.requested_by}</span></span>
             {request.agent_id && <span>Agent: <span className="text-slate-400 font-mono text-[10px]">{request.agent_id.slice(0, 8)}…</span></span>}
             <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
+            {request.source ? <span>Entry: <span className="text-slate-300 capitalize">{request.source}</span></span> : null}
+            {request.job_id ? <span>Run: <span className="text-slate-400 font-mono text-[10px]">{request.job_id.slice(0, 8)}…</span></span> : null}
+            {request.approval_source ? <span>Type: <span className="text-slate-300">{request.approval_source === 'job_approval' ? 'Governed job' : 'Connector approval'}</span></span> : null}
             <SlaCountdown createdAt={request.created_at} slaHours={request.sla_hours} escalatedAt={request.escalated_at} />
             {request.delegate_to_user_id && (
               <span className="inline-flex items-center gap-1 text-xs text-violet-400"><UserCheck className="w-3 h-3" />Delegated</span>
@@ -421,6 +424,9 @@ function HistoryCard({ request, highlighted = false }: { request: ApprovalReques
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span>From: <span className="text-slate-400">{request.requested_by}</span></span>
             {request.reviewer_id && <span>Reviewed by: <span className="text-slate-400 font-mono text-[10px]">{request.reviewer_id.slice(0, 8)}…</span></span>}
+            {request.source ? <span>Entry: <span className="text-slate-300 capitalize">{request.source}</span></span> : null}
+            {request.job_id ? <span>Run: <span className="text-slate-400 font-mono text-[10px]">{request.job_id.slice(0, 8)}…</span></span> : null}
+            {request.approval_source ? <span>Type: <span className="text-slate-300">{request.approval_source === 'job_approval' ? 'Governed job' : 'Connector approval'}</span></span> : null}
           </div>
         </div>
         <span className="text-xs text-slate-500 shrink-0">
@@ -511,7 +517,7 @@ export default function ApprovalsPage() {
     const res = await api.approvals.approve(id, note || undefined);
     if (res.success) {
       toast.success('Request approved');
-      setAll(prev => prev.map(r => r.id === id ? { ...r, status: 'approved', reviewer_note: note || null, reviewed_at: new Date().toISOString() } : r));
+      setAll(prev => prev.map(r => r.id === id ? { ...r, ...(res.data || {}), status: 'approved', reviewer_note: note || null, reviewed_at: new Date().toISOString() } : r));
     } else {
       toast.error(res.error || 'Failed to approve request');
     }
@@ -520,8 +526,8 @@ export default function ApprovalsPage() {
   const handleDeny = async (id: string, note: string) => {
     const res = await api.approvals.deny(id, note || undefined);
     if (res.success) {
-      toast.error('Request denied');
-      setAll(prev => prev.map(r => r.id === id ? { ...r, status: 'denied', reviewer_note: note || null, reviewed_at: new Date().toISOString() } : r));
+      toast.success('Request denied');
+      setAll(prev => prev.map(r => r.id === id ? { ...r, ...(res.data || {}), status: 'denied', reviewer_note: note || null, reviewed_at: new Date().toISOString() } : r));
     } else {
       toast.error(res.error || 'Failed to deny request');
     }
