@@ -44,4 +44,4 @@ images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:latest'
 
 options:
-  logging: LEGACY
+  logging: CLOUD_LOGGING_ONLY
