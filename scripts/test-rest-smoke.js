@@ -33,6 +33,11 @@ const state = {
   token: '',
   userId: '',
   agentId: '',
+  runtimeId: '',
+  deploymentId: '',
+  conversationId: '',
+  templateConversationId: '',
+  connectorJobId: '',
   incidentId: '',
   apiKeyId: '',
   apiKeySecret: '',
@@ -126,6 +131,10 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isUuidLike(value) {
+  return typeof value === 'string' && value.length >= 8;
+}
+
 async function main() {
   log('\nREST Endpoint Smoke Test\n', colors.blue);
 
@@ -197,6 +206,186 @@ async function main() {
 
     if (!response.ok || !data?.success) {
       throw new Error(`Update agent failed: ${response.status}`);
+    }
+  }));
+
+  results.push(await runStep('POST /api/runtimes', async () => {
+    const { response, data } = await apiRequest('/api/runtimes', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `Smoke Runtime ${Date.now()}`,
+        mode: 'vpc',
+      }),
+    });
+
+    if (!response.ok || !data?.success || !data?.data?.id) {
+      throw new Error(`Create runtime failed: ${response.status}`);
+    }
+
+    state.runtimeId = data.data.id;
+    registerCleanup('Delete smoke-test runtime', async () => {
+      await apiRequest(`/api/runtimes/${state.runtimeId}`, { method: 'DELETE' });
+    });
+  }));
+
+  results.push(await runStep('POST /api/runtimes/deployments', async () => {
+    const { response, data } = await apiRequest('/api/runtimes/deployments', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: state.agentId,
+        runtime_instance_id: state.runtimeId,
+      }),
+    });
+
+    if (!response.ok || !data?.success || !data?.data?.id) {
+      throw new Error(`Create deployment failed: ${response.status}`);
+    }
+
+    state.deploymentId = data.data.id;
+  }));
+
+  results.push(await runStep('POST /api/conversations/chat (governed chat)', async () => {
+    const { response, data } = await apiRequest('/api/conversations/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: state.agentId,
+        prompt: 'Summarize the latest support issue in one paragraph.',
+        mode: 'operator',
+      }),
+    });
+
+    if (!response.ok || !data?.success) {
+      throw new Error(`Governed chat failed: ${response.status}`);
+    }
+
+    const session = data?.data?.session;
+    const conversation = data?.data?.conversation;
+    const job = data?.data?.job;
+    if (!session || session.source !== 'chat') {
+      throw new Error('Governed chat did not return a chat session');
+    }
+    if (!job?.id || !['queued', 'approved', 'executing'].includes(String(job?.governed_execution?.status || ''))) {
+      throw new Error('Governed chat did not return a normalized execution summary');
+    }
+    if (!conversation?.id) {
+      throw new Error('Governed chat did not return a conversation id');
+    }
+    state.conversationId = conversation.id;
+  }));
+
+  results.push(await runStep('GET /api/conversations/:id (governed chat thread)', async () => {
+    const { response, data } = await apiRequest(`/api/conversations/${state.conversationId}`);
+    if (!response.ok || !data?.success || data?.data?.id !== state.conversationId) {
+      throw new Error(`Get governed chat conversation failed: ${response.status}`);
+    }
+    if (!Array.isArray(data?.data?.messages) || data.data.messages.length < 1) {
+      throw new Error('Governed chat conversation did not return messages');
+    }
+  }));
+
+  results.push(await runStep('POST /api/conversations/chat (template-backed)', async () => {
+    const { response, data } = await apiRequest('/api/conversations/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: state.agentId,
+        prompt: 'Prepare a short compliance evidence summary.',
+        mode: 'operator',
+        template_id: 'compliance-evidence-assistant',
+        template_context: {
+          name: 'Compliance Evidence Assistant',
+          businessPurpose: 'Prepare evidence for reviewer sign-off.',
+          riskLevel: 'medium',
+          approvalDefault: 'manager_review',
+          requiredSystems: ['Google Workspace', 'Jira'],
+        },
+      }),
+    });
+
+    if (!response.ok || !data?.success) {
+      throw new Error(`Template-backed chat failed: ${response.status}`);
+    }
+
+    const session = data?.data?.session;
+    const conversation = data?.data?.conversation;
+    const job = data?.data?.job;
+    if (!session || session.source !== 'template') {
+      throw new Error('Template-backed chat did not return a template session');
+    }
+    if (job?.type !== 'workflow_run') {
+      throw new Error('Template-backed chat did not create a workflow_run job');
+    }
+    if (!conversation?.id) {
+      throw new Error('Template-backed chat did not return a conversation id');
+    }
+    state.templateConversationId = conversation.id;
+  }));
+
+  results.push(await runStep('POST /api/jobs (connector action approval path)', async () => {
+    const { response, data } = await apiRequest('/api/jobs', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: state.agentId,
+        type: 'connector_action',
+        input: {
+          connector: {
+            service: 'slack',
+            action: 'comms.message.send',
+            params: {
+              channel: '#ops-smoke',
+              text: 'Zapheit smoke test approval path',
+            },
+          },
+        },
+      }),
+    });
+
+    if (!response.ok || !data?.success || !data?.data?.job?.id) {
+      throw new Error(`Create governed connector job failed: ${response.status}`);
+    }
+
+    const job = data.data.job;
+    state.connectorJobId = job.id;
+    if (!['pending_approval', 'queued'].includes(String(job?.governed_execution?.status || ''))) {
+      throw new Error(`Unexpected governed connector job status: ${job?.governed_execution?.status || 'missing'}`);
+    }
+  }));
+
+  results.push(await runStep('POST /api/jobs/:id/decision (approve governed action)', async () => {
+    if (!isUuidLike(state.connectorJobId)) {
+      throw new Error('Missing governed connector job id');
+    }
+
+    const { response, data } = await apiRequest(`/api/jobs/${state.connectorJobId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approved' }),
+    });
+
+    if (!response.ok || !data?.success || !data?.data?.job?.id) {
+      throw new Error(`Approve governed connector job failed: ${response.status}`);
+    }
+
+    const job = data.data.job;
+    if (!['approved', 'pending_approval'].includes(String(job?.governed_execution?.status || ''))) {
+      throw new Error(`Unexpected post-approval job status: ${job?.governed_execution?.status || 'missing'}`);
+    }
+  }));
+
+  results.push(await runStep('GET /api/jobs/:id (normalized governed action)', async () => {
+    if (!isUuidLike(state.connectorJobId)) {
+      throw new Error('Missing governed connector job id');
+    }
+
+    const { response, data } = await apiRequest(`/api/jobs/${state.connectorJobId}`);
+    if (!response.ok || !data?.success || !data?.data?.job?.id) {
+      throw new Error(`Get governed connector job failed: ${response.status}`);
+    }
+
+    const job = data.data.job;
+    if (job?.approval_summary?.approval_source !== 'job_approval') {
+      throw new Error('Governed connector job is missing normalized approval metadata');
+    }
+    if (!job?.governed_execution?.source) {
+      throw new Error('Governed connector job is missing normalized workflow source');
     }
   }));
 

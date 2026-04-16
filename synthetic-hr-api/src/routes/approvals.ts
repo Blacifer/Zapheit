@@ -32,6 +32,26 @@ function canReview(userRole: string, requiredRole: string): boolean {
   return (ROLE_ORDER[userRole] ?? -1) >= (ROLE_ORDER[requiredRole] ?? 999);
 }
 
+async function safeUserRest<T = any[]>(req: Request, table: string, query?: URLSearchParams | string, options?: Record<string, any>): Promise<T> {
+  try {
+    return await Promise.resolve(
+      supabaseRestAsUser(getUserJwt(req), table, query as any, options as any),
+    ) as T;
+  } catch {
+    return [] as unknown as T;
+  }
+}
+
+async function safeServiceRest<T = any[]>(table: string, query?: URLSearchParams | string, options?: Record<string, any>): Promise<T> {
+  try {
+    return await Promise.resolve(
+      supabaseRestAsService(table, query as any, options as any),
+    ) as T;
+  } catch {
+    return [] as unknown as T;
+  }
+}
+
 // ─── Routing rule helpers ──────────────────────────────────────────────────
 
 type RoutingRule = {
@@ -301,7 +321,7 @@ async function loadApprovalExecutions(orgId: string, approvalIds: string[]) {
   executionQuery.set('approval_id', in_(approvalIds));
   executionQuery.set('select', 'id,approval_id,connector_id,action,policy_snapshot,result,requested_by,success,error_message');
   executionQuery.set('order', 'created_at.desc');
-  const rows = (await supabaseRestAsService('connector_action_executions', executionQuery).catch(() => [])) as any[];
+  const rows = await safeServiceRest<any[]>('connector_action_executions', executionQuery);
   const byApprovalId = new Map<string, any>();
   for (const row of rows || []) {
     if (row?.approval_id && !byApprovalId.has(row.approval_id)) {
@@ -321,14 +341,14 @@ async function loadJobApprovalsForOrg(req: Request, orgId: string, status?: stri
   if (status === 'pending') jobsQuery.set('status', eq('pending_approval'));
   if (status === 'denied') jobsQuery.set('status', eq('canceled'));
 
-  const jobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobsQuery).catch(() => [])) as any[];
+  const jobs = await safeUserRest<any[]>(req, 'agent_jobs', jobsQuery);
   if (!jobs.length) return [];
 
   const approvalsQuery = new URLSearchParams();
   approvalsQuery.set('job_id', in_(jobs.map((job: any) => job.id)));
   approvalsQuery.set('select', '*');
   approvalsQuery.set('order', 'created_at.desc');
-  const approvals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', approvalsQuery).catch(() => [])) as any[];
+  const approvals = await safeUserRest<any[]>(req, 'agent_job_approvals', approvalsQuery);
   const approvalByJobId = new Map<string, any>();
   for (const approval of approvals || []) {
     if (approval?.job_id && !approvalByJobId.has(approval.job_id)) approvalByJobId.set(approval.job_id, approval);
@@ -407,7 +427,7 @@ router.get('/:id', requirePermission('policies.manage'), async (req: Request, re
     jobApprovalQuery.set('id', eq(id));
     jobApprovalQuery.set('select', '*');
     jobApprovalQuery.set('limit', '1');
-    const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+    const jobApprovalRows = await safeUserRest<any[]>(req, 'agent_job_approvals', jobApprovalQuery);
     const approval = jobApprovalRows?.[0];
     if (!approval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
@@ -416,7 +436,7 @@ router.get('/:id', requirePermission('policies.manage'), async (req: Request, re
     jobQuery.set('organization_id', eq(orgId));
     jobQuery.set('select', '*');
     jobQuery.set('limit', '1');
-    const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+    const jobRows = await safeUserRest<any[]>(req, 'agent_jobs', jobQuery);
     const job = jobRows?.[0];
     if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
@@ -583,7 +603,7 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       jobApprovalQuery.set('id', eq(id));
       jobApprovalQuery.set('select', '*');
       jobApprovalQuery.set('limit', '1');
-      const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+      const jobApprovalRows = await safeUserRest<any[]>(req, 'agent_job_approvals', jobApprovalQuery);
       const jobApproval = jobApprovalRows?.[0];
       if (!jobApproval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
@@ -592,7 +612,7 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       jobQuery.set('organization_id', eq(orgId));
       jobQuery.set('select', '*');
       jobQuery.set('limit', '1');
-      const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+      const jobRows = await safeUserRest<any[]>(req, 'agent_jobs', jobQuery);
       const job = jobRows?.[0];
       if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
@@ -813,7 +833,7 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       jobApprovalQuery.set('id', eq(id));
       jobApprovalQuery.set('select', '*');
       jobApprovalQuery.set('limit', '1');
-      const jobApprovalRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', jobApprovalQuery).catch(() => [])) as any[];
+      const jobApprovalRows = await safeUserRest<any[]>(req, 'agent_job_approvals', jobApprovalQuery);
       const jobApproval = jobApprovalRows?.[0];
       if (!jobApproval?.job_id) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
@@ -822,7 +842,7 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       jobQuery.set('organization_id', eq(orgId));
       jobQuery.set('select', '*');
       jobQuery.set('limit', '1');
-      const jobRows = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery).catch(() => [])) as any[];
+      const jobRows = await safeUserRest<any[]>(req, 'agent_jobs', jobQuery);
       const job = jobRows?.[0];
       if (!job) return res.status(404).json({ success: false, error: 'Approval request not found' });
 
