@@ -1,5 +1,5 @@
 /**
- * Canonical model definitions for the Rasi platform.
+ * Canonical model definitions for the Zapheit platform.
  *
  * These are used as:
  * 1. Fallback when the live /api/models endpoint is unavailable

@@ -547,7 +547,7 @@ async function callLlmForScoring(prompt: string): Promise<{ score: number; summa
     logger.warn('No OpenAI API key configured for resume scoring, returning mock score');
     return {
       score: Math.floor(Math.random() * 40) + 50,
-      summary: 'AI scoring is not configured. Please set OPENAI_API_KEY or RASI_OPENAI_API_KEY.',
+      summary: 'AI scoring is not configured. Please set OPENAI_API_KEY or the legacy RASI_OPENAI_API_KEY.',
       strengths: ['Unable to evaluate'],
       gaps: ['AI scoring not configured'],
     };

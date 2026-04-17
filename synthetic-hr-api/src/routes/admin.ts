@@ -309,8 +309,8 @@ router.get('/coverage-status', requireRole(['admin', 'super_admin']), async (req
     if (adminUsers.length === 0) notes.push('No admin or super admin operator is assigned to this organization.');
     if (!currentUserProfileReady) notes.push('The current signed-in user is not fully mapped in the users profile table.');
     if (activeAgents.length === 0) notes.push('No active agents are registered yet.');
-    if (activeKeys.length === 0) notes.push('No active RASI API keys are available for tracked traffic.');
-    if (!gatewayObserved) notes.push('No RASI-observed traffic has been recorded yet.');
+    if (activeKeys.length === 0) notes.push('No active Zapheit API keys are available for tracked traffic.');
+    if (!gatewayObserved) notes.push('No Zapheit-observed traffic has been recorded yet.');
     if (providerEntries.length === 0) notes.push('Provider-reported spend has not been recorded yet, so invoice reconciliation is incomplete.');
     if (inviteRows.length > 0) notes.push(`${inviteRows.length} pending team invite${inviteRows.length === 1 ? '' : 's'} still require acceptance.`);
 

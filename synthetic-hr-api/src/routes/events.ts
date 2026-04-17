@@ -21,7 +21,7 @@ const inboundEventSchema = z.object({
 
 /**
  * Derive a work-item type and summary from the inbound event so that it can
- * be surfaced in the Rasi dashboard without the caller knowing our internal
+ * be surfaced in the Zapheit dashboard without the caller knowing our internal
  * data model.
  */
 function classifyEvent(eventType: string, source: string, payload: Record<string, any>) {

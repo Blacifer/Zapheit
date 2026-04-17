@@ -1778,7 +1778,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = preview.events.length > 0
       ? 'Review upcoming calendar commitments before allowing agents to send or schedule changes.'
-      : 'Reconnect with broader collaboration scopes if you want inbox and calendar work to happen fully inside Rasi.';
+      : 'Reconnect with broader collaboration scopes if you want inbox and calendar work to happen fully inside Zapheit.';
   } else if (aliases.includes('microsoft-365') || aliases.includes('microsoft_365')) {
     if (!accessToken) {
       return res.status(400).json({ success: false, error: 'Microsoft 365 credentials are incomplete for workspace preview' });
@@ -1820,7 +1820,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = preview.events.length > 0
       ? 'Review meetings and profile details before enabling agents to draft or schedule collaboration actions.'
-      : 'Reconnect with broader Microsoft Graph scopes if you want inbox and calendar work to happen fully inside Rasi.';
+      : 'Reconnect with broader Microsoft Graph scopes if you want inbox and calendar work to happen fully inside Zapheit.';
   } else if (aliases.includes('zendesk')) {
     const subdomain = String(credentials.subdomain || '').replace(/\.zendesk\.com$/i, '');
     const email = String(credentials.email || '');
@@ -1869,7 +1869,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
       ? 'Review urgent tickets and decide which replies should stay human-approved before enabling agent responses.'
-      : 'Connect a Zendesk admin token with ticket access if you want live support inbox data inside Rasi.';
+      : 'Connect a Zendesk admin token with ticket access if you want live support inbox data inside Zapheit.';
   } else if (aliases.includes('freshdesk')) {
     const subdomain = String(credentials.subdomain || '').replace(/\.freshdesk\.com$/i, '');
     const apiKey = String(credentials.apiKey || credentials.api_key || '');
@@ -1900,7 +1900,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
       ? 'Triage recent Freshdesk tickets and confirm which ones should allow agent-written responses.'
-      : 'Reconnect Freshdesk with ticket-read permissions if you want live support inbox data inside Rasi.';
+      : 'Reconnect Freshdesk with ticket-read permissions if you want live support inbox data inside Zapheit.';
   } else if (aliases.includes('intercom')) {
     const accessToken = String(credentials.accessToken || credentials.access_token || '');
     if (!accessToken) {
@@ -1951,7 +1951,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
       ? 'Review open Intercom conversations and decide which replies should require human approval.'
-      : 'Reconnect Intercom with conversation-read access if you want live support inbox data inside Rasi.';
+      : 'Reconnect Intercom with conversation-read access if you want live support inbox data inside Zapheit.';
   } else if (aliases.includes('stripe')) {
     const secretKey = String(credentials.secretKey || credentials.secret_key || '');
     if (!secretKey) {
@@ -2008,7 +2008,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent charges and payout state before allowing agents to approve refunds or payment operations.'
-      : 'Reconnect Stripe with a live secret key if you want payment activity inside Rasi.';
+      : 'Reconnect Stripe with a live secret key if you want payment activity inside Zapheit.';
   } else if (aliases.includes('razorpay')) {
     const keyId = String(credentials.key_id || credentials.keyId || '');
     const keySecret = String(credentials.key_secret || credentials.keySecret || '');
@@ -2057,7 +2057,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review captured payments and settlements before letting agents trigger refunds or payout operations.'
-      : 'Reconnect Razorpay with valid API keys if you want payment activity inside Rasi.';
+      : 'Reconnect Razorpay with valid API keys if you want payment activity inside Zapheit.';
   } else if (aliases.includes('paytm')) {
     const merchantId = String(credentials.merchant_id || '');
     const merchantKey = String(credentials.merchant_key || '');
@@ -2094,7 +2094,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent Paytm transactions before allowing agents to trigger finance follow-ups or exception actions.'
-      : 'Reconnect Paytm with transaction-read access if you want finance activity inside Rasi.';
+      : 'Reconnect Paytm with transaction-read access if you want finance activity inside Zapheit.';
   } else if (aliases.includes('cleartax')) {
     const apiKey = String(credentials.api_key || credentials.apiKey || '');
     const gstin = String(credentials.gstin || '');
@@ -2130,7 +2130,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
         preview.notes.push('Compliance status could not be loaded with the current ClearTax credentials.');
       }
     } else if (!gstin) {
-      preview.notes.push('Add a GSTIN to this connection if you want live filing status inside Rasi.');
+      preview.notes.push('Add a GSTIN to this connection if you want live filing status inside Zapheit.');
     }
 
     if (noticesRes.status === 'fulfilled') {
@@ -2155,7 +2155,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review open notices and filing posture before allowing agents to submit or remediate compliance actions.'
-      : 'Reconnect ClearTax with notice and filing access if you want live compliance context inside Rasi.';
+      : 'Reconnect ClearTax with notice and filing access if you want live compliance context inside Zapheit.';
   } else if (aliases.includes('salesforce')) {
     const accessToken = String(credentials.access_token || credentials.accessToken || '');
     const instanceUrl = String(credentials.instance_url || credentials.instanceUrl || '');
@@ -2221,7 +2221,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent leads and opportunity stages before letting agents update pipeline state in Salesforce.'
-      : 'Reconnect Salesforce with lead and opportunity read access if you want live CRM context inside Rasi.';
+      : 'Reconnect Salesforce with lead and opportunity read access if you want live CRM context inside Zapheit.';
   } else if (aliases.includes('hubspot')) {
     const accessToken = String(credentials.access_token || credentials.accessToken || '');
     if (!accessToken) {
@@ -2287,7 +2287,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent contacts and deal stages before letting agents update pipeline state in HubSpot.'
-      : 'Reconnect HubSpot with contact and deal read access if you want live CRM context inside Rasi.';
+      : 'Reconnect HubSpot with contact and deal read access if you want live CRM context inside Zapheit.';
   } else if (aliases.includes('mailchimp')) {
     const apiKey = String(credentials.api_key || credentials.apiKey || '');
     const explicitServer = String(credentials.server_prefix || credentials.server || '').trim();
@@ -2341,7 +2341,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review campaign state and audience coverage before letting agents trigger or tune outbound marketing work.'
-      : 'Reconnect Mailchimp with a valid API key if you want live campaign context inside Rasi.';
+      : 'Reconnect Mailchimp with a valid API key if you want live campaign context inside Zapheit.';
   } else if (aliases.includes('brevo')) {
     const apiKey = String(credentials.api_key || credentials.apiKey || '');
     if (!apiKey) {
@@ -2392,7 +2392,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review live campaigns and contact coverage before letting agents launch or optimize outbound work.'
-      : 'Reconnect Brevo with a valid API key if you want live campaign context inside Rasi.';
+      : 'Reconnect Brevo with a valid API key if you want live campaign context inside Zapheit.';
   } else if (aliases.includes('okta')) {
     const domain = String(credentials.domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const apiToken = String(credentials.apiToken || credentials.api_token || '');
@@ -2446,7 +2446,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review active users and group inventory before letting agents provision, deactivate, or change group membership in Okta.'
-      : 'Reconnect Okta with user and group read access if you want live identity context inside Rasi.';
+      : 'Reconnect Okta with user and group read access if you want live identity context inside Zapheit.';
   } else if (aliases.includes('jumpcloud')) {
     const apiKey = String(credentials.api_key || credentials.apiKey || '');
     if (!apiKey) {
@@ -2501,7 +2501,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review JumpCloud users and group coverage before letting agents approve or deny identity changes.'
-      : 'Reconnect JumpCloud with a valid API key if you want live identity context inside Rasi.';
+      : 'Reconnect JumpCloud with a valid API key if you want live identity context inside Zapheit.';
   } else if (aliases.includes('jamf')) {
     const baseUrl = String(credentials.base_url || credentials.baseUrl || credentials.domain || '').replace(/\/+$/, '');
     const jamfToken = String(credentials.access_token || credentials.accessToken || credentials.api_token || credentials.apiToken || '');
@@ -2557,7 +2557,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review managed devices and group coverage before letting agents apply endpoint policy changes in Jamf.'
-      : 'Reconnect Jamf with a valid base URL and token if you want live endpoint context inside Rasi.';
+      : 'Reconnect Jamf with a valid base URL and token if you want live endpoint context inside Zapheit.';
   } else if (aliases.includes('azure-ad') || aliases.includes('azure_ad')) {
     if (!accessToken) {
       return res.status(400).json({ success: false, error: 'Azure AD credentials are incomplete for workspace preview' });
@@ -2609,7 +2609,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review users and groups before letting agents provision, disable, or change access in Azure AD.'
-      : 'Reconnect Azure AD with Microsoft Graph directory read access if you want live identity context inside Rasi.';
+      : 'Reconnect Azure AD with Microsoft Graph directory read access if you want live identity context inside Zapheit.';
   } else if (aliases.includes('onelogin')) {
     const domain = String(credentials.domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const clientId = String(credentials.client_id || credentials.clientId || '');
@@ -2681,7 +2681,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review OneLogin users and role coverage before letting agents approve or deny identity changes.'
-      : 'Reconnect OneLogin with valid API credentials if you want live identity context inside Rasi.';
+      : 'Reconnect OneLogin with valid API credentials if you want live identity context inside Zapheit.';
   } else if (aliases.includes('kandji')) {
     const baseUrl = String(credentials.base_url || credentials.baseUrl || '').replace(/\/+$/, '');
     const apiKey = String(credentials.api_key || credentials.apiKey || '');
@@ -2754,7 +2754,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review managed devices and blueprint coverage before letting agents apply endpoint policy changes in Kandji.'
-      : 'Reconnect Kandji with a valid tenant API URL and token if you want live endpoint context inside Rasi.';
+      : 'Reconnect Kandji with a valid tenant API URL and token if you want live endpoint context inside Zapheit.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }

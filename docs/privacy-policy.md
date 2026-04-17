@@ -1,6 +1,7 @@
 # Privacy Policy
 
-**Rasi Cyber Solutions**
+**Zapheit**
+Operated by Rasi Cyber Solutions Private Limited
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
 contact: privacy@zapheit.com
 website: www.zapheit.com
@@ -12,7 +13,7 @@ website: www.zapheit.com
 
 ## 1. Introduction
 
-Rasi Cyber Solutions ("we", "us", "our") operates Zapheit, an AI agent control plane for HR and workforce management ("Service"). This Privacy Policy explains how we collect, use, store, and protect personal data when you use our Service.
+Zapheit ("we", "us", "our"), operated by Rasi Cyber Solutions Private Limited, is an AI agent control plane for HR and workforce management ("Service"). This Privacy Policy explains how we collect, use, store, and protect personal data when you use our Service.
 
 By using our Service, you agree to the collection and use of information as described in this policy.
 
@@ -21,11 +22,11 @@ By using our Service, you agree to the collection and use of information as desc
 ## 2. Who We Are
 
 **Data Controller:**
-Rasi Cyber Solutions
+Rasi Cyber Solutions Private Limited
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
 Email: privacy@zapheit.com
 
-For users in the European Economic Area (EEA), Rasi Cyber Solutions acts as the Data Controller for personal data processed through the Service.
+For users in the European Economic Area (EEA), Rasi Cyber Solutions Private Limited acts as the Data Controller for personal data processed through the Service.
 
 ---
 
@@ -75,7 +76,7 @@ We share data only with:
 
 | Recipient | Purpose |
 |---|---|
-| Railway (railway.app) | Backend hosting and infrastructure |
+| Google Cloud Platform (Cloud Run) | Backend hosting and infrastructure |
 | Vercel | Frontend hosting |
 | Supabase | Database and authentication |
 | Third-party integrations | Only data you authorize via OAuth or API key |
@@ -138,7 +139,7 @@ To exercise any of these rights, contact us at privacy@zapheit.com. We will resp
 
 ## 9. International Data Transfers
 
-Our infrastructure is hosted in the United States (Railway, Vercel, Supabase). If you are located in India or the EEA, your data may be transferred to and processed in the United States. We ensure appropriate safeguards are in place for such transfers, including standard contractual clauses where applicable.
+Our infrastructure uses Google Cloud Platform (Cloud Run), Vercel, and Supabase. Depending on configured provider regions and the integrations you enable, your data may be transferred to and processed outside India. We ensure appropriate safeguards are in place for such transfers, including standard contractual clauses where applicable.
 
 ---
 
@@ -168,7 +169,8 @@ We may update this Privacy Policy from time to time. We will notify you of mater
 
 For privacy-related questions, requests, or complaints:
 
-**Rasi Cyber Solutions**
+**Zapheit**
+Operated by Rasi Cyber Solutions Private Limited
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
 Email: privacy@zapheit.com
 Website: www.zapheit.com

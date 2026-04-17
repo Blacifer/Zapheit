@@ -212,7 +212,7 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     name: 'Stripe',
     developer: 'Stripe, Inc.',
     category: 'finance',
-    description: "Accept payments, automate payouts, and reconcile transactions. Rasi's Refund Agent monitors every charge and automates dispute handling.",
+    description: "Accept payments, automate payouts, and reconcile transactions. Zapheit's Refund Agent monitors every charge and automates dispute handling.",
     permissions: ['Read charges and refunds', 'Initiate refunds up to policy limit', 'Read payout schedules', 'Receive webhook events'],
     relatedAgentIds: ['refund_agent', 'finance_ops_agent'],
     actionsUnlocked: ['Auto-process refunds', 'Reconcile transactions', 'Flag anomalies', 'Monitor disputes'],

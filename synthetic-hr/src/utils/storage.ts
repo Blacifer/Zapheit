@@ -71,7 +71,7 @@ export const removeFromStorage = (key: string): void => {
 };
 
 /**
- * Clear all RasiSyntheticHR data from localStorage
+ * Clear all Zapheit localStorage data
  */
 export const clearAllStorage = (): void => {
   try {

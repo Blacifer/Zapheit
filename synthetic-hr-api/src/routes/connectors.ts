@@ -154,20 +154,20 @@ function getActionSamplePayload(provider: string) {
         data: {
           severity: 'high',
           agent: 'sales-support',
-          message: 'Test alert from RASI integrations workspace',
+          message: 'Test alert from Zapheit integrations workspace',
         },
       };
     case 'pagerduty':
       return {
-        summary: 'RASI integration workspace test incident',
+        summary: 'Zapheit integration workspace test incident',
         severity: 'error',
-        source: 'rasi-integrations',
+        source: 'zapheit-integrations',
         event_action: 'trigger',
       };
     case 'jira':
       return {
-        summary: `RASI test incident ${new Date().toLocaleDateString('en-GB')}`,
-        description: 'This is a real connectivity test issue created from the RASI integrations workspace.',
+        summary: `Zapheit test incident ${new Date().toLocaleDateString('en-GB')}`,
+        description: 'This is a real connectivity test issue created from the Zapheit integrations workspace.',
       };
     case 'webhook':
       return {
@@ -176,42 +176,42 @@ function getActionSamplePayload(provider: string) {
         created_at: now,
         data: {
           provider: 'webhook',
-          message: 'Test event from RASI integrations workspace',
+          message: 'Test event from Zapheit integrations workspace',
         },
       };
     case 'zendesk':
     case 'freshdesk':
       return {
-        subject: `RASI test ticket ${new Date().toLocaleDateString('en-GB')}`,
-        description: 'Connectivity test ticket created from the RASI integrations workspace. Safe to delete.',
+        subject: `Zapheit test ticket ${new Date().toLocaleDateString('en-GB')}`,
+        description: 'Connectivity test ticket created from the Zapheit integrations workspace. Safe to delete.',
       };
     case 'intercom':
       return {
         role: 'lead',
-        name: 'RASI Integration Test',
+        name: 'Zapheit Integration Test',
       };
     case 'hubspot':
       return {
-        firstname: 'RASI',
+        firstname: 'Zapheit',
         lastname: 'IntegrationTest',
-        email: `rasi-test-${Date.now()}@example.com`,
+        email: `zapheit-test-${Date.now()}@example.com`,
       };
     case 'salesforce':
       return {
-        FirstName: 'RASI',
+        FirstName: 'Zapheit',
         LastName: 'IntegrationTest',
-        Company: 'RASI Test',
-        Email: `rasi-test-${Date.now()}@example.com`,
+        Company: 'Zapheit Test',
+        Email: `zapheit-test-${Date.now()}@example.com`,
       };
     case 'okta':
       return {
-        firstName: 'RASI',
+        firstName: 'Zapheit',
         lastName: 'TestUser',
-        email: `rasi-test-${Date.now()}@example.com`,
+        email: `zapheit-test-${Date.now()}@example.com`,
       };
     case 'razorpayx':
       return {
-        name: 'RASI Test Contact',
+        name: 'Zapheit Test Contact',
         type: 'vendor',
       };
     case 'google_workspace':
@@ -246,7 +246,7 @@ async function runProviderActionTest(
         },
         body: JSON.stringify({
           channel,
-          text: 'RASI test alert: your Slack integration is authenticated and ready.',
+          text: 'Zapheit test alert: your Slack integration is authenticated and ready.',
         }),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -287,7 +287,7 @@ async function runProviderActionTest(
                 type: 'AdaptiveCard',
                 version: '1.4',
                 body: [
-                  { type: 'TextBlock', size: 'Medium', weight: 'Bolder', text: 'RASI test alert' },
+                  { type: 'TextBlock', size: 'Medium', weight: 'Bolder', text: 'Zapheit test alert' },
                   { type: 'TextBlock', wrap: true, text: 'Your Microsoft Teams integration is ready to deliver incident notifications.' },
                 ],
               },
@@ -408,7 +408,7 @@ async function runProviderActionTest(
       const auth = Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64');
       const amount = Number.parseInt(String(setup.amountInPaise || '1000'), 10);
       const currency = String(setup.currency || 'INR').trim().toUpperCase();
-      const receiptPrefix = String(setup.receiptPrefix || 'rasi-test').trim() || 'rasi-test';
+      const receiptPrefix = String(setup.receiptPrefix || 'zapheit-test').trim() || 'zapheit-test';
 
       if (!Number.isFinite(amount) || amount <= 0) {
         return { ok: false, actionType: 'webhook', error: 'Provide a valid Razorpay test amount in paise before creating a test order.' };
@@ -427,7 +427,7 @@ async function runProviderActionTest(
           currency,
           receipt,
           notes: {
-            source: 'rasi-integrations',
+            source: 'zapheit-integrations',
             purpose: 'provider-action-test',
           },
         }),
@@ -459,7 +459,7 @@ async function runProviderActionTest(
         : 'https://sandbox.cashfree.com/pg';
       const orderAmount = Number.parseFloat(String(setup.orderAmount || '10.00'));
       const currency = String(setup.currency || 'INR').trim().toUpperCase();
-      const receiptPrefix = String(setup.receiptPrefix || 'rasi-cf').trim() || 'rasi-cf';
+      const receiptPrefix = String(setup.receiptPrefix || 'zapheit-cf').trim() || 'zapheit-cf';
 
       if (!Number.isFinite(orderAmount) || orderAmount <= 0) {
         return { ok: false, actionType: 'webhook', error: 'Provide a valid Cashfree test order amount before creating an order.' };
@@ -480,12 +480,12 @@ async function runProviderActionTest(
           order_amount: Number(orderAmount.toFixed(2)),
           order_currency: currency,
           customer_details: {
-            customer_id: 'rasi-integration-test',
-            customer_name: 'RASI Test Customer',
-            customer_email: 'test@rasi.synthetic',
+            customer_id: 'zapheit-integration-test',
+            customer_name: 'Zapheit Test Customer',
+            customer_email: 'test@zapheit.synthetic',
             customer_phone: '9999999999',
           },
-          order_note: 'RASI integrations provider action test',
+          order_note: 'Zapheit integrations provider action test',
         }),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -555,7 +555,7 @@ async function runProviderActionTest(
           ticket: {
             subject: payload.subject,
             comment: { body: payload.description },
-            tags: ['rasi-integration-test'],
+            tags: ['zapheit-integration-test'],
           },
         }),
       });
@@ -584,10 +584,10 @@ async function runProviderActionTest(
         body: JSON.stringify({
           subject: payload.subject,
           description: payload.description,
-          email: 'rasi-integration-test@example.com',
+          email: 'zapheit-integration-test@example.com',
           priority: 1,
           status: 2,
-          tags: ['rasi-integration-test'],
+          tags: ['zapheit-integration-test'],
         }),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -603,7 +603,7 @@ async function runProviderActionTest(
       };
     }
     case 'intercom': {
-      const testEmail = `rasi-test-${Date.now()}@example.com`;
+      const testEmail = `zapheit-test-${Date.now()}@example.com`;
       const response = await fetchWithTimeout('https://api.intercom.io/contacts', {
         method: 'POST',
         headers: {
@@ -612,7 +612,7 @@ async function runProviderActionTest(
           Accept: 'application/json',
           'Intercom-Version': '2.10',
         },
-        body: JSON.stringify({ role: 'lead', email: testEmail, name: 'RASI Integration Test' }),
+        body: JSON.stringify({ role: 'lead', email: testEmail, name: 'Zapheit Integration Test' }),
       });
       const data: any = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -637,7 +637,7 @@ async function runProviderActionTest(
             firstname: payload.firstname,
             lastname: payload.lastname,
             email: payload.email,
-            company: 'RASI Integration Test',
+            company: 'Zapheit Integration Test',
             hs_lead_status: 'NEW',
           },
         }),
@@ -669,7 +669,7 @@ async function runProviderActionTest(
           Company: payload.Company,
           Email: payload.Email,
           LeadSource: 'Web',
-          Description: 'RASI integration test lead — safe to delete.',
+          Description: 'Zapheit integration test lead — safe to delete.',
         }),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -691,7 +691,7 @@ async function runProviderActionTest(
       if (!domain) {
         return { ok: false, actionType: 'ticket', error: 'Provide your Okta domain before creating a test user.' };
       }
-      const testEmail = `rasi-test-${Date.now()}@example.com`;
+      const testEmail = `zapheit-test-${Date.now()}@example.com`;
       const response = await fetchWithTimeout(`https://${domain}/api/v1/users?activate=false`, {
         method: 'POST',
         headers: {
@@ -700,7 +700,7 @@ async function runProviderActionTest(
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          profile: { firstName: 'RASI', lastName: 'TestUser', email: testEmail, login: testEmail },
+          profile: { firstName: 'Zapheit', lastName: 'TestUser', email: testEmail, login: testEmail },
         }),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -727,8 +727,8 @@ async function runProviderActionTest(
         body: new URLSearchParams({
           amount: '100',
           currency: 'usd',
-          description: 'RASI integration test',
-          'metadata[source]': 'rasi-integration-test',
+          description: 'Zapheit integration test',
+          'metadata[source]': 'zapheit-integration-test',
         }).toString(),
       });
       const data: any = await response.json().catch(() => ({}));
@@ -749,11 +749,11 @@ async function runProviderActionTest(
         method: 'POST',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: 'RASI Test Contact',
+          name: 'Zapheit Test Contact',
           type: 'vendor',
-          email: `rasi-test-${Date.now()}@example.com`,
-          reference_id: `rasi-${Date.now()}`,
-          notes: { source: 'rasi-integration-test' },
+          email: `zapheit-test-${Date.now()}@example.com`,
+          reference_id: `zapheit-${Date.now()}`,
+          notes: { source: 'zapheit-integration-test' },
         }),
       });
       const data: any = await response.json().catch(() => ({}));

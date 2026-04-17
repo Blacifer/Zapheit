@@ -1,6 +1,7 @@
 # Information Security Policy
 
-**Rasi Cyber Solutions**
+**Zapheit**
+Operated by Rasi Cyber Solutions Private Limited
 **Effective Date:** March 15, 2026
 **Last Updated:** March 15, 2026
 
@@ -8,7 +9,7 @@
 
 ## 1. Purpose
 
-This policy defines the security controls, standards, and responsibilities that Rasi Cyber Solutions maintains to protect customer data, employee data, and company systems from unauthorized access, disclosure, modification, or destruction.
+This policy defines the security controls, standards, and responsibilities that Zapheit maintains to protect customer data, employee data, and company systems from unauthorized access, disclosure, modification, or destruction.
 
 ---
 
@@ -17,14 +18,14 @@ This policy defines the security controls, standards, and responsibilities that 
 This policy applies to:
 - All employees, contractors, and third parties with access to company systems
 - All systems, applications, and infrastructure used to deliver the Zapheit Service
-- All customer and partner data processed by Rasi Cyber Solutions
+- All customer and partner data processed for Zapheit
 
 ---
 
 ## 3. Infrastructure Security
 
 ### 3.1 Hosting Providers
-- **Backend API:** Railway (SOC 2 compliant)
+- **Backend API:** Google Cloud Platform / Cloud Run
 - **Frontend:** Vercel (SOC 2 compliant)
 - **Database:** Supabase (SOC 2 compliant, PostgreSQL with Row-Level Security)
 
@@ -57,7 +58,7 @@ The Zapheit platform enforces four access levels:
 ### 4.3 Multi-Factor Authentication (MFA)
 MFA is required for access to all internal systems including:
 - GitHub (source code)
-- Railway (backend infrastructure)
+- Google Cloud Platform / Cloud Run (backend infrastructure)
 - Vercel (frontend infrastructure)
 - Supabase (database)
 
@@ -65,7 +66,7 @@ MFA is required for access to all internal systems including:
 Row-Level Security (RLS) is enforced at the database layer, ensuring complete organizational data isolation. No user can access data belonging to another organization.
 
 ### 4.5 Secrets Management
-All secrets and credentials are stored in Railway's encrypted environment variable store. Secrets are never committed to source code. Access to production secrets is restricted to authorized personnel only.
+All secrets and credentials are stored in Google Secret Manager and encrypted environment variable stores. Secrets are never committed to source code. Access to production secrets is restricted to authorized personnel only.
 
 ---
 
@@ -121,7 +122,7 @@ Employees are required to:
 
 ### 7.1 Scanning
 - GitHub Dependabot monitors dependencies for known CVEs
-- Infrastructure vulnerability scanning is handled by Railway and Supabase
+- Infrastructure vulnerability scanning is handled by Google Cloud Platform and Supabase
 
 ### 7.2 Remediation SLAs
 | Severity | Remediation Timeline |
@@ -132,7 +133,7 @@ Employees are required to:
 | Low | Next scheduled release |
 
 ### 7.3 Penetration Testing
-Rasi Cyber Solutions plans to conduct its first third-party penetration test within 6 months. Penetration testing will be conducted annually thereafter.
+Zapheit plans to conduct third-party penetration testing on a recurring annual basis.
 
 ---
 
@@ -160,5 +161,5 @@ Ongoing vendor risk is reviewed annually.
 
 This policy is reviewed and updated at least annually, or following any significant security incident or material change to our infrastructure.
 
-**Policy Owner:** Rasi Cyber Solutions Leadership
+**Policy Owner:** Zapheit Leadership
 **Contact:** support@zapheit.com

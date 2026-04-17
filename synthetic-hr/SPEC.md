@@ -1,10 +1,10 @@
-# Synthetic HR™ Webapp Specification
+# Zapheit Webapp Specification
 
 ## Project Overview
 
-- **Project Name**: Synthetic HR™ by Rasi Solutions
+- **Project Name**: Zapheit
 - **Type**: B2B Enterprise Web Application (Marketing Site + Interactive Dashboard)
-- **Core Functionality**: A high-end corporate platform translating complex AI governance into familiar HR concepts, featuring an interactive Rasi-OS dashboard preview
+- **Core Functionality**: A high-end corporate platform translating complex AI governance into familiar operational controls, featuring an interactive Zapheit dashboard preview
 - **Target Users**: CTOs, CIOs, Heads of AI, HR Directors, Enterprise Risk/Compliance Officers
 
 ---
@@ -22,7 +22,7 @@
 2. Core Philosophy - HR parallel framework diagram
 3. The 4 Pillars - Interactive grid cards
 4. Governance Layer - Technical specs accordion
-5. Rasi-OS Dashboard - Interactive simulator (the "wow" feature)
+5. Zapheit Dashboard - Interactive simulator (the "wow" feature)
 6. Commercial Model - 3 pricing tier cards
 7. Vision & Footer - Company vision and contact
 
@@ -61,7 +61,7 @@
 ### Components
 
 **1. Navigation**
-- Logo (text-based "RASI" with "Synthetic HR")
+- Logo (Zapheit wordmark)
 - Nav links with hover underline animation
 - "Book Audit" CTA button (primary blue)
 - Mobile: Slide-out drawer menu
@@ -73,7 +73,7 @@
 - Primary CTA button
 
 **3. Philosophy Section**
-- Side-by-side comparison: "Traditional AI" vs "Synthetic HR Approach"
+- Side-by-side comparison: "Traditional AI" vs "Zapheit Approach"
 - Animated parallel list (AI Need → HR Solution)
 - Visual diagram of HR-to-AI mapping
 
@@ -88,7 +88,7 @@
 - Technical specs with icons
 - Safe Harbor SLA, Universal Connector, Async Auditing, Black Box
 
-**6. Rasi-OS Dashboard (Interactive)**
+**6. Zapheit Dashboard (Interactive)**
 - Tab navigation: Org Chart | Risk Score | Logs | Settings
 - **Org Chart Tab**: Interactive node graph showing AI agents
   - Nodes: Support Bot, Sales Bot, Refund Bot, etc.
@@ -147,7 +147,7 @@
 
 1. ✅ All 7 main sections rendered correctly
 2. ✅ 4 Pillar cards with hover interactions
-3. ✅ Interactive Rasi-OS Dashboard with tabs
+3. ✅ Interactive Zapheit Dashboard with tabs
 4. ✅ Kill Switch toggle functional (visual only)
 5. ✅ Risk Score gauge displays correctly
 6. ✅ AI Org Chart with clickable nodes

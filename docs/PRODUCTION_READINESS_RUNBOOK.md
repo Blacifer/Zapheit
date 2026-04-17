@@ -129,6 +129,7 @@ Related docs:
 - `docs/DEPLOYMENT_QUICK_REFERENCE.md`
 - `docs/INCIDENT_RESPONSE_PLAYBOOK.md`
 - `docs/SLO_DEFINITIONS.md`
+- `docs/STAGING_RELEASE_RUNBOOK.md`
 
 ## 6. Release Decision
 

@@ -1362,7 +1362,7 @@ async function deelAction(
         body: JSON.stringify({
           contract_id: params.contract_id,
           amount: { value: Number(params.amount), currency: params.currency || 'USD' },
-          reason: params.reason || 'Payment via Rasi',
+          reason: params.reason || 'Payment via Zapheit',
         }),
       });
       if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };

@@ -1,6 +1,7 @@
 # Incident Response Policy
 
-**Rasi Cyber Solutions**
+**Zapheit**
+Operated by Rasi Cyber Solutions Private Limited
 **Effective Date:** March 15, 2026
 **Last Updated:** March 15, 2026
 
@@ -8,13 +9,13 @@
 
 ## 1. Purpose
 
-This policy defines how Rasi Cyber Solutions detects, responds to, documents, and communicates security incidents, including data breaches, unauthorized access, and service disruptions.
+This policy defines how Zapheit detects, responds to, documents, and communicates security incidents, including data breaches, unauthorized access, and service disruptions.
 
 ---
 
 ## 2. Scope
 
-This policy applies to all systems, services, and data managed by Rasi Cyber Solutions, including the Zapheit platform and all third-party integrations.
+This policy applies to all systems, services, and data managed for Zapheit, including the platform and all third-party integrations.
 
 ---
 
@@ -33,7 +34,7 @@ This policy applies to all systems, services, and data managed by Rasi Cyber Sol
 
 ### Phase 1 — Detection (Target: within 1 hour)
 Incidents may be detected via:
-- Automated monitoring and alerting (Railway, Supabase)
+- Automated monitoring and alerting (Google Cloud Platform / Cloud Run, Vercel, Supabase)
 - API anomaly detection in application logs
 - Customer or third-party report
 - Internal team discovery

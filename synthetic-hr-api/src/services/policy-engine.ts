@@ -1,6 +1,6 @@
 /**
  * policy-engine.ts
- * Policy-as-Code engine for Rasi.
+ * Policy-as-Code engine for Zapheit.
  *
  * Parses YAML policy definitions, evaluates them against a request/response
  * context, and returns enforcement decisions (block, warn, redact,

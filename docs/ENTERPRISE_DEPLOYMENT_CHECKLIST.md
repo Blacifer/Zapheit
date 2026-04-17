@@ -7,7 +7,7 @@ Zapheit can be deployed as SaaS or into a company-managed environment. Today, bo
 
 ## Deployment Models
 
-- **SaaS (recommended for fastest rollout):** Vercel (frontend) + Railway (API) + Supabase (DB/auth).
+- **SaaS (recommended for fastest rollout):** Vercel (frontend) + Google Cloud Platform / Cloud Run (API) + Supabase (DB/auth).
 - **Customer-managed cloud:** Docker/Kubernetes for API + frontend, Supabase Cloud or self-hosted.
 - **On‑prem:** Docker/Kubernetes for API + frontend, Supabase self-hosted within the customer network.
 
@@ -39,4 +39,3 @@ Zapheit can be deployed as SaaS or into a company-managed environment. Today, bo
 3. Open:
    - Frontend: `http://localhost:8080`
    - API health: `http://localhost:3001/health`
-

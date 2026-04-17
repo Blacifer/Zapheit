@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Brain, ArrowLeft } from 'lucide-react';
 
 const EFFECTIVE_DATE = '1 April 2025';
-const COMPANY = 'Rasi Cyber Solutions Private Limited';
+const LEGAL_ENTITY = 'Rasi Cyber Solutions Private Limited';
 const PRODUCT = 'Zapheit';
 const CONTACT_EMAIL = 'legal@zapheit.com';
 
@@ -42,7 +42,7 @@ export default function TermsPage() {
 
           <section>
             <p>
-              These Terms of Service ("Terms") govern your access to and use of {PRODUCT}, a product of {COMPANY} ("we", "us", "our"). By creating an account or using the platform, you agree to these Terms. If you do not agree, do not use the service.
+              These Terms of Service ("Terms") govern your access to and use of {PRODUCT}, which is operated by {LEGAL_ENTITY} ("we", "us", "our"). By creating an account or using the platform, you agree to these Terms. If you do not agree, do not use the service.
             </p>
           </section>
 
@@ -110,7 +110,7 @@ export default function TermsPage() {
 
           <Section title="8. Intellectual Property">
             <p>
-              {COMPANY} owns all rights to the {PRODUCT} platform, including its software, design, trademarks, and documentation. These Terms do not grant you any ownership rights. You may not use our name, logo, or trademarks without our written permission.
+              {LEGAL_ENTITY} owns all rights to the {PRODUCT} platform, including its software, design, trademarks, and documentation. These Terms do not grant you any ownership rights. You may not use our name, logo, or trademarks without our written permission.
             </p>
           </Section>
 
@@ -122,7 +122,7 @@ export default function TermsPage() {
 
           <Section title="10. Limitation of Liability">
             <p>
-              To the maximum extent permitted by law, {COMPANY} is not liable for any indirect, incidental, consequential, or punitive damages arising from your use of the service, including but not limited to loss of data, revenue, or business opportunities.
+              To the maximum extent permitted by law, {LEGAL_ENTITY} is not liable for any indirect, incidental, consequential, or punitive damages arising from your use of the service, including but not limited to loss of data, revenue, or business opportunities.
             </p>
             <p className="mt-3">
               Our total liability to you for any claim arising from these Terms shall not exceed the amount you paid us in the three months preceding the claim.
@@ -131,7 +131,7 @@ export default function TermsPage() {
 
           <Section title="11. Indemnification">
             <p>
-              You agree to indemnify and hold {COMPANY} harmless from any claims, losses, or damages (including legal fees) arising from your violation of these Terms, your use of the service, or your infringement of any third-party rights.
+              You agree to indemnify and hold {LEGAL_ENTITY} harmless from any claims, losses, or damages (including legal fees) arising from your violation of these Terms, your use of the service, or your infringement of any third-party rights.
             </p>
           </Section>
 
@@ -161,7 +161,7 @@ export default function TermsPage() {
               For questions about these Terms, contact us at:
             </p>
             <div className="mt-3 p-4 rounded-xl border border-slate-700 bg-white/[0.02] space-y-1">
-              <p className="text-slate-300 font-medium">{COMPANY}</p>
+              <p className="text-slate-300 font-medium">{PRODUCT} (operated by {LEGAL_ENTITY})</p>
               <p>PH-II GR FL, BL-B 20, Round Tank Ln, Howrah, West Bengal 711101, India</p>
               <p>Mobile: +91-9433116259</p>
               <p>Email: <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a></p>
@@ -174,7 +174,7 @@ export default function TermsPage() {
       {/* Footer */}
       <footer className="border-t border-slate-800 py-8 px-6 mt-16">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-          <p>© {year} {COMPANY}. All rights reserved.</p>
+          <p>© {year} {PRODUCT}. Operated by {LEGAL_ENTITY}.</p>
           <div className="flex gap-6">
             <button onClick={() => navigate('/terms')} className="hover:text-cyan-400 transition-colors">Terms</button>
             <button onClick={() => navigate('/privacy')} className="hover:text-cyan-400 transition-colors">Privacy</button>

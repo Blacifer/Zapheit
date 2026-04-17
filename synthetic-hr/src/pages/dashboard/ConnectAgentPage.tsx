@@ -290,27 +290,27 @@ export default function ConnectAgentPage(props: {
 
   const envSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
-    const key = createdSecret ? createdSecret : '$RASI_API_KEY';
+    const key = createdSecret ? createdSecret : '$ZAPHEIT_API_KEY';
     return `# Zapheit gateway\n` +
-      `export RASI_BASE_URL="${gatewayBaseUrl}"\n` +
-      `export RASI_API_KEY="${key}"\n` +
-      `export RASI_AGENT_ID="${agent}"\n`;
+      `export ZAPHEIT_BASE_URL="${gatewayBaseUrl}"\n` +
+      `export ZAPHEIT_API_KEY="${key}"\n` +
+      `export ZAPHEIT_AGENT_ID="${agent}"\n`;
   }, [createdSecret, gatewayBaseUrl, selectedAgentId]);
 
   const nodeSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
     return `// Node.js (OpenAI SDK) via Zapheit gateway\n` +
       `// 1) npm i openai\n` +
-      `// 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export RASI_API_KEY="sk_..."'}\n` +
-      `// 3) export RASI_AGENT_ID="${agent}"\n` +
+      `// 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export ZAPHEIT_API_KEY="sk_..."'}\n` +
+      `// 3) export ZAPHEIT_AGENT_ID="${agent}"\n` +
       `\n` +
       `import OpenAI from "openai";\n` +
       `\n` +
       `const client = new OpenAI({\n` +
-      `  apiKey: process.env.RASI_API_KEY,\n` +
-      `  baseURL: process.env.RASI_BASE_URL || "${gatewayBaseUrl}",\n` +
+      `  apiKey: process.env.ZAPHEIT_API_KEY,\n` +
+      `  baseURL: process.env.ZAPHEIT_BASE_URL || "${gatewayBaseUrl}",\n` +
       `  defaultHeaders: {\n` +
-      `    "x-zapheit-agent-id": process.env.RASI_AGENT_ID,\n` +
+      `    "x-zapheit-agent-id": process.env.ZAPHEIT_AGENT_ID,\n` +
       `  },\n` +
       `});\n` +
       `\n` +
@@ -326,17 +326,17 @@ export default function ConnectAgentPage(props: {
     const agent = selectedAgentId || '<AGENT_ID>';
     return `# Python (OpenAI SDK) via Zapheit gateway\n` +
       `# 1) pip install openai\n` +
-      `# 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export RASI_API_KEY="sk_..."'}\n` +
-      `# 3) export RASI_AGENT_ID="${agent}"\n` +
+      `# 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export ZAPHEIT_API_KEY="sk_..."'}\n` +
+      `# 3) export ZAPHEIT_AGENT_ID="${agent}"\n` +
       `\n` +
       `from openai import OpenAI\n` +
       `import os\n` +
       `\n` +
       `client = OpenAI(\n` +
-      `  api_key=os.environ["RASI_API_KEY"],\n` +
-      `  base_url=os.environ.get("RASI_BASE_URL", "${gatewayBaseUrl}"),\n` +
+      `  api_key=os.environ["ZAPHEIT_API_KEY"],\n` +
+      `  base_url=os.environ.get("ZAPHEIT_BASE_URL", "${gatewayBaseUrl}"),\n` +
       `  default_headers={\n` +
-      `    "x-zapheit-agent-id": os.environ["RASI_AGENT_ID"],\n` +
+      `    "x-zapheit-agent-id": os.environ["ZAPHEIT_AGENT_ID"],\n` +
       `  },\n` +
       `)\n` +
       `\n` +
@@ -350,8 +350,8 @@ export default function ConnectAgentPage(props: {
 
   const curlSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
-    return `curl "${'${RASI_BASE_URL:-' + gatewayBaseUrl + '}'}/chat/completions" \\\n` +
-      `  -H "Authorization: Bearer $RASI_API_KEY" \\\n` +
+    return `curl "${'${ZAPHEIT_BASE_URL:-' + gatewayBaseUrl + '}'}/chat/completions" \\\n` +
+      `  -H "Authorization: Bearer $ZAPHEIT_API_KEY" \\\n` +
       `  -H "Content-Type: application/json" \\\n` +
       `  -H "x-zapheit-agent-id: ${agent}" \\\n` +
       `  -d '{\n` +
@@ -563,7 +563,7 @@ export default function ConnectAgentPage(props: {
                       </label>
                       {selectedKey ? (
                         <div className="text-xs text-slate-400">
-                          Secret can’t be re-shown. You’ll use the env var `RASI_API_KEY` in your app.
+                          Secret can’t be re-shown. You’ll use the env var `ZAPHEIT_API_KEY` in your app.
                         </div>
                       ) : null}
                     </>

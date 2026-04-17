@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Brain, ArrowLeft } from 'lucide-react';
 
 const EFFECTIVE_DATE = '1 April 2025';
-const COMPANY = 'Rasi Cyber Solutions Private Limited';
+const LEGAL_ENTITY = 'Rasi Cyber Solutions Private Limited';
 const PRODUCT = 'Zapheit';
 const CONTACT_EMAIL = 'privacy@zapheit.com';
 
@@ -37,7 +37,7 @@ export default function PrivacyPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Privacy Policy</h1>
           <p className="text-slate-500 text-sm">Effective date: {EFFECTIVE_DATE}</p>
           <p className="text-slate-500 text-sm mt-1">
-            This policy applies to the {PRODUCT} platform operated by {COMPANY} and is compliant with India's Digital Personal Data Protection Act 2023 (DPDPA).
+            This policy applies to the {PRODUCT} platform. {PRODUCT} is operated by {LEGAL_ENTITY} and is compliant with India's Digital Personal Data Protection Act 2023 (DPDPA).
           </p>
         </div>
 
@@ -45,13 +45,13 @@ export default function PrivacyPage() {
 
           <section>
             <p>
-              At {COMPANY}, we take privacy seriously. This Privacy Policy explains what data we collect, why we collect it, how we use it, and your rights over it. We do not sell your data. Ever.
+              At {PRODUCT}, we take privacy seriously. This Privacy Policy explains what data we collect, why we collect it, how we use it, and your rights over it. We do not sell your data. Ever.
             </p>
           </section>
 
           <Section title="1. Who We Are">
             <p>
-              {COMPANY} is the data controller for information collected through the {PRODUCT} platform. For questions about this policy, contact us at{' '}
+              {PRODUCT} is operated by {LEGAL_ENTITY}, which acts as the data controller for information collected through the platform. For questions about this policy, contact us at{' '}
               <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>.
             </p>
           </Section>
@@ -172,7 +172,7 @@ export default function PrivacyPage() {
               For privacy questions, data requests, or grievances under the DPDPA, contact our Privacy Officer:
             </p>
             <div className="mt-3 p-4 rounded-xl border border-slate-700 bg-white/[0.02] space-y-1">
-              <p className="text-slate-300 font-medium">{COMPANY}</p>
+              <p className="text-slate-300 font-medium">{PRODUCT} (operated by {LEGAL_ENTITY})</p>
               <p>PH-II GR FL, BL-B 20, Round Tank Ln, Howrah, West Bengal 711101, India</p>
               <p>Mobile: +91-9433116259</p>
               <p>Email: <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a></p>
@@ -186,7 +186,7 @@ export default function PrivacyPage() {
       {/* Footer */}
       <footer className="border-t border-slate-800 py-8 px-6 mt-16">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-          <p>© {year} {COMPANY}. All rights reserved.</p>
+          <p>© {year} {PRODUCT}. Operated by {LEGAL_ENTITY}.</p>
           <div className="flex gap-6">
             <button onClick={() => navigate('/terms')} className="hover:text-cyan-400 transition-colors">Terms</button>
             <button onClick={() => navigate('/privacy')} className="hover:text-cyan-400 transition-colors">Privacy</button>

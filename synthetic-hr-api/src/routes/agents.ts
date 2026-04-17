@@ -1855,7 +1855,7 @@ Always be professional, empathetic, and concise. Do not make up policies that ar
         risk_level: 'low',
         risk_score: 20,
         config: {
-          display_provider: 'Rasi AI',
+          display_provider: 'Zapheit AI',
           knowledge_context: contextText,
           knowledge_source: req.file.originalname,
           knowledge_chars: contextText.length,

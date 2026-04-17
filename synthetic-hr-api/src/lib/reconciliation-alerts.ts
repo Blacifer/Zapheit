@@ -101,7 +101,7 @@ export function deriveReconciliationAlerts(input: {
         code: 'reconciliation_gap',
         provider: 'all',
         title: 'Provider-reported spend drift detected',
-        message: `The current provider-reported total differs from RASI-observed spend by ${absoluteGap.toFixed(2)} USD across the last 30-day window.`,
+        message: `The current provider-reported total differs from Zapheit-observed spend by ${absoluteGap.toFixed(2)} USD across the last 30-day window.`,
       });
     }
   }

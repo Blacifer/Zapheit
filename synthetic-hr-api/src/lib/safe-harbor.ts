@@ -499,10 +499,10 @@ export async function generateSafeHarborDocument(orgId: string, type: DocumentTy
   const state = await getSafeHarborState(orgId);
   const heading =
     type === 'sla'
-      ? 'RASI Safe Harbor SLA Summary'
+      ? 'Zapheit Safe Harbor SLA Summary'
       : type === 'dpa'
-        ? 'RASI Data Processing Overview'
-        : 'RASI Security Responsibility Matrix';
+        ? 'Zapheit Data Processing Overview'
+        : 'Zapheit Security Responsibility Matrix';
 
   const commonHeader = [
     heading,
@@ -532,9 +532,9 @@ export async function generateSafeHarborDocument(orgId: string, type: DocumentTy
       : type === 'dpa'
         ? [
             'Data processing boundary',
-            '- RASI processes governance metadata, operational telemetry, audit evidence, and control-state summaries.',
+            '- Zapheit processes governance metadata, operational telemetry, audit evidence, and control-state summaries.',
             '- Customers remain responsible for prompt content, training data quality, and downstream business processing.',
-            '- Third-party model providers remain independent processors/sub-processors outside the RASI governance layer.',
+            '- Third-party model providers remain independent processors/sub-processors outside the Zapheit governance layer.',
             '',
             'Data-handling points to review',
             `- Audit retention target: ${state.sla.auditRetentionDays} days`,
@@ -545,9 +545,9 @@ export async function generateSafeHarborDocument(orgId: string, type: DocumentTy
           ]
         : [
             'Security responsibility matrix',
-            '- RASI covers governance controls, account-level policy persistence, observability, and emergency control surfaces where configured.',
+            '- Zapheit covers governance controls, account-level policy persistence, observability, and emergency control surfaces where configured.',
             '- Customer covers prompts, integrations, credentials, model usage decisions, and legal review of outputs.',
-            '- Third-party provider availability and behavior remain outside the RASI security boundary.',
+            '- Third-party provider availability and behavior remain outside the Zapheit security boundary.',
             '',
             'Latest evidence',
             `- Last webhook delivery: ${state.proofs.lastWebhookDelivery ? `${formatDateTime(state.proofs.lastWebhookDelivery.attemptedAt)} (${state.proofs.lastWebhookDelivery.status})` : 'No delivery observed yet'}`,
@@ -560,7 +560,7 @@ export async function generateSafeHarborDocument(orgId: string, type: DocumentTy
     '',
     'Legal note',
     '- This document is an account summary generated from live backend state.',
-    '- Final commercial, DPA, and liability terms remain defined by the executed agreement with Rasi Solutions.',
+    '- Final commercial, DPA, and liability terms remain defined by the executed agreement with Zapheit and its operating entity.',
   ];
 
   const lines = [...commonHeader, ...typeSpecific, ...footer].flatMap((line) => wrapText(line));

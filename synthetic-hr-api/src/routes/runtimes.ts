@@ -1310,8 +1310,8 @@ async function executeExternalAction(
           mode: payload.mode,
           purpose: payload.purpose,
           queue_if_low_balance: payload.queue_if_low_balance ?? true,
-          narration: payload.narration || 'RASI agent payout',
-          notes: { source: 'rasi-agent', ...(payload.notes || {}) },
+          narration: payload.narration || 'Zapheit agent payout',
+          notes: { source: 'zapheit-agent', ...(payload.notes || {}) },
         }),
       });
       const data: any = await res.json().catch(() => ({}));

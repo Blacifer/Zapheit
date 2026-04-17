@@ -512,7 +512,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
         <SectionCard title="Coverage" description="What is evidenced today vs what still depends on your team." icon={ShieldCheck}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-              <p className="text-sm font-semibold text-white">Covered by RASI</p>
+              <p className="text-sm font-semibold text-white">Covered by Zapheit</p>
               <ul className="mt-4 space-y-3 text-sm text-slate-300">
                 <li>{agentsWithBudgets.length}/{agents.length || 0} agents have budget guardrails.</li>
                 <li>{connectedIntegrations.length} integrations are inside monitored scope.</li>
