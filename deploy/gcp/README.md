@@ -2,6 +2,20 @@
 
 This guide covers the one-time manual setup on GCP, then automated deploys via Cloud Build on every push.
 
+For staging, use a separate target instead of reusing production-named Cloud Run services. The repo now includes `deploy/gcp/deploy-staging.sh`, which defaults to:
+
+- `DEPLOY_ENV=staging`
+- `SERVICE_SUFFIX=-staging`
+- `SECRET_SUFFIX=_STAGING`
+- `BUILD_SA_NAME=cloudbuild-deployer-staging`
+
+That means staging deploys can safely target:
+
+- `synthetic-hr-api-staging`
+- `synthetic-hr-runtime-staging`
+
+while still using the same base deploy logic.
+
 ---
 
 ## Prerequisites
@@ -116,25 +130,52 @@ secret SYNTHETICHR_MODEL             "gpt-4o"
 
 ## Step 6 — Grant Cloud Build Access to Secrets
 
-Cloud Build runs as a service account. Grant it permission to read Secret Manager secrets and deploy to Cloud Run:
+Use a dedicated user-managed service account for Cloud Build trigger execution. This avoids overloading the Cloud Run runtime identity and matches org policies that require a user-managed trigger service account.
 
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)")
+BUILD_SA="cloudbuild-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com"
 
-# Allow Cloud Build to access secrets
+# Create a dedicated build service account
+gcloud iam service-accounts create cloudbuild-deployer \
+  --display-name="Zapheit Cloud Build Deployer" \
+  --project=YOUR_PROJECT_ID
+
+# Allow the build SA to access secrets
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --member="serviceAccount:${BUILD_SA}" \
   --role="roles/secretmanager.secretAccessor"
 
-# Allow Cloud Build to deploy Cloud Run services
+# Allow the build SA to deploy Cloud Run services
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --member="serviceAccount:${BUILD_SA}" \
   --role="roles/run.admin"
 
-# Allow Cloud Build to push images to Artifact Registry
+# Allow the build SA to push images to Artifact Registry
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --member="serviceAccount:${BUILD_SA}" \
   --role="roles/artifactregistry.writer"
+
+# Allow the build SA to write build logs
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${BUILD_SA}" \
+  --role="roles/logging.logWriter"
+
+# Allow the build SA to execute builds
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${BUILD_SA}" \
+  --role="roles/cloudbuild.builds.builder"
+
+# Allow the build SA to deploy with the runtime identities
+gcloud iam service-accounts add-iam-policy-binding \
+  zapheit-api@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:${BUILD_SA}" \
+  --role="roles/iam.serviceAccountUser"
+
+gcloud iam service-accounts add-iam-policy-binding \
+  zapheit-runtime@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:${BUILD_SA}" \
+  --role="roles/iam.serviceAccountUser"
 
 # Allow Cloud Run to pull images from Artifact Registry
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
@@ -160,7 +201,8 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 4. Branch: `^main$`
 5. Build configuration: **Cloud Build configuration file**
 6. Location: `synthetic-hr-api/cloudbuild.yaml`
-7. Click **Save**
+7. Service account: `cloudbuild-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`
+8. Click **Save**
 
 ### Create trigger for synthetic-hr-runtime
 
@@ -168,15 +210,18 @@ Repeat the same steps:
 1. Name: `deploy-runtime`
 2. Same branch and settings
 3. Configuration file: `synthetic-hr-runtime/cloudbuild.yaml`
-4. Click **Save**
+4. Service account: `cloudbuild-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`
+5. Click **Save**
 
 > By default triggers fire on every push to `main`. If you only want to trigger when those directories change, add an **Included files filter**: `synthetic-hr-api/**` or `synthetic-hr-runtime/**`.
+>
+> Do not use `zapheit-api@...` or `zapheit-runtime@...` as the trigger service account. Those are the Cloud Run runtime identities, not the Cloud Build executor.
 
 ---
 
 ## Step 8 — First Deploy (Manual)
 
-For the very first deploy, run the script from the repo root:
+For the very first production deploy, run the script from the repo root:
 
 ```bash
 export PROJECT_ID=YOUR_PROJECT_ID
@@ -191,6 +236,33 @@ This will:
 4. Deploy both Cloud Run services
 
 At the end it prints the **API URL** (looks like `https://synthetic-hr-api-xxxx-el.a.run.app`).
+
+### Staging deploy
+
+For a staging deploy, prefer either:
+
+```bash
+export PROJECT_ID=YOUR_STAGING_PROJECT_ID
+export REGION=asia-south1
+bash deploy/gcp/deploy-staging.sh
+```
+
+or, if you intentionally keep staging in the same GCP project, make sure you also maintain separate secret names with the `_STAGING` suffix before running the same command.
+
+The staging wrapper deploys:
+
+- `synthetic-hr-api-staging`
+- `synthetic-hr-runtime-staging`
+
+and expects secrets like:
+
+- `API_URL_STAGING`
+- `FRONTEND_URL_STAGING`
+- `SUPABASE_URL_STAGING`
+- `SUPABASE_ANON_KEY_STAGING`
+- `SYNTHETICHR_CONTROL_PLANE_URL_STAGING`
+
+Use a separate staging Vercel URL and staging Supabase project/config. Do not point staging runtime credentials at the production control plane.
 
 ---
 
@@ -254,7 +326,10 @@ No manual action needed after initial setup.
 ## Troubleshooting
 
 **Build fails with "permission denied" pushing to Artifact Registry**  
-→ Re-run Step 6 to ensure the Cloud Build service account has `artifactregistry.writer`.
+→ Re-run Step 6 to ensure `cloudbuild-deployer@...` has `artifactregistry.writer`.
+
+**Build fails immediately with "Internal Error" and no step logs**
+→ Verify the trigger is using `cloudbuild-deployer@...` and not `zapheit-api@...`. Also confirm the build SA has `logging.logWriter`, `cloudbuild.builds.builder`, `run.admin`, `artifactregistry.writer`, `secretmanager.secretAccessor`, and `iam.serviceAccountUser` on the runtime service accounts.
 
 **Cloud Run service returns 403**  
 → The runtime service is `--no-allow-unauthenticated` by design (internal). The API service should be `--allow-unauthenticated`.

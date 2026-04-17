@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy/gcp/deploy.sh
 # First-time GCP setup + deploy for Zapheit (synthetic-hr-api + synthetic-hr-runtime)
-# Run ONCE after completing the manual steps in README.md
+# Supports production and staging targets.
 #
 # Usage:
 #   export PROJECT_ID=rasisynthetichr
@@ -15,13 +15,98 @@ PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID env var first}"
 REGION="${REGION:-asia-south1}"
 REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/zapheit"
 COMMIT_SHA=$(git rev-parse --short HEAD)
+DEPLOY_ENV="${DEPLOY_ENV:-production}"
+SERVICE_SUFFIX="${SERVICE_SUFFIX:-}"
+SECRET_SUFFIX="${SECRET_SUFFIX:-}"
+BUILD_SA_NAME="${BUILD_SA_NAME:-cloudbuild-deployer}"
+BUILD_SA_EMAIL="${BUILD_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 BILLING_ACCOUNT=$(gcloud billing projects describe "${PROJECT_ID}" --format="value(billingAccountName)" 2>/dev/null | sed 's|billingAccounts/||' || echo "")
 
+if [ -z "${SERVICE_SUFFIX}" ] && [ "${DEPLOY_ENV}" != "production" ]; then
+  SERVICE_SUFFIX="-${DEPLOY_ENV}"
+fi
+
+API_SERVICE_NAME="synthetic-hr-api${SERVICE_SUFFIX}"
+RUNTIME_SERVICE_NAME="synthetic-hr-runtime${SERVICE_SUFFIX}"
+API_SA_NAME="zapheit-api${SERVICE_SUFFIX}"
+RUNTIME_SA_NAME="zapheit-runtime${SERVICE_SUFFIX}"
+UPTIME_CHECK_NAME="zapheit-api-health${SERVICE_SUFFIX}"
+
+CREATE_BUDGET_ALERT="${CREATE_BUDGET_ALERT:-}"
+if [ -z "${CREATE_BUDGET_ALERT}" ]; then
+  if [ "${DEPLOY_ENV}" = "production" ]; then
+    CREATE_BUDGET_ALERT="true"
+  else
+    CREATE_BUDGET_ALERT="false"
+  fi
+fi
+
+build_secret_bindings() {
+  local bindings=()
+  local env_name
+  for env_name in "$@"; do
+    bindings+=("${env_name}=${env_name}${SECRET_SUFFIX}:latest")
+  done
+  local IFS=,
+  echo "${bindings[*]}"
+}
+
+API_SECRET_BINDINGS=$(build_secret_bindings \
+  NODE_ENV \
+  SUPABASE_URL \
+  SUPABASE_ANON_KEY \
+  SUPABASE_SERVICE_KEY \
+  JWT_SECRET \
+  FRONTEND_URL \
+  API_URL \
+  CORS_ALLOWED_ORIGINS \
+  OPENAI_API_KEY \
+  ANTHROPIC_API_KEY \
+  RASI_OPENAI_API_KEY \
+  RASI_ANTHROPIC_API_KEY \
+  RASI_OPENROUTER_API_KEY \
+  DATABASE_URL \
+  INTEGRATIONS_ENCRYPTION_KEY \
+  ERASURE_SIGNING_SALT \
+  EMAIL_PROVIDER \
+  EMAIL_FROM \
+  ALERT_EMAIL_TO \
+  RESEND_API_KEY \
+  CASHFREE_CLIENT_ID \
+  CASHFREE_CLIENT_SECRET \
+  CASHFREE_API_VERSION \
+  CASHFREE_ENVIRONMENT \
+  CASHFREE_WEBHOOK_SECRET \
+  GOOGLE_CLIENT_ID \
+  GOOGLE_CLIENT_SECRET \
+  SLACK_CLIENT_ID \
+  SLACK_CLIENT_SECRET \
+  SLACK_SIGNING_SECRET \
+  CONNECTORS_ENABLED \
+  CROSS_BORDER_PII_MASKING \
+  SCHEMA_COMPAT_STRICT_OPTIONAL \
+  REDTEAM_INTERVAL_MINUTES \
+  RECRUITMENT_SCORING_MODEL \
+  OTEL_ENABLED)
+
+RUNTIME_SECRET_BINDINGS=$(build_secret_bindings \
+  SYNTHETICHR_CONTROL_PLANE_URL \
+  SYNTHETICHR_API_KEY \
+  SYNTHETICHR_RUNTIME_ID \
+  SYNTHETICHR_ENROLLMENT_TOKEN \
+  SYNTHETICHR_RUNTIME_SECRET \
+  SYNTHETICHR_MODEL)
+
 echo ""
-echo "=== Zapheit GCP Production Deploy ==="
+echo "=== Zapheit GCP Deploy ==="
+echo "  Env     : ${DEPLOY_ENV}"
 echo "  Project : ${PROJECT_ID}"
 echo "  Region  : ${REGION}"
 echo "  Registry: ${REGISTRY}"
+echo "  API Svc : ${API_SERVICE_NAME}"
+echo "  Run Svc : ${RUNTIME_SERVICE_NAME}"
+echo "  Secret Suffix: ${SECRET_SUFFIX:-<none>}"
+echo "  Build SA: ${BUILD_SA_EMAIL}"
 echo "  Commit  : ${COMMIT_SHA}"
 echo ""
 
@@ -49,19 +134,25 @@ gcloud artifacts repositories create zapheit \
 echo "[3/8] Creating dedicated service accounts..."
 
 # API service account
-gcloud iam service-accounts create zapheit-api \
-  --display-name="Zapheit API (Cloud Run)" \
+gcloud iam service-accounts create "${API_SA_NAME}" \
+  --display-name="Zapheit API (${DEPLOY_ENV})" \
   --project="${PROJECT_ID}" \
-  2>/dev/null || echo "  zapheit-api SA already exists"
+  2>/dev/null || echo "  ${API_SA_NAME} SA already exists"
 
 # Runtime service account
-gcloud iam service-accounts create zapheit-runtime \
-  --display-name="Zapheit Runtime Worker (Cloud Run)" \
+gcloud iam service-accounts create "${RUNTIME_SA_NAME}" \
+  --display-name="Zapheit Runtime Worker (${DEPLOY_ENV})" \
   --project="${PROJECT_ID}" \
-  2>/dev/null || echo "  zapheit-runtime SA already exists"
+  2>/dev/null || echo "  ${RUNTIME_SA_NAME} SA already exists"
+
+# Dedicated Cloud Build execution service account
+gcloud iam service-accounts create "${BUILD_SA_NAME}" \
+  --display-name="Zapheit Cloud Build Deployer" \
+  --project="${PROJECT_ID}" \
+  2>/dev/null || echo "  ${BUILD_SA_NAME} SA already exists"
 
 # Grant both SAs permission to read Secret Manager secrets only
-for SA in zapheit-api zapheit-runtime; do
+for SA in "${API_SA_NAME}" "${RUNTIME_SA_NAME}"; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor" \
@@ -71,30 +162,37 @@ done
 # ── Step 4: Grant Cloud Build permissions ─────────────────────────────────────
 echo "[4/8] Granting Cloud Build IAM permissions..."
 PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)")
-CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
 COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${CB_SA}" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
   --role="roles/secretmanager.secretAccessor" --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${CB_SA}" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
   --role="roles/run.admin" --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${CB_SA}" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
   --role="roles/artifactregistry.writer" --quiet
+
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
+  --role="roles/logging.logWriter" --quiet
+
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
+  --role="roles/cloudbuild.builds.builder" --quiet
 
 # Allow Cloud Build to act as the dedicated service accounts during deploy
 gcloud iam service-accounts add-iam-policy-binding \
-  "zapheit-api@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --member="serviceAccount:${CB_SA}" \
+  "${API_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser" --quiet
 
 gcloud iam service-accounts add-iam-policy-binding \
-  "zapheit-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --member="serviceAccount:${CB_SA}" \
+  "${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser" --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
@@ -127,8 +225,8 @@ docker push --all-tags "${REGISTRY}/zapheit-runtime"
 # ── Step 7: Deploy to Cloud Run ───────────────────────────────────────────────
 echo "[7/8] Deploying to Cloud Run..."
 
-echo "  Deploying synthetic-hr-api..."
-gcloud run deploy synthetic-hr-api \
+echo "  Deploying ${API_SERVICE_NAME}..."
+gcloud run deploy "${API_SERVICE_NAME}" \
   --image="${REGISTRY}/zapheit-api:${COMMIT_SHA}" \
   --region="${REGION}" \
   --platform=managed \
@@ -141,47 +239,12 @@ gcloud run deploy synthetic-hr-api \
   --max-instances=10 \
   --timeout=60 \
   --concurrency=80 \
-  --service-account="zapheit-api@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --set-secrets="NODE_ENV=NODE_ENV:latest,\
-SUPABASE_URL=SUPABASE_URL:latest,\
-SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,\
-SUPABASE_SERVICE_KEY=SUPABASE_SERVICE_KEY:latest,\
-JWT_SECRET=JWT_SECRET:latest,\
-FRONTEND_URL=FRONTEND_URL:latest,\
-API_URL=API_URL:latest,\
-CORS_ALLOWED_ORIGINS=CORS_ALLOWED_ORIGINS:latest,\
-OPENAI_API_KEY=OPENAI_API_KEY:latest,\
-ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,\
-RASI_OPENAI_API_KEY=RASI_OPENAI_API_KEY:latest,\
-RASI_ANTHROPIC_API_KEY=RASI_ANTHROPIC_API_KEY:latest,\
-RASI_OPENROUTER_API_KEY=RASI_OPENROUTER_API_KEY:latest,\
-DATABASE_URL=DATABASE_URL:latest,\
-INTEGRATIONS_ENCRYPTION_KEY=INTEGRATIONS_ENCRYPTION_KEY:latest,\
-ERASURE_SIGNING_SALT=ERASURE_SIGNING_SALT:latest,\
-EMAIL_PROVIDER=EMAIL_PROVIDER:latest,\
-EMAIL_FROM=EMAIL_FROM:latest,\
-ALERT_EMAIL_TO=ALERT_EMAIL_TO:latest,\
-RESEND_API_KEY=RESEND_API_KEY:latest,\
-CASHFREE_CLIENT_ID=CASHFREE_CLIENT_ID:latest,\
-CASHFREE_CLIENT_SECRET=CASHFREE_CLIENT_SECRET:latest,\
-CASHFREE_API_VERSION=CASHFREE_API_VERSION:latest,\
-CASHFREE_ENVIRONMENT=CASHFREE_ENVIRONMENT:latest,\
-CASHFREE_WEBHOOK_SECRET=CASHFREE_WEBHOOK_SECRET:latest,\
-GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,\
-GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,\
-SLACK_CLIENT_ID=SLACK_CLIENT_ID:latest,\
-SLACK_CLIENT_SECRET=SLACK_CLIENT_SECRET:latest,\
-SLACK_SIGNING_SECRET=SLACK_SIGNING_SECRET:latest,\
-CONNECTORS_ENABLED=CONNECTORS_ENABLED:latest,\
-CROSS_BORDER_PII_MASKING=CROSS_BORDER_PII_MASKING:latest,\
-SCHEMA_COMPAT_STRICT_OPTIONAL=SCHEMA_COMPAT_STRICT_OPTIONAL:latest,\
-REDTEAM_INTERVAL_MINUTES=REDTEAM_INTERVAL_MINUTES:latest,\
-RECRUITMENT_SCORING_MODEL=RECRUITMENT_SCORING_MODEL:latest,\
-OTEL_ENABLED=OTEL_ENABLED:latest" \
+  --service-account="${API_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --set-secrets="${API_SECRET_BINDINGS}" \
   --project="${PROJECT_ID}"
 
-echo "  Deploying synthetic-hr-runtime..."
-gcloud run deploy synthetic-hr-runtime \
+echo "  Deploying ${RUNTIME_SERVICE_NAME}..."
+gcloud run deploy "${RUNTIME_SERVICE_NAME}" \
   --image="${REGISTRY}/zapheit-runtime:${COMMIT_SHA}" \
   --region="${REGION}" \
   --platform=managed \
@@ -194,26 +257,21 @@ gcloud run deploy synthetic-hr-runtime \
   --max-instances=1 \
   --timeout=3600 \
   --concurrency=1 \
-  --service-account="zapheit-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --set-secrets="SYNTHETICHR_CONTROL_PLANE_URL=SYNTHETICHR_CONTROL_PLANE_URL:latest,\
-SYNTHETICHR_API_KEY=SYNTHETICHR_API_KEY:latest,\
-SYNTHETICHR_RUNTIME_ID=SYNTHETICHR_RUNTIME_ID:latest,\
-SYNTHETICHR_ENROLLMENT_TOKEN=SYNTHETICHR_ENROLLMENT_TOKEN:latest,\
-SYNTHETICHR_RUNTIME_SECRET=SYNTHETICHR_RUNTIME_SECRET:latest,\
-SYNTHETICHR_MODEL=SYNTHETICHR_MODEL:latest" \
+  --service-account="${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --set-secrets="${RUNTIME_SECRET_BINDINGS}" \
   --project="${PROJECT_ID}"
 
 # ── Step 8: Uptime check + budget alert ──────────────────────────────────────
 echo "[8/8] Setting up monitoring and budget alert..."
 
-API_URL=$(gcloud run services describe synthetic-hr-api \
+API_URL=$(gcloud run services describe "${API_SERVICE_NAME}" \
   --region="${REGION}" \
   --project="${PROJECT_ID}" \
   --format="value(status.url)")
 
 # Uptime check for the API health endpoint
-gcloud monitoring uptime create zapheit-api-health \
-  --display-name="Zapheit API Health" \
+gcloud monitoring uptime create "${UPTIME_CHECK_NAME}" \
+  --display-name="Zapheit API Health (${DEPLOY_ENV})" \
   --http-check-path="/health" \
   --hostname="${API_URL#https://}" \
   --port=443 \
@@ -222,17 +280,17 @@ gcloud monitoring uptime create zapheit-api-health \
   2>/dev/null || echo "  (uptime check already exists or skipped)"
 
 # Budget alert at ₹2000/month (~$24) — adjust as needed
-if [ -n "${BILLING_ACCOUNT}" ]; then
+if [ "${CREATE_BUDGET_ALERT}" = "true" ] && [ -n "${BILLING_ACCOUNT}" ]; then
   gcloud billing budgets create \
     --billing-account="${BILLING_ACCOUNT}" \
-    --display-name="Zapheit Monthly Budget" \
+    --display-name="Zapheit ${DEPLOY_ENV^} Monthly Budget" \
     --budget-amount="2000INR" \
     --threshold-rule=percent=50 \
     --threshold-rule=percent=90 \
     --threshold-rule=percent=100 \
     2>/dev/null || echo "  (budget alert already exists or skipped)"
 else
-  echo "  (skipping budget alert — billing account not found)"
+  echo "  (skipping budget alert)"
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
@@ -242,9 +300,14 @@ echo ""
 echo "API URL: ${API_URL}"
 echo "Health:  ${API_URL}/health"
 echo ""
+echo "Service names:"
+echo "  API    : ${API_SERVICE_NAME}"
+echo "  Runtime: ${RUNTIME_SERVICE_NAME}"
+echo ""
 echo "Next steps:"
 echo "  1. Run the secrets setup: bash deploy/gcp/secrets.sh"
 echo "  2. Update API_URL secret with: ${API_URL}"
 echo "  3. Update VITE_API_URL on Vercel to: ${API_URL}"
-echo "  4. Connect Cloud Build to GitHub — see deploy/gcp/README.md Step 7"
-echo "  5. (Optional) Map custom domain api.zapheit.com — see README.md Step 10"
+echo "  4. Configure Cloud Build triggers to use: ${BUILD_SA_EMAIL}"
+echo "  5. Connect Cloud Build to GitHub — see deploy/gcp/README.md Step 7"
+echo "  6. (Optional) Map custom domain api.zapheit.com — see README.md Step 10"

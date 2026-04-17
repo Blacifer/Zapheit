@@ -30,12 +30,29 @@ If staging Cloud Run services do not exist yet, create them as separate services
 - `synthetic-hr-api-staging`
 - `synthetic-hr-runtime-staging`
 
+Recommended repo-supported deploy command:
+
+```bash
+export PROJECT_ID="<your-staging-gcp-project>"
+export REGION="asia-south1"
+bash deploy/gcp/deploy-staging.sh
+```
+
+This wrapper defaults to:
+
+- `DEPLOY_ENV=staging`
+- `SERVICE_SUFFIX=-staging`
+- `SECRET_SUFFIX=_STAGING`
+- `BUILD_SA_NAME=cloudbuild-deployer-staging`
+
 Recommended staging env separation:
 
 - `FRONTEND_URL` -> staging frontend URL
 - `API_URL` -> staging API URL
 - `CORS_ALLOWED_ORIGINS` -> staging frontend URL
 - runtime enrollment/API key/runtime ID -> staging-specific values
+
+If staging shares the same GCP project as production, the `_STAGING` secret suffix is required to avoid collisions with production secrets.
 
 Do not point staging runtime to the production control plane.
 
