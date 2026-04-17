@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { checkCircuitBreaker, recordSuccess, recordFailure } from '../lib/circuit-breaker';
 
 // Sentinel org ID used for system-level (provider) circuit breakers.
@@ -143,43 +144,40 @@ export class OpenAIService {
 
 // Anthropic Service
 export class AnthropicService {
-  private apiKey: string;
-  private baseUrl: string;
-  private version: string;
+  private client: Anthropic;
 
   constructor(apiKey: string) {
-    this.apiKey = apiKey;
-    this.baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
-    this.version = process.env.ANTHROPIC_VERSION || '2023-06-01';
+    this.client = new Anthropic({
+      apiKey,
+      ...(process.env.ANTHROPIC_BASE_URL ? { baseURL: process.env.ANTHROPIC_BASE_URL } : {}),
+    });
   }
 
-  private static extractTextBlocks(content: any): string {
-    if (!Array.isArray(content)) return '';
+  private static extractTextBlocks(content: Anthropic.ContentBlock[]): string {
     return content
-      .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
       .join('');
   }
 
   /** Translate OpenAI tool schema → Anthropic format */
-  private static toAnthropicTools(tools: ConnectorTool[]): any[] {
+  private static toAnthropicTools(tools: ConnectorTool[]): Anthropic.Tool[] {
     return tools.map((t) => ({
       name: t.function.name,
       description: t.function.description,
-      input_schema: t.function.parameters,
+      input_schema: t.function.parameters as Anthropic.Tool['input_schema'],
     }));
   }
 
   /** Translate Anthropic tool_use content blocks → OpenAI ToolCall format */
-  private static extractToolCalls(content: any[]): ToolCall[] {
-    if (!Array.isArray(content)) return [];
+  private static extractToolCalls(content: Anthropic.ContentBlock[]): ToolCall[] {
     return content
-      .filter((block) => block?.type === 'tool_use')
+      .filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use')
       .map((block) => ({
-        id: block.id as string,
+        id: block.id,
         type: 'function' as const,
         function: {
-          name: block.name as string,
+          name: block.name,
           arguments: JSON.stringify(block.input ?? {}),
         },
       }));
@@ -189,17 +187,21 @@ export class AnthropicService {
    * Translate messages for Anthropic — handles tool_calls (assistant) and
    * tool results (role: 'tool') that come from the gateway continuation loop.
    */
-  private static toAnthropicMessages(messages: { role: string; content: any }[]): any[] {
-    const out: any[] = [];
+  private static toAnthropicMessages(messages: { role: string; content: any }[]): Anthropic.MessageParam[] {
+    const out: Anthropic.MessageParam[] = [];
     for (const m of messages) {
       if (m.role === 'system') continue;
 
       if (m.role === 'tool') {
         // Tool result — must be appended as user content block
         const last = out[out.length - 1];
-        const block = { type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: String(m.content) };
+        const block: Anthropic.ToolResultBlockParam = {
+          type: 'tool_result',
+          tool_use_id: (m as any).tool_call_id,
+          content: String(m.content),
+        };
         if (last?.role === 'user' && Array.isArray(last.content)) {
-          last.content.push(block);
+          (last.content as any[]).push(block);
         } else {
           out.push({ role: 'user', content: [block] });
         }
@@ -211,7 +213,7 @@ export class AnthropicService {
         out.push({
           role: 'assistant',
           content: (m as any).tool_calls.map((tc: ToolCall) => ({
-            type: 'tool_use',
+            type: 'tool_use' as const,
             id: tc.id,
             name: tc.function.name,
             input: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
@@ -237,7 +239,6 @@ export class AnthropicService {
 
     const anthropicMessages = AnthropicService.toAnthropicMessages(messages);
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
-
     const anthropicTools = options.tools && options.tools.length > 0
       ? AnthropicService.toAnthropicTools(options.tools)
       : undefined;
@@ -250,63 +251,39 @@ export class AnthropicService {
       throw err;
     }
 
-    let response: Response;
+    let data: Anthropic.Message;
     try {
-      response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'x-api-key': this.apiKey,
-          'anthropic-version': this.version,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          ...(systemPrompt ? { system: systemPrompt } : {}),
-          messages: anthropicMessages,
-          max_tokens: options.maxTokens ?? 4096,
-          temperature: options.temperature ?? 0.7,
-          ...(anthropicTools ? { tools: anthropicTools } : {}),
-        }),
+      data = await this.client.messages.create({
+        model,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
+        messages: anthropicMessages,
+        max_tokens: options.maxTokens ?? 4096,
+        temperature: options.temperature ?? 0.7,
+        ...(anthropicTools ? { tools: anthropicTools } : {}),
       });
-    } catch (fetchErr) {
+    } catch (err) {
       void recordFailure(SYSTEM_ORG, 'anthropic');
-      throw fetchErr;
-    }
-
-    if (!response.ok) {
-      void recordFailure(SYSTEM_ORG, 'anthropic');
-      const body = await response.text();
-      const err: any = new Error(`Anthropic messages API failed: ${response.status} ${body}`);
-      err.status = response.status;
-      err.responseBody = body;
       throw err;
     }
-    void recordSuccess(SYSTEM_ORG, 'anthropic');
 
-    const data = (await response.json()) as any;
+    void recordSuccess(SYSTEM_ORG, 'anthropic');
     const latency = Date.now() - startTime;
 
-    const outputText = AnthropicService.extractTextBlocks(data?.content);
-    const toolCalls = AnthropicService.extractToolCalls(data?.content || []);
+    const outputText = AnthropicService.extractTextBlocks(data.content);
+    const toolCalls = AnthropicService.extractToolCalls(data.content);
 
-    // Token counts (fallback to heuristic if missing)
-    const inputTokens = Number.isFinite(data?.usage?.input_tokens)
-      ? Number(data.usage.input_tokens)
-      : Math.ceil(messages.reduce((acc, m) => acc + String(m.content).length / 4, 0));
-    const outputTokens = Number.isFinite(data?.usage?.output_tokens)
-      ? Number(data.usage.output_tokens)
-      : Math.ceil(outputText.length / 4);
+    const inputTokens = data.usage.input_tokens;
+    const outputTokens = data.usage.output_tokens;
     const totalTokens = inputTokens + outputTokens;
 
-    // Calculate cost
-    const pricing = ANTHROPIC_PRICING[model as keyof typeof ANTHROPIC_PRICING] || ANTHROPIC_PRICING['claude-3-sonnet'];
+    const pricing = ANTHROPIC_PRICING[model as keyof typeof ANTHROPIC_PRICING] || ANTHROPIC_PRICING['claude-sonnet-4-6'];
     const costUSD = ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
 
     return {
       content: outputText,
       tokenCount: { input: inputTokens, output: outputTokens, total: totalTokens },
       costUSD,
-      model: data?.model || model,
+      model: data.model,
       latency,
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
@@ -325,7 +302,7 @@ export function calculateTokenCost(
   if (platform === 'openai') {
     pricing = OPENAI_PRICING[model as keyof typeof OPENAI_PRICING] || OPENAI_PRICING['gpt-4o'];
   } else {
-    pricing = ANTHROPIC_PRICING[model as keyof typeof ANTHROPIC_PRICING] || ANTHROPIC_PRICING['claude-3-sonnet'];
+    pricing = ANTHROPIC_PRICING[model as keyof typeof ANTHROPIC_PRICING] || ANTHROPIC_PRICING['claude-sonnet-4-6'];
   }
 
   return ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
