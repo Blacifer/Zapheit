@@ -1,77 +1,37 @@
-/**
- * Sentry Error Tracking Setup
- * Initialize Sentry for production error tracking and performance monitoring
- */
-
 import * as Sentry from '@sentry/react';
 import { getFrontendConfig } from './config';
 
 export const initSentry = () => {
-  // Only initialize if we have a Sentry DSN configured
   const config = getFrontendConfig();
-  const sentryDsn = config.sentryDsn;
-  
-  if (!sentryDsn) {
-    return;
-  }
+  if (!config.sentryDsn) return;
 
   const environment = import.meta.env.MODE || 'development';
   const isProduction = environment === 'production';
 
   Sentry.init({
-    // Sentry DSN (Data Source Name)
-    dsn: sentryDsn,
-
-    // Environment (development, staging, production)
+    dsn: config.sentryDsn,
     environment,
-
-    // Release version (optional but recommended)
     release: config.appVersion || '1.0.0',
-
-    // Sample rate (0 = no errors sent, 1 = all errors sent)
+    integrations: [Sentry.browserTracingIntegration()],
     sampleRate: isProduction ? 0.9 : 1.0,
-
-    // Trace sample rate for performance monitoring
     tracesSampleRate: isProduction ? 0.1 : 1.0,
-
-    // Attach stack traces to all messages
     attachStacktrace: true,
-
-    // Ignore errors from known sources
     ignoreErrors: [
-      // Browser extensions
       'top.GLOBALS',
-      // See http://blog.errorception.com/2012/03/tale-of-unfindable-js-error.html
       'originalCreateNotification',
       'canvas.contentDocument',
       'MyApp_RemoveAllHighlights',
-      // LocalStorage quota exceeded
       'QuotaExceededError',
     ],
-
-    // Before sending errors to Sentry
-    beforeSend(event, hint) {
-      // Filter out sensitive data if needed
-      if (event.request?.url) {
-        // Don't capture errors from internal development URLs
-        if (event.request.url.includes('chrome-extension')) {
-          return null;
-        }
-      }
-
-      return event;
-    },
-
-    // Denylist for performance urls
     denyUrls: [
-      // Browser extensions
       /extensions\//i,
       /^chrome:\/\//i,
-      // Third party scripts
       /google-analytics/i,
-      // LocalStorage errors
-      /QuotaExceededError/i,
     ],
+    beforeSend(event) {
+      if (event.request?.url?.includes('chrome-extension')) return null;
+      return event;
+    },
   });
 };
 

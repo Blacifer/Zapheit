@@ -15,6 +15,9 @@ WORKDIR /usr/share/nginx/html
 
 COPY --from=build /app/dist ./
 
+# Nginx config: SPA routing + /health endpoint + gzip + asset caching
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
 # Runtime-config injection for enterprise/self-host deployments.
 RUN apk add --no-cache gettext
 COPY docker/runtime-config.template.js /etc/synthetic-hr/runtime-config.template.js
