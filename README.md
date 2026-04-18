@@ -15,25 +15,25 @@
 
 | Service | Folder | Hosting |
 |---|---|---|
-| Frontend dashboard | `./synthetic-hr` | Vercel |
-| Backend API | `./synthetic-hr-api` | GCP Cloud Run |
-| Runtime worker | `./synthetic-hr-runtime` | GCP Cloud Run |
-| Database & migrations | `./synthetic-hr-database` | Supabase (PostgreSQL) |
+| Frontend dashboard | `./zapheit` | Vercel |
+| Backend API | `./zapheit-api` | GCP Cloud Run |
+| Runtime worker | `./zapheit-runtime` | GCP Cloud Run |
+| Database & migrations | `./zapheit-database` | Supabase (PostgreSQL) |
 
 ## Quick start (local)
 
 ```bash
 # Frontend
-cd synthetic-hr && pnpm install && pnpm dev
+cd zapheit && pnpm install && pnpm dev
 
 # Backend API
-cd synthetic-hr-api && npm install && npm run dev
+cd zapheit-api && npm install && npm run dev
 
 # Runtime worker
-cd synthetic-hr-runtime && npm install && npm run dev
+cd zapheit-runtime && npm install && npm run dev
 ```
 
-See `synthetic-hr/README.md` and `synthetic-hr-database/DEPLOYMENT_GUIDE.md` for full setup.
+See `zapheit/README.md` and `zapheit-database/DEPLOYMENT_GUIDE.md` for full setup.
 
 ## Production gate
 

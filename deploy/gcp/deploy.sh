@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # deploy/gcp/deploy.sh
-# First-time GCP setup + deploy for Zapheit (synthetic-hr-api + synthetic-hr-runtime)
+# First-time GCP setup + deploy for Zapheit (zapheit-api + zapheit-runtime)
 # Supports production and staging targets.
 #
 # Usage:
@@ -26,8 +26,8 @@ if [ -z "${SERVICE_SUFFIX}" ] && [ "${DEPLOY_ENV}" != "production" ]; then
   SERVICE_SUFFIX="-${DEPLOY_ENV}"
 fi
 
-API_SERVICE_NAME="synthetic-hr-api${SERVICE_SUFFIX}"
-RUNTIME_SERVICE_NAME="synthetic-hr-runtime${SERVICE_SUFFIX}"
+API_SERVICE_NAME="zapheit-api${SERVICE_SUFFIX}"
+RUNTIME_SERVICE_NAME="zapheit-runtime${SERVICE_SUFFIX}"
 API_SA_NAME="zapheit-api${SERVICE_SUFFIX}"
 RUNTIME_SA_NAME="zapheit-runtime${SERVICE_SUFFIX}"
 UPTIME_CHECK_NAME="zapheit-api-health${SERVICE_SUFFIX}"
@@ -115,12 +115,12 @@ API_SECRET_BINDINGS=$(build_secret_bindings \
   OTEL_METRICS_EXPORTER)
 
 RUNTIME_SECRET_BINDINGS=$(build_secret_bindings \
-  SYNTHETICHR_CONTROL_PLANE_URL \
-  SYNTHETICHR_API_KEY \
-  SYNTHETICHR_RUNTIME_ID \
-  SYNTHETICHR_ENROLLMENT_TOKEN \
-  SYNTHETICHR_RUNTIME_SECRET \
-  SYNTHETICHR_MODEL)
+  ZAPHEIT_CONTROL_PLANE_URL \
+  ZAPHEIT_API_KEY \
+  ZAPHEIT_RUNTIME_ID \
+  ZAPHEIT_ENROLLMENT_TOKEN \
+  ZAPHEIT_RUNTIME_SECRET \
+  ZAPHEIT_MODEL)
 
 echo ""
 echo "=== Zapheit GCP Deploy ==="
@@ -236,7 +236,7 @@ docker build \
   --platform=linux/amd64 \
   -t "${REGISTRY}/zapheit-api:${COMMIT_SHA}" \
   -t "${REGISTRY}/zapheit-api:latest" \
-  ./synthetic-hr-api
+  ./zapheit-api
 docker push --all-tags "${REGISTRY}/zapheit-api"
 
 echo "  Building zapheit-runtime..."
@@ -244,7 +244,7 @@ docker build \
   --platform=linux/amd64 \
   -t "${REGISTRY}/zapheit-runtime:${COMMIT_SHA}" \
   -t "${REGISTRY}/zapheit-runtime:latest" \
-  ./synthetic-hr-runtime
+  ./zapheit-runtime
 docker push --all-tags "${REGISTRY}/zapheit-runtime"
 
 # ── Step 7: Deploy to Cloud Run ───────────────────────────────────────────────

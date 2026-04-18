@@ -108,7 +108,7 @@ If one surface uses different language or hides a state transition, the release 
 
 Before release, verify:
 
-- no customer-facing launch surface shows legacy `Rasi` / `Synthetic HR` branding
+- no customer-facing launch surface shows legacy `Rasi` / `Zapheit` branding
 - no launch-facing page overclaims unsupported maturity
 - weaker modules are explicitly labeled `Beta` or `Preview`
 - `Apps`, `Chat`, and `Templates` all route into the same governed workflow model

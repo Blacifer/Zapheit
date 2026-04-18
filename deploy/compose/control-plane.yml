@@ -1,11 +1,11 @@
 services:
-  synthetic-hr-api:
+  zapheit-api:
     build:
-      context: ../../synthetic-hr-api
+      context: ../../zapheit-api
     env_file:
       - ./control-plane.env
     ports:
-      - "${SYNTHETICHR_API_PORT:-3001}:3001"
+      - "${ZAPHEIT_API_PORT:-3001}:3001"
     restart: unless-stopped
     deploy:
       resources:
@@ -13,19 +13,19 @@ services:
           cpus: '1.0'
           memory: 512M
 
-  synthetic-hr-frontend:
+  zapheit-ui:
     build:
-      context: ../../synthetic-hr
+      context: ../../zapheit-ui
     ports:
-      - "${SYNTHETICHR_FRONTEND_PORT:-8080}:80"
+      - "${ZAPHEIT_FRONTEND_PORT:-8080}:80"
     environment:
       # These values are written into /runtime-config.js by the container entrypoint.
-      SYNTHETICHR_API_URL: ${SYNTHETICHR_API_URL:-http://localhost:3001/api}
-      SYNTHETICHR_SUPABASE_URL: ${SYNTHETICHR_SUPABASE_URL}
-      SYNTHETICHR_SUPABASE_ANON_KEY: ${SYNTHETICHR_SUPABASE_ANON_KEY}
-      SYNTHETICHR_SENTRY_DSN: ${SYNTHETICHR_SENTRY_DSN:-}
-      SYNTHETICHR_APP_VERSION: ${SYNTHETICHR_APP_VERSION:-}
-      SYNTHETICHR_ERROR_REPORTING_URL: ${SYNTHETICHR_ERROR_REPORTING_URL:-}
+      ZAPHEIT_API_URL: ${ZAPHEIT_API_URL:-http://localhost:3001/api}
+      ZAPHEIT_SUPABASE_URL: ${ZAPHEIT_SUPABASE_URL}
+      ZAPHEIT_SUPABASE_ANON_KEY: ${ZAPHEIT_SUPABASE_ANON_KEY}
+      ZAPHEIT_SENTRY_DSN: ${ZAPHEIT_SENTRY_DSN:-}
+      ZAPHEIT_APP_VERSION: ${ZAPHEIT_APP_VERSION:-}
+      ZAPHEIT_ERROR_REPORTING_URL: ${ZAPHEIT_ERROR_REPORTING_URL:-}
     restart: unless-stopped
     deploy:
       resources:

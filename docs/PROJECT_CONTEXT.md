@@ -54,10 +54,10 @@ The platform is built on a modern, enterprise-ready technology stack:
 
 ## 8. Repository Structure & Navigation
 To assist with navigation and onboarding, the repository is structured as a monorepo containing distinct services:
-- `/synthetic-hr`: The Frontend React/Vite dashboard.
-- `/synthetic-hr-api`: The Express/Node.js backend HTTP API.
-- `/synthetic-hr-runtime`: The execution engine/worker node application.
-- `/synthetic-hr-database`: Database schema, Supabase migrations, and deployment configurations.
+- `/zapheit`: The Frontend React/Vite dashboard.
+- `/zapheit-api`: The Express/Node.js backend HTTP API.
+- `/zapheit-runtime`: The execution engine/worker node application.
+- `/zapheit-database`: Database schema, Supabase migrations, and deployment configurations.
 - `/deploy`: Centralized deployment configurations (e.g., Docker Compose for self-hosting).
 - `/docs`: Archived and broader application documentation.
 

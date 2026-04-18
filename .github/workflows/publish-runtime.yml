@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'synthetic-hr-runtime/**'
+      - 'zapheit-runtime/**'
       - '.github/workflows/publish-runtime.yml'
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./synthetic-hr-runtime
+          context: ./zapheit-runtime
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

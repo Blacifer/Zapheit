@@ -125,7 +125,7 @@ Returns current metrics:
 Run load tests to validate against SLOs:
 ```bash
 export TEST_API_KEY="sk_..."
-cd /Users/patty/Downloads/RasiSyntheticHR
+cd /Users/patty/Downloads/RasiZapheit
 npm run load-test
 ```
 

@@ -32,7 +32,7 @@ Three charts are provided under `charts/`. Install them in this order so the API
 
 ```bash
 # 1. API
-helm install synthetichr-api charts/synthetic-hr-api \
+helm install synthetichr-api charts/zapheit-api \
   --set env.SUPABASE_URL=https://your-project.supabase.co \
   --set env.SUPABASE_ANON_KEY=your-anon-key \
   --set env.SUPABASE_SERVICE_KEY=your-service-key \
@@ -42,17 +42,17 @@ helm install synthetichr-api charts/synthetic-hr-api \
   --set env.API_URL=https://api.synthetichr.example.com
 
 # 2. Runtime worker (one per customer VPC, or self-managed)
-helm install synthetichr-runtime charts/synthetic-hr-runtime \
-  --set env.SYNTHETICHR_CONTROL_PLANE_URL=https://api.synthetichr.example.com \
-  --set env.SYNTHETICHR_RUNTIME_ID=your-runtime-id \
-  --set env.SYNTHETICHR_ENROLLMENT_TOKEN=your-token \
-  --set env.SYNTHETICHR_API_KEY=your-api-key
+helm install synthetichr-runtime charts/zapheit-runtime \
+  --set env.ZAPHEIT_CONTROL_PLANE_URL=https://api.synthetichr.example.com \
+  --set env.ZAPHEIT_RUNTIME_ID=your-runtime-id \
+  --set env.ZAPHEIT_ENROLLMENT_TOKEN=your-token \
+  --set env.ZAPHEIT_API_KEY=your-api-key
 
 # 3. Frontend (enable ingress for external access)
-helm install synthetichr-frontend charts/synthetic-hr-frontend \
-  --set env.SYNTHETICHR_API_URL=https://api.synthetichr.example.com/api \
-  --set env.SYNTHETICHR_SUPABASE_URL=https://your-project.supabase.co \
-  --set env.SYNTHETICHR_SUPABASE_ANON_KEY=your-anon-key \
+helm install synthetichr-frontend charts/zapheit-ui \
+  --set env.ZAPHEIT_API_URL=https://api.synthetichr.example.com/api \
+  --set env.ZAPHEIT_SUPABASE_URL=https://your-project.supabase.co \
+  --set env.ZAPHEIT_SUPABASE_ANON_KEY=your-anon-key \
   --set ingress.enabled=true \
   --set ingress.host=synthetichr.example.com \
   --set ingress.tls.enabled=true \
@@ -63,7 +63,7 @@ kubectl get pods
 helm status synthetichr-api
 ```
 
-All charts follow the same pattern as `charts/synthetic-hr-runtime/`. See each chart's `values.yaml` for the full list of configurable env vars.
+All charts follow the same pattern as `charts/zapheit-runtime/`. See each chart's `values.yaml` for the full list of configurable env vars.
 
 ---
 
@@ -255,7 +255,7 @@ lsof -i :3002
 kill -9 $(lsof -i :3002 | grep node | awk '{print $2}')
 
 # Start manually
-cd synthetic-hr-api && PORT=3002 npm run start &
+cd zapheit-api && PORT=3002 npm run start &
 ```
 
 ### Traffic not switching

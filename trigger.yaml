@@ -1,8 +1,8 @@
 createTime: '2026-04-14T09:02:32.581870617Z'
-filename: synthetic-hr-api/cloudbuild.yaml
+filename: zapheit-api/cloudbuild.yaml
 id: 2abe8e26-07bb-4dae-9ddc-69c5f983c7bb
 includedFiles:
-- synthetic-hr-api/**
+- zapheit-api/**
 name: deploy-api
 repositoryEventConfig:
   push:
@@ -12,9 +12,9 @@ repositoryEventConfig:
 resourceName: projects/rasisynthetichr/locations/asia-south1/triggers/2abe8e26-07bb-4dae-9ddc-69c5f983c7bb
 serviceAccount: projects/rasisynthetichr/serviceAccounts/cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com
 ---
-filename: synthetic-hr-runtime/cloudbuild.yaml
+filename: zapheit-runtime/cloudbuild.yaml
 includedFiles:
-- synthetic-hr-runtime/**
+- zapheit-runtime/**
 name: deploy-runtime
 repositoryEventConfig:
   push:

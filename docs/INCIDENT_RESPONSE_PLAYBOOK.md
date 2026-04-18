@@ -177,7 +177,7 @@ curl -s https://api.zapheit.com/health | jq '.dependencies.supabase'
 # Expected: "healthy"
 
 # 2. Check API logs
-kubectl logs -n production deployment/synthetic-hr-api --tail=50 | grep -i error
+kubectl logs -n production deployment/zapheit-api --tail=50 | grep -i error
 # Look for: "Error connecting to database", "JWT verification failed", etc.
 
 # 3. Check error rate
@@ -207,10 +207,10 @@ kubectl get nodes
 # If any "NotReady": Hardware failure, drain and rebuild
 
 # 2. Check pod status
-kubectl get pods -n production | grep synthetic-hr-api
+kubectl get pods -n production | grep zapheit-api
 # Expected: All pods "Running"
 # If "CrashLoopBackOff": Check logs with:
-kubectl logs -n production deployment/synthetic-hr-api --tail=20
+kubectl logs -n production deployment/zapheit-api --tail=20
 
 # 3. Check load balancer
 kubectl get svc -n production
@@ -230,8 +230,8 @@ Based on root cause from Step 3, execute the appropriate runbook:
 **If API Code Issue:**
 → Restart API containers
 ```bash
-kubectl rollout restart deployment/synthetic-hr-api -n production
-kubectl rollout status deployment/synthetic-hr-api -n production
+kubectl rollout restart deployment/zapheit-api -n production
+kubectl rollout status deployment/zapheit-api -n production
 # Monitor that pods come back healthy
 ```
 
@@ -245,7 +245,7 @@ curl -X POST https://api.zapheit.com/admin/clear-cache \
   -H "Authorization: Bearer $ADMIN_TOKEN"
   
 # Restart API
-kubectl rollout restart deployment/synthetic-hr-api -n production
+kubectl rollout restart deployment/zapheit-api -n production
 ```
 
 **If Payment Processing Down:**
@@ -481,15 +481,15 @@ Runaway queries didn't release connections.
 
 **Diagnosis (2 min):**
 ```bash
-kubectl get pods -n production | grep synthetic-hr-api
+kubectl get pods -n production | grep zapheit-api
 # If "CrashLoopBackOff" or "Pending":
-kubectl logs -n production deployment/synthetic-hr-api | tail -30
+kubectl logs -n production deployment/zapheit-api | tail -30
 ```
 
 **Fix (3 min):**
 ```bash
-kubectl rollout restart deployment/synthetic-hr-api -n production
-kubectl rollout status deployment/synthetic-hr-api -n production
+kubectl rollout restart deployment/zapheit-api -n production
+kubectl rollout status deployment/zapheit-api -n production
 ```
 
 **Validation (2 min):**

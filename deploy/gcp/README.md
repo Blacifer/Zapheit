@@ -11,8 +11,8 @@ For staging, use a separate target instead of reusing production-named Cloud Run
 
 That means staging deploys can safely target:
 
-- `synthetic-hr-api-staging`
-- `synthetic-hr-runtime-staging`
+- `zapheit-api-staging`
+- `zapheit-runtime-staging`
 
 while still using the same base deploy logic.
 
@@ -92,7 +92,7 @@ secret() {
 }
 ```
 
-### API secrets (synthetic-hr-api)
+### API secrets (zapheit-api)
 
 ```bash
 secret NODE_ENV            "production"
@@ -115,16 +115,16 @@ secret RESEND_API_KEY      "re_..."
 secret EMAIL_FROM          "no-reply@zapheit.com"
 ```
 
-### Runtime secrets (synthetic-hr-runtime)
+### Runtime secrets (zapheit-runtime)
 
 ```bash
-secret SYNTHETICHR_CONTROL_PLANE_URL "https://api.zapheit.com"  # same as API_URL above
-secret SYNTHETICHR_API_KEY           "your-runtime-api-key"     # from Zapheit dashboard → Runtime
-secret SYNTHETICHR_RUNTIME_ID        "your-runtime-uuid"        # from Zapheit dashboard → Runtime
-secret SYNTHETICHR_MODEL             "gpt-4o"
+secret ZAPHEIT_CONTROL_PLANE_URL "https://api.zapheit.com"  # same as API_URL above
+secret ZAPHEIT_API_KEY           "your-runtime-api-key"     # from Zapheit dashboard → Runtime
+secret ZAPHEIT_RUNTIME_ID        "your-runtime-uuid"        # from Zapheit dashboard → Runtime
+secret ZAPHEIT_MODEL             "gpt-4o"
 ```
 
-> To get `SYNTHETICHR_API_KEY` and `SYNTHETICHR_RUNTIME_ID`: first deploy the API, log into the dashboard, go to **Runtime** settings, and register a runtime instance.
+> To get `ZAPHEIT_API_KEY` and `ZAPHEIT_RUNTIME_ID`: first deploy the API, log into the dashboard, go to **Runtime** settings, and register a runtime instance.
 
 ---
 
@@ -193,27 +193,27 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 4. Authenticate with GitHub and choose your repo (`Zapheit`)
 5. Click **Connect**
 
-### Create trigger for synthetic-hr-api
+### Create trigger for zapheit-api
 
 1. Click **Create Trigger**
 2. Name: `deploy-api`
 3. Event: **Push to a branch**
 4. Branch: `^main$`
 5. Build configuration: **Cloud Build configuration file**
-6. Location: `synthetic-hr-api/cloudbuild.yaml`
+6. Location: `zapheit-api/cloudbuild.yaml`
 7. Service account: `cloudbuild-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`
 8. Click **Save**
 
-### Create trigger for synthetic-hr-runtime
+### Create trigger for zapheit-runtime
 
 Repeat the same steps:
 1. Name: `deploy-runtime`
 2. Same branch and settings
-3. Configuration file: `synthetic-hr-runtime/cloudbuild.yaml`
+3. Configuration file: `zapheit-runtime/cloudbuild.yaml`
 4. Service account: `cloudbuild-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`
 5. Click **Save**
 
-> By default triggers fire on every push to `main`. If you only want to trigger when those directories change, add an **Included files filter**: `synthetic-hr-api/**` or `synthetic-hr-runtime/**`.
+> By default triggers fire on every push to `main`. If you only want to trigger when those directories change, add an **Included files filter**: `zapheit-api/**` or `zapheit-runtime/**`.
 >
 > Do not use `zapheit-api@...` or `zapheit-runtime@...` as the trigger service account. Those are the Cloud Run runtime identities, not the Cloud Build executor.
 
@@ -235,7 +235,7 @@ This will:
 3. Build and push both Docker images
 4. Deploy both Cloud Run services
 
-At the end it prints the **API URL** (looks like `https://synthetic-hr-api-xxxx-el.a.run.app`).
+At the end it prints the **API URL** (looks like `https://zapheit-api-xxxx-el.a.run.app`).
 
 ### Staging deploy
 
@@ -251,8 +251,8 @@ or, if you intentionally keep staging in the same GCP project, make sure you als
 
 The staging wrapper deploys:
 
-- `synthetic-hr-api-staging`
-- `synthetic-hr-runtime-staging`
+- `zapheit-api-staging`
+- `zapheit-runtime-staging`
 
 and expects secrets like:
 
@@ -260,7 +260,7 @@ and expects secrets like:
 - `FRONTEND_URL_STAGING`
 - `SUPABASE_URL_STAGING`
 - `SUPABASE_ANON_KEY_STAGING`
-- `SYNTHETICHR_CONTROL_PLANE_URL_STAGING`
+- `ZAPHEIT_CONTROL_PLANE_URL_STAGING`
 
 Use a separate staging Vercel URL and staging Supabase project/config. Do not point staging runtime credentials at the production control plane.
 
@@ -271,12 +271,12 @@ Use a separate staging Vercel URL and staging Supabase project/config. Do not po
 After the first deploy you'll have a real URL. Update two secrets:
 
 ```bash
-API_URL="https://synthetic-hr-api-xxxx-el.a.run.app"  # replace with your URL
+API_URL="https://zapheit-api-xxxx-el.a.run.app"  # replace with your URL
 
 echo -n "$API_URL" | gcloud secrets versions add API_URL \
   --data-file=- --project=YOUR_PROJECT_ID
 
-echo -n "$API_URL" | gcloud secrets versions add SYNTHETICHR_CONTROL_PLANE_URL \
+echo -n "$API_URL" | gcloud secrets versions add ZAPHEIT_CONTROL_PLANE_URL \
   --data-file=- --project=YOUR_PROJECT_ID
 ```
 
@@ -289,7 +289,7 @@ Then update your Vercel environment variable:
 
 ## Step 10 — Set Up a Custom Domain (Optional)
 
-1. Go to **Cloud Run** → `synthetic-hr-api` → **Manage Custom Domains**
+1. Go to **Cloud Run** → `zapheit-api` → **Manage Custom Domains**
 2. Click **Add Mapping**
 3. Enter `api.zapheit.com`
 4. GCP will give you a DNS record (CNAME or A) — add it to your domain registrar
@@ -335,10 +335,10 @@ No manual action needed after initial setup.
 → The runtime service is `--no-allow-unauthenticated` by design (internal). The API service should be `--allow-unauthenticated`.
 
 **Runtime not polling / no jobs executing**  
-→ Check `SYNTHETICHR_CONTROL_PLANE_URL` and `SYNTHETICHR_API_KEY` secrets are correct. View logs: `gcloud run services logs read synthetic-hr-runtime --region=asia-south1`.
+→ Check `ZAPHEIT_CONTROL_PLANE_URL` and `ZAPHEIT_API_KEY` secrets are correct. View logs: `gcloud run services logs read zapheit-runtime --region=asia-south1`.
 
 **Environment variable not found at runtime**  
 → The secret may not be in Secret Manager, or the Cloud Run service account lacks `secretmanager.secretAccessor`. Check the Cloud Run logs for the specific secret name.
 
 **Cold starts on the API**  
-→ `--min-instances=1` is set, so there should be no cold starts. If you're seeing them, verify the config: `gcloud run services describe synthetic-hr-api --region=asia-south1`.
+→ `--min-instances=1` is set, so there should be no cold starts. If you're seeing them, verify the config: `gcloud run services describe zapheit-api --region=asia-south1`.

@@ -203,7 +203,7 @@ async function startGreenEnvironment() {
   }
 
   // Start new server
-  const startCommand = `cd synthetic-hr-api && PORT=${CONFIG.GREEN_PORT} npm run start > ${CONFIG.GREEN_LOG} 2>&1 &`;
+  const startCommand = `cd zapheit-api && PORT=${CONFIG.GREEN_PORT} npm run start > ${CONFIG.GREEN_LOG} 2>&1 &`;
   const result = await sh(startCommand);
   
   if (!result.success) {
@@ -235,7 +235,7 @@ async function buildAndTest() {
   
   // Build
   log.debug('Running build...');
-  let result = await sh('cd synthetic-hr-api && npm run build');
+  let result = await sh('cd zapheit-api && npm run build');
   if (!result.success) {
     log.error('Build failed');
     return false;
@@ -244,7 +244,7 @@ async function buildAndTest() {
   
   // Run tests
   log.debug('Running tests...');
-  result = await sh('cd synthetic-hr-api && npm test 2>&1 | tail -20');
+  result = await sh('cd zapheit-api && npm test 2>&1 | tail -20');
   if (!result.success) {
     log.warn('Some tests failed (continuing anyway)');
   } else {

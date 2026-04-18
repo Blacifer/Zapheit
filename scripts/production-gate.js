@@ -15,7 +15,7 @@ const flags = {
 const checks = [
   {
     name: 'Frontend build',
-    cwd: 'synthetic-hr',
+    cwd: 'zapheit',
     cmd: 'pnpm',
     args: ['build'],
     required: true,
@@ -23,7 +23,7 @@ const checks = [
   },
   {
     name: 'API build',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['run', 'build'],
     required: true,
@@ -31,7 +31,7 @@ const checks = [
   },
   {
     name: 'Runtime build',
-    cwd: 'synthetic-hr-runtime',
+    cwd: 'zapheit-runtime',
     cmd: 'npm',
     args: ['run', 'build'],
     required: true,
@@ -39,7 +39,7 @@ const checks = [
   },
   {
     name: 'Approvals normalization tests',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['test', '--', '--runInBand', 'src/routes/__tests__/approvals-reason-model.test.ts'],
     required: flags.withRouteTests,
@@ -47,7 +47,7 @@ const checks = [
   },
   {
     name: 'Governed actions workflow tests',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['test', '--', '--runInBand', 'src/routes/__tests__/integrations-governed-actions.test.ts'],
     required: flags.withRouteTests,
@@ -55,7 +55,7 @@ const checks = [
   },
   {
     name: 'Governed chat workflow tests',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['test', '--', '--runInBand', 'src/routes/__tests__/conversations-chat.test.ts'],
     required: flags.withRouteTests,
@@ -63,7 +63,7 @@ const checks = [
   },
   {
     name: 'Standard chat workflow tests',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['test', '--', '--runInBand', 'src/routes/__tests__/chat-standard.test.ts'],
     required: flags.withRouteTests,
@@ -71,7 +71,7 @@ const checks = [
   },
   {
     name: 'Chat runtime profile tests',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['test', '--', '--runInBand', 'src/routes/__tests__/chat-runtime-profiles.test.ts'],
     required: flags.withRouteTests,
@@ -79,7 +79,7 @@ const checks = [
   },
   {
     name: 'REST smoke suite',
-    cwd: 'synthetic-hr-api',
+    cwd: 'zapheit-api',
     cmd: 'npm',
     args: ['run', 'smoke:rest'],
     required: flags.withRestSmoke,
@@ -87,7 +87,7 @@ const checks = [
   },
   {
     name: 'Frontend smoke suite',
-    cwd: 'synthetic-hr',
+    cwd: 'zapheit',
     cmd: 'pnpm',
     args: ['e2e'],
     required: flags.withUiSmoke,

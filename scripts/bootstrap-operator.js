@@ -49,7 +49,7 @@ if (!normalizedSlug) {
 }
 
 async function main() {
-  const { createClient } = require('/Users/patty/Downloads/RasiSyntheticHR/synthetic-hr-api/node_modules/@supabase/supabase-js');
+  const { createClient } = require('/Users/patty/Downloads/RasiZapheit/zapheit-api/node_modules/@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

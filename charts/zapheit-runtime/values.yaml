@@ -1,0 +1,25 @@
+image:
+  repository: zapheit-runtime
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+env:
+  ZAPHEIT_CONTROL_PLANE_URL: "https://api.your-synthetichr.com"
+  ZAPHEIT_GATEWAY_URL: ""
+  ZAPHEIT_RUNTIME_ID: ""
+  ZAPHEIT_ENROLLMENT_TOKEN: ""
+  ZAPHEIT_RUNTIME_SECRET: ""
+  ZAPHEIT_RUNTIME_SECRET_FILE: "/data/runtime_secret"
+  ZAPHEIT_API_KEY: ""
+  ZAPHEIT_POLL_INTERVAL_MS: "2000"
+  ZAPHEIT_HEARTBEAT_INTERVAL_MS: "15000"
+  ZAPHEIT_MODEL: "openai/gpt-4o-mini"
+  ZAPHEIT_STREAM_MODE: "poll"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi

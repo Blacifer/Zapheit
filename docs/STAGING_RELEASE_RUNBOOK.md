@@ -4,13 +4,13 @@ Use this runbook when preparing a Zapheit release candidate for production proof
 
 This repo currently ships production-named GCP services by default:
 
-- `synthetic-hr-api`
-- `synthetic-hr-runtime`
+- `zapheit-api`
+- `zapheit-runtime`
 
 Do not use those services for staging validation. Create or use separate staging targets:
 
-- `synthetic-hr-api-staging`
-- `synthetic-hr-runtime-staging`
+- `zapheit-api-staging`
+- `zapheit-runtime-staging`
 - a Vercel preview or dedicated staging frontend URL
 
 ## 1. Staging prerequisites
@@ -27,8 +27,8 @@ Confirm all of the following before running the full release gate:
 
 If staging Cloud Run services do not exist yet, create them as separate services instead of reusing production:
 
-- `synthetic-hr-api-staging`
-- `synthetic-hr-runtime-staging`
+- `zapheit-api-staging`
+- `zapheit-runtime-staging`
 
 Recommended repo-supported deploy command:
 

@@ -12,9 +12,9 @@
 services:
 
   # ── Database ────────────────────────────────────────────────────────────────
-  synthetic-hr-postgres:
+  zapheit-postgres:
     image: postgres:16-alpine
-    container_name: synthetic-hr-postgres
+    container_name: zapheit-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-synthetic_hr}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -22,7 +22,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - synthetic-hr-postgres-data:/var/lib/postgresql/data
+      - zapheit-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -31,15 +31,15 @@ services:
     restart: unless-stopped
 
   # ── API ─────────────────────────────────────────────────────────────────────
-  synthetic-hr-api:
+  zapheit-api:
     build:
-      context: ../../synthetic-hr-api
+      context: ../../zapheit-api
     env_file:
       - ./stack.env
     ports:
-      - "${SYNTHETICHR_API_PORT:-3001}:3001"
+      - "${ZAPHEIT_API_PORT:-3001}:3001"
     depends_on:
-      synthetic-hr-postgres:
+      zapheit-postgres:
         condition: service_healthy
     restart: unless-stopped
     deploy:
@@ -49,20 +49,20 @@ services:
           memory: 512M
 
   # ── Frontend ─────────────────────────────────────────────────────────────────
-  synthetic-hr-frontend:
+  zapheit-ui:
     build:
-      context: ../../synthetic-hr
+      context: ../../zapheit-ui
     ports:
-      - "${SYNTHETICHR_FRONTEND_PORT:-8080}:80"
+      - "${ZAPHEIT_FRONTEND_PORT:-8080}:80"
     environment:
-      SYNTHETICHR_API_URL: ${SYNTHETICHR_API_URL:-http://localhost:3001/api}
-      SYNTHETICHR_SUPABASE_URL: ${SYNTHETICHR_SUPABASE_URL}
-      SYNTHETICHR_SUPABASE_ANON_KEY: ${SYNTHETICHR_SUPABASE_ANON_KEY}
-      SYNTHETICHR_SENTRY_DSN: ${SYNTHETICHR_SENTRY_DSN:-}
-      SYNTHETICHR_APP_VERSION: ${SYNTHETICHR_APP_VERSION:-}
-      SYNTHETICHR_ERROR_REPORTING_URL: ${SYNTHETICHR_ERROR_REPORTING_URL:-}
+      ZAPHEIT_API_URL: ${ZAPHEIT_API_URL:-http://localhost:3001/api}
+      ZAPHEIT_SUPABASE_URL: ${ZAPHEIT_SUPABASE_URL}
+      ZAPHEIT_SUPABASE_ANON_KEY: ${ZAPHEIT_SUPABASE_ANON_KEY}
+      ZAPHEIT_SENTRY_DSN: ${ZAPHEIT_SENTRY_DSN:-}
+      ZAPHEIT_APP_VERSION: ${ZAPHEIT_APP_VERSION:-}
+      ZAPHEIT_ERROR_REPORTING_URL: ${ZAPHEIT_ERROR_REPORTING_URL:-}
     depends_on:
-      - synthetic-hr-api
+      - zapheit-api
     restart: unless-stopped
     deploy:
       resources:
@@ -71,27 +71,27 @@ services:
           memory: 128M
 
   # ── Runtime worker (optional, enable with --profile runtime) ─────────────────
-  synthetic-hr-runtime:
+  zapheit-runtime:
     profiles:
       - runtime
     build:
-      context: ../../synthetic-hr-runtime
+      context: ../../zapheit-runtime
     environment:
-      SYNTHETICHR_CONTROL_PLANE_URL: ${SYNTHETICHR_CONTROL_PLANE_URL:-http://synthetic-hr-api:3001}
-      SYNTHETICHR_GATEWAY_URL: ${SYNTHETICHR_GATEWAY_URL:-}
-      SYNTHETICHR_RUNTIME_ID: ${SYNTHETICHR_RUNTIME_ID}
-      SYNTHETICHR_ENROLLMENT_TOKEN: ${SYNTHETICHR_ENROLLMENT_TOKEN}
-      SYNTHETICHR_RUNTIME_SECRET: ${SYNTHETICHR_RUNTIME_SECRET:-}
-      SYNTHETICHR_RUNTIME_SECRET_FILE: ${SYNTHETICHR_RUNTIME_SECRET_FILE:-/data/runtime_secret}
-      SYNTHETICHR_API_KEY: ${SYNTHETICHR_API_KEY}
-      SYNTHETICHR_POLL_INTERVAL_MS: ${SYNTHETICHR_POLL_INTERVAL_MS:-2000}
-      SYNTHETICHR_HEARTBEAT_INTERVAL_MS: ${SYNTHETICHR_HEARTBEAT_INTERVAL_MS:-15000}
-      SYNTHETICHR_MODEL: ${SYNTHETICHR_MODEL:-openai/gpt-4o-mini}
-      SYNTHETICHR_STREAM_MODE: ${SYNTHETICHR_STREAM_MODE:-poll}
+      ZAPHEIT_CONTROL_PLANE_URL: ${ZAPHEIT_CONTROL_PLANE_URL:-http://zapheit-api:3001}
+      ZAPHEIT_GATEWAY_URL: ${ZAPHEIT_GATEWAY_URL:-}
+      ZAPHEIT_RUNTIME_ID: ${ZAPHEIT_RUNTIME_ID}
+      ZAPHEIT_ENROLLMENT_TOKEN: ${ZAPHEIT_ENROLLMENT_TOKEN}
+      ZAPHEIT_RUNTIME_SECRET: ${ZAPHEIT_RUNTIME_SECRET:-}
+      ZAPHEIT_RUNTIME_SECRET_FILE: ${ZAPHEIT_RUNTIME_SECRET_FILE:-/data/runtime_secret}
+      ZAPHEIT_API_KEY: ${ZAPHEIT_API_KEY}
+      ZAPHEIT_POLL_INTERVAL_MS: ${ZAPHEIT_POLL_INTERVAL_MS:-2000}
+      ZAPHEIT_HEARTBEAT_INTERVAL_MS: ${ZAPHEIT_HEARTBEAT_INTERVAL_MS:-15000}
+      ZAPHEIT_MODEL: ${ZAPHEIT_MODEL:-openai/gpt-4o-mini}
+      ZAPHEIT_STREAM_MODE: ${ZAPHEIT_STREAM_MODE:-poll}
     volumes:
       - runtime-data:/data
     depends_on:
-      - synthetic-hr-api
+      - zapheit-api
     restart: unless-stopped
     deploy:
       resources:
@@ -100,5 +100,5 @@ services:
           memory: 256M
 
 volumes:
-  synthetic-hr-postgres-data:
+  zapheit-postgres-data:
   runtime-data:

@@ -1,0 +1,31 @@
+image:
+  repository: zapheit-ui
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+
+env:
+  ZAPHEIT_API_URL: "http://zapheit-api:3001/api"
+  ZAPHEIT_SUPABASE_URL: ""
+  ZAPHEIT_SUPABASE_ANON_KEY: ""
+  ZAPHEIT_SENTRY_DSN: ""
+  ZAPHEIT_APP_VERSION: ""
+  ZAPHEIT_ERROR_REPORTING_URL: ""
+
+ingress:
+  enabled: false
+  className: nginx
+  host: synthetichr.example.com
+  tls:
+    enabled: false
+    secretName: synthetichr-tls
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 128Mi

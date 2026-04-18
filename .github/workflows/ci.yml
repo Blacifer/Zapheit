@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: synthetic-hr-api
+        working-directory: zapheit-api
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: synthetic-hr-api/package-lock.json
+          cache-dependency-path: zapheit-api/package-lock.json
       - run: npm ci
       - name: Type check
         run: npx tsc --noEmit
@@ -45,14 +45,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: synthetic-hr-api/coverage/
+          path: zapheit-api/coverage/
           retention-days: 7
 
   frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: synthetic-hr
+        working-directory: zapheit
     env:
       PNPM_STORE_PATH: ~/.pnpm-store
     steps:
@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.PNPM_STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('synthetic-hr/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('zapheit/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
       - run: pnpm install --frozen-lockfile
@@ -87,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: synthetic-hr/coverage/
+          path: zapheit/coverage/
           retention-days: 7
 
   migration-lint:
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check migration numbering
         run: |
-          cd synthetic-hr-database
+          cd zapheit-database
           # Verify no duplicate migration numbers (except known 022 pair)
           nums=$(ls migration_*.sql | sed 's/migration_\([0-9]*\).*/\1/' | sort)
           dupes=$(echo "$nums" | uniq -d)
@@ -113,7 +113,7 @@ jobs:
           fi
       - name: Check RLS pattern consistency
         run: |
-          cd synthetic-hr-database
+          cd zapheit-database
           # Ensure no migration references the non-existent organization_members table
           if grep -rn "organization_members" migration_*.sql; then
             echo "❌ Found references to non-existent organization_members table"

@@ -13,8 +13,8 @@ Primary docs:
 
 Product/service docs:
 
-- Frontend: `./synthetic-hr/README.md`
-- Database deployment: `./synthetic-hr-database/DEPLOYMENT_GUIDE.md`
+- Frontend: `./zapheit/README.md`
+- Database deployment: `./zapheit-database/DEPLOYMENT_GUIDE.md`
 
 Archive:
 

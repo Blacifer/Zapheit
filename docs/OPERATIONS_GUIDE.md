@@ -4,7 +4,7 @@
 
 ### 1. Start Backend with Observability
 ```bash
-cd synthetic-hr-api
+cd zapheit-api
 npm run dev
 ```
 
@@ -16,7 +16,7 @@ Backend starts with:
 
 ### 2. Run All Tests
 ```bash
-cd synthetic-hr-api
+cd zapheit-api
 npm test                    # Run unit + integration tests (5-10s)
 ```
 
@@ -26,7 +26,7 @@ npm test                    # Run unit + integration tests (5-10s)
 export TEST_API_KEY=$(node test-api-key-creation.js 2>&1 | grep "Your new API key:" | awk '{print $NF}')
 
 # Run load test
-cd /Users/patty/Downloads/RasiSyntheticHR
+cd /Users/patty/Downloads/RasiZapheit
 node load-test.js
 ```
 
@@ -133,7 +133,7 @@ lsof -i :3001
 lsof -i :3001 | grep -v COMMAND | awk '{print $2}' | xargs kill -9
 
 # Check TypeScript compilation
-cd synthetic-hr-api && npm run build
+cd zapheit-api && npm run build
 ```
 
 ### API Key Issues
@@ -153,7 +153,7 @@ curl -H "Authorization: Bearer $TEST_API_KEY" \
 ### Tests Not Running
 ```bash
 # Clear Jest cache
-cd synthetic-hr-api && npm test -- --clearCache
+cd zapheit-api && npm test -- --clearCache
 
 # Check Node version (needs 16+)
 node --version

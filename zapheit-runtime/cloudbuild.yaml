@@ -1,0 +1,47 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:$COMMIT_SHA'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:latest'
+      - '.'
+    dir: 'zapheit-runtime'
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime'
+
+  # Deploy to Cloud Run (always-on, min 1 instance — runtime must poll continuously)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'zapheit-runtime'
+      - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:$COMMIT_SHA'
+      - '--region=asia-south1'
+      - '--platform=managed'
+      - '--no-allow-unauthenticated'
+      - '--port=3002'
+      - '--memory=256Mi'
+      - '--cpu=1'
+      - '--cpu-boost'
+      - '--min-instances=1'
+      - '--max-instances=1'
+      - '--timeout=3600'
+      - '--concurrency=1'
+      - '--service-account=zapheit-runtime@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-secrets=ZAPHEIT_CONTROL_PLANE_URL=ZAPHEIT_CONTROL_PLANE_URL:latest,ZAPHEIT_API_KEY=ZAPHEIT_API_KEY:latest,ZAPHEIT_RUNTIME_ID=ZAPHEIT_RUNTIME_ID:latest,ZAPHEIT_RUNTIME_SECRET=ZAPHEIT_RUNTIME_SECRET:latest,ZAPHEIT_MODEL=ZAPHEIT_MODEL:latest,ZAPHEIT_ENROLLMENT_TOKEN=ZAPHEIT_ENROLLMENT_TOKEN:latest'
+
+images:
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:$COMMIT_SHA'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-runtime:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

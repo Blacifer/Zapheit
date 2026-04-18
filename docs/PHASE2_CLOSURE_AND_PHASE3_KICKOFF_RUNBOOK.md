@@ -5,7 +5,7 @@ This runbook is the locked execution path for closing Phase 2 and starting Phase
 ## 1) Production Hardening Completion
 
 1. Apply database backfill in staging and production:
-   - `synthetic-hr-database/migration_041_connector_action_execution_governance_backfill.sql`
+   - `zapheit-database/migration_041_connector_action_execution_governance_backfill.sql`
 2. Verify `connector_action_executions` columns exist:
    - `requested_by`
    - `policy_snapshot`
@@ -23,17 +23,17 @@ Run these on the release candidate commit:
 
 1. API build:
 ```bash
-cd synthetic-hr-api
+cd zapheit-api
 pnpm build
 ```
 2. Frontend build:
 ```bash
-cd synthetic-hr
+cd zapheit
 pnpm run build
 ```
 3. Contracts in production-like env:
 ```bash
-cd synthetic-hr-api
+cd zapheit-api
 SCHEMA_COMPAT_STRICT_OPTIONAL=true pnpm run check:contracts
 ```
 

@@ -66,8 +66,8 @@ Use this after frontend and API production deploys are complete.
 Phase 2 + early Phase 3 are accepted only if all are true:
 
 1. Build gates pass:
-   - `synthetic-hr-api`: `pnpm build`
-   - `synthetic-hr`: `pnpm run build`
+   - `zapheit-api`: `pnpm build`
+   - `zapheit`: `pnpm run build`
 2. Contract gate passes in production-like env:
    - `SCHEMA_COMPAT_STRICT_OPTIONAL=true pnpm run check:contracts`
 3. Incident workflows persist to backend (not UI-only).
