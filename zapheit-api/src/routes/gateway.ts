@@ -1838,6 +1838,41 @@ const transcribeViaProvider = async (params: {
 
 router.use(validateApiKey);
 
+/**
+ * @openapi
+ * /v1/models:
+ *   get:
+ *     tags: [Gateway]
+ *     summary: List available models
+ *     description: Returns all models available through the Zapheit gateway across all configured providers.
+ *     security:
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: List of available models
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 object:
+ *                   type: string
+ *                   example: list
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: gpt-4o
+ *                       object:
+ *                         type: string
+ *                         example: model
+ *                       owned_by:
+ *                         type: string
+ *                         example: openai
+ */
 router.get('/models', async (req: Request, res: Response) => {
   if (!(await enforceApiKeyRateLimit(req, res))) {
     return;
@@ -1870,6 +1905,111 @@ router.get('/models', async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * @openapi
+ * /v1/chat/completions:
+ *   post:
+ *     tags: [Gateway]
+ *     summary: Create a governed chat completion
+ *     description: |
+ *       OpenAI-compatible chat completions endpoint routed through the Zapheit governance layer.
+ *       Adds incident detection, cost tracking, reasoning traces, and policy enforcement.
+ *       Supports streaming via SSE when `stream: true`.
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: x-zapheit-agent-id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Agent ID to associate this completion with for cost/incident tracking
+ *       - in: header
+ *         name: x-request-id
+ *         schema:
+ *           type: string
+ *         description: Idempotency key — identical requests within 5 minutes return cached response
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [model, messages]
+ *             properties:
+ *               model:
+ *                 type: string
+ *                 example: gpt-4o
+ *                 description: Model ID. Prefix with `claude-` for Anthropic, `gemini-` for Google via OpenRouter.
+ *               messages:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [role, content]
+ *                   properties:
+ *                     role:
+ *                       type: string
+ *                       enum: [system, user, assistant]
+ *                     content:
+ *                       type: string
+ *               stream:
+ *                 type: boolean
+ *                 default: false
+ *                 description: Stream response tokens via SSE
+ *               temperature:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 2
+ *               max_tokens:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Chat completion response (OpenAI-compatible)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   example: chatcmpl_abc123
+ *                 object:
+ *                   type: string
+ *                   example: chat.completion
+ *                 created:
+ *                   type: integer
+ *                 model:
+ *                   type: string
+ *                 choices:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       index:
+ *                         type: integer
+ *                       message:
+ *                         type: object
+ *                         properties:
+ *                           role:
+ *                             type: string
+ *                           content:
+ *                             type: string
+ *                       finish_reason:
+ *                         type: string
+ *                 usage:
+ *                   type: object
+ *                   properties:
+ *                     prompt_tokens:
+ *                       type: integer
+ *                     completion_tokens:
+ *                       type: integer
+ *                     total_tokens:
+ *                       type: integer
+ *       401:
+ *         description: Invalid or missing API key
+ *       429:
+ *         description: Rate limit exceeded
+ */
 router.post('/chat/completions', async (req: Request, res: Response) => {
   if (!(await enforceApiKeyRateLimit(req, res))) {
     return;

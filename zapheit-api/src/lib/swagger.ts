@@ -26,7 +26,12 @@ const options: swaggerJsdoc.Options = {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'Supabase JWT token from authentication',
+          description: 'Supabase JWT — for dashboard/operator routes (/agents, /chat/sessions)',
+        },
+        apiKeyAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          description: 'Zapheit API key — for gateway routes (/v1/chat/completions, /v1/models)',
         },
       },
       schemas: {
@@ -67,7 +72,7 @@ const options: swaggerJsdoc.Options = {
     },
     security: [{ bearerAuth: [] }],
   },
-  apis: ['./src/routes/*.ts'], // Path to API route files with JSDoc annotations
+  apis: ['./src/routes/*.ts', './src/routes/agents.ts'],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

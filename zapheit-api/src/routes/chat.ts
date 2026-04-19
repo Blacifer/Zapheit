@@ -586,6 +586,51 @@ router.get('/chat/runtime-profiles/:id/models', requirePermission('dashboard.rea
   }
 });
 
+/**
+ * @openapi
+ * /chat/sessions:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Create a chat session
+ *     description: Creates a new governed chat session and returns a session ID for subsequent messages.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [mode]
+ *             properties:
+ *               mode:
+ *                 type: string
+ *                 enum: [operator, employee, external]
+ *                 example: operator
+ *               model:
+ *                 type: string
+ *                 example: gpt-4o
+ *               runtime_profile_id:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       201:
+ *         description: Session created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     session_id:
+ *                       type: string
+ *                     conversation:
+ *                       type: object
+ */
 router.post('/chat/sessions', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {
     const parsed = createSessionSchema.safeParse(req.body || {});
@@ -642,6 +687,69 @@ router.post('/chat/sessions', requirePermission('dashboard.read'), async (req: R
   }
 });
 
+/**
+ * @openapi
+ * /chat/sessions/{id}/messages:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Send a message in a chat session
+ *     description: Sends a user message, runs the LLM completion through the governance layer, and persists the assistant reply.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Chat session ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [prompt]
+ *             properties:
+ *               prompt:
+ *                 type: string
+ *                 example: Summarise the top 3 open incidents
+ *               model:
+ *                 type: string
+ *                 example: gpt-4o
+ *     responses:
+ *       200:
+ *         description: Assistant reply with usage stats
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: object
+ *                       properties:
+ *                         role:
+ *                           type: string
+ *                         content:
+ *                           type: string
+ *                     usage:
+ *                       type: object
+ *                       properties:
+ *                         input_tokens:
+ *                           type: integer
+ *                         output_tokens:
+ *                           type: integer
+ *                         cost_usd:
+ *                           type: number
+ *       404:
+ *         description: Session not found
+ */
 router.post('/chat/sessions/:id/messages', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {
     const parsed = sendMessageSchema.safeParse(req.body || {});

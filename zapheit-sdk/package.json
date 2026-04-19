@@ -1,0 +1,47 @@
+{
+  "name": "@zapheit/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for the Zapheit AI Agent Governance Platform",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "governance",
+    "llm",
+    "openai",
+    "anthropic",
+    "zapheit"
+  ],
+  "author": "Zapheit <support@zapheit.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Blacifer/Zapheit.git",
+    "directory": "zapheit-sdk"
+  },
+  "homepage": "https://zapheit.com",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

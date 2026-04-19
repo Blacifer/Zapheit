@@ -369,6 +369,32 @@ const patchAgentRecord = async (req: Request, orgId: string, id: string, body: R
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
+/**
+ * @openapi
+ * /agents:
+ *   get:
+ *     tags: [Agents]
+ *     summary: List all agents
+ *     description: Returns all AI agents registered in the organisation, enriched with live health, cost, and incident data.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of agents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Agent'
+ *       401:
+ *         description: Unauthorized
+ */
 router.get('/agents', requirePermission('agents.read'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
@@ -415,6 +441,36 @@ router.get('/agents', requirePermission('agents.read'), async (req: Request, res
   }
 });
 
+/**
+ * @openapi
+ * /agents/{id}:
+ *   get:
+ *     tags: [Agents]
+ *     summary: Get agent by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Agent detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Agent'
+ *       404:
+ *         description: Agent not found
+ */
 router.get('/agents/:id', requirePermission('agents.read'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -814,6 +870,53 @@ const PLAN_AGENT_LIMITS: Record<string, number> = {
   enterprise: -1,
 };
 
+/**
+ * @openapi
+ * /agents:
+ *   post:
+ *     tags: [Agents]
+ *     summary: Register a new agent
+ *     description: Creates a new AI agent under the organisation and returns its ID for use with the gateway.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Support Bot
+ *               model_name:
+ *                 type: string
+ *                 example: gpt-4o
+ *               platform:
+ *                 type: string
+ *                 example: openai
+ *               budget_limit:
+ *                 type: number
+ *                 example: 100
+ *               auto_throttle:
+ *                 type: boolean
+ *                 default: false
+ *     responses:
+ *       201:
+ *         description: Agent created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Agent'
+ *       400:
+ *         description: Validation error
+ */
 router.post('/agents', requirePermission('agents.create'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
@@ -1092,6 +1195,39 @@ router.post('/agents/:id/escalate', requirePermission('incidents.escalate'), asy
   }
 });
 
+/**
+ * @openapi
+ * /agents/{id}:
+ *   delete:
+ *     tags: [Agents]
+ *     summary: Delete an agent
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Agent deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *       404:
+ *         description: Agent not found
+ */
 router.delete('/agents/:id', requirePermission('agents.delete'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
