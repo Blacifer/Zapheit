@@ -23,6 +23,7 @@ import policiesRoutes from './routes/policies';
 import complianceRoutes from './routes/compliance';
 import webhooksRoutes from './routes/webhooks';
 import gatewayRoutes, { initializeIdempotencyCache } from './routes/gateway';
+import mcpRoutes from './routes/mcp';
 import runtimesRoutes from './routes/runtimes';
 import jobsRoutes from './routes/jobs';
 import workItemsRoutes from './routes/work-items';
@@ -398,6 +399,9 @@ app.post('/public/playbooks/:slug', validateApiKey, handlePublicPlaybookRun);
 
 // Public API-key gateway routes (OpenAI-compatible)
 app.use('/v1', gatewayRoutes);
+
+// Governed MCP (Model Context Protocol) gateway
+app.use('/mcp', mcpRoutes);
 
 // Inbound event receiver — third-party systems push agent events here.
 // Auth is handled inside the router via validateApiKey (no JWT required).
