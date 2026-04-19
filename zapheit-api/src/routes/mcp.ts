@@ -22,6 +22,7 @@ import { supabaseRest } from '../lib/supabase-rest';
 import { evaluatePolicies } from '../services/policy-engine';
 import { auditLog } from '../lib/audit-logger';
 import logger from '../lib/logger';
+import { getRedisClient, createRedisSubscriber } from '../lib/redis-client';
 
 const router = express.Router();
 
@@ -44,9 +45,20 @@ interface McpToolRow {
 
 type PolicyDecision = 'allow' | 'warn' | 'require_approval' | 'block';
 
-// ─── In-memory SSE session store ──────────────────────────────────────────────
-// Maps sessionId → { res, orgId, agentId }
-// Acceptable for an MVP — replace with Redis pub/sub for multi-instance deploys.
+// ─── Session store (Redis pub/sub when available, in-memory fallback) ──────────
+//
+// Redis layout:
+//   Key   mcp:meta:<sessionId>  — hash: { orgId, agentId }; TTL 1 h
+//   Chan  mcp:msg:<sessionId>   — published JSON-RPC responses
+//
+// Each instance holds a local map of SSE response objects for sessions it is
+// serving. When a POST arrives on any instance it publishes to the Redis
+// channel; the instance hosting the SSE connection picks it up and writes to
+// its local `res`. This makes the transport horizontally scalable with no
+// sticky sessions required.
+//
+// When REDIS_URL is absent the local Map doubles as the session registry and
+// dispatch goes directly to `session.res` — single-instance behaviour unchanged.
 
 interface McpSession {
   res: Response;
@@ -54,7 +66,10 @@ interface McpSession {
   agentId?: string;
 }
 
-const sessions = new Map<string, McpSession>();
+// Local map: SSE responses owned by *this* process instance
+const localSessions = new Map<string, McpSession>();
+
+const SESSION_TTL_S = 3600; // 1 hour
 
 function sendEvent(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -68,9 +83,22 @@ function rpcErr(id: string | number | null, code: number, message: string) {
   return { jsonrpc: '2.0', id, error: { code, message } };
 }
 
+async function publishReply(sessionId: string, reply: unknown): Promise<void> {
+  const redis = await getRedisClient();
+  if (redis) {
+    await redis.publish(`mcp:msg:${sessionId}`, JSON.stringify(reply));
+  } else {
+    // In-memory fallback: write directly to the local SSE response
+    const session = localSessions.get(sessionId);
+    if (session && reply !== null) {
+      session.res.write(`event: message\ndata: ${JSON.stringify(reply)}\n\n`);
+    }
+  }
+}
+
 // ─── SSE connection ────────────────────────────────────────────────────────────
 
-router.get('/sse', validateApiKey, (req: Request, res: Response) => {
+router.get('/sse', validateApiKey, async (req: Request, res: Response) => {
   const orgId = req.apiKey!.organization_id;
   const agentId = req.apiKey!.allowed_agent_ids?.[0];
   const sessionId = crypto.randomUUID();
@@ -81,48 +109,93 @@ router.get('/sse', validateApiKey, (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (typeof (res as any).flushHeaders === 'function') (res as any).flushHeaders();
 
-  sessions.set(sessionId, { res, orgId, agentId });
+  // Always keep res locally — it's a Node.js socket, not serialisable to Redis
+  localSessions.set(sessionId, { res, orgId, agentId });
+
+  const redis = await getRedisClient();
+
+  if (redis) {
+    // Store session metadata in Redis so any instance can serve /messages
+    const metaKey = `mcp:meta:${sessionId}`;
+    await redis.hset(metaKey, { orgId, agentId: agentId ?? '' });
+    await redis.expire(metaKey, SESSION_TTL_S);
+
+    // Subscribe on a dedicated connection so the publisher stays usable
+    const subscriber = await createRedisSubscriber();
+    if (subscriber) {
+      await subscriber.subscribe(`mcp:msg:${sessionId}`);
+      subscriber.on('message', (_chan: string, data: string) => {
+        res.write(`event: message\ndata: ${data}\n\n`);
+      });
+
+      req.on('close', () => {
+        void subscriber.unsubscribe().catch(() => null);
+        subscriber.disconnect();
+        localSessions.delete(sessionId);
+        void redis.del(metaKey).catch(() => null);
+        logger.info('MCP SSE session closed (Redis)', { sessionId });
+      });
+    }
+  } else {
+    // In-memory mode — session already in localSessions
+    req.on('close', () => {
+      localSessions.delete(sessionId);
+      logger.info('MCP SSE session closed (in-memory)', { sessionId });
+    });
+  }
 
   // Tell the client where to POST messages (MCP SSE transport requirement)
   sendEvent(res, 'endpoint', { uri: `/mcp/messages?sessionId=${sessionId}` });
 
-  logger.info('MCP SSE session opened', { sessionId, orgId });
-
-  req.on('close', () => {
-    sessions.delete(sessionId);
-    logger.info('MCP SSE session closed', { sessionId });
-  });
+  logger.info('MCP SSE session opened', { sessionId, orgId, backend: redis ? 'redis' : 'memory' });
 });
 
 // ─── Message receiver ─────────────────────────────────────────────────────────
 
 router.post('/messages', validateApiKey, async (req: Request, res: Response) => {
   const sessionId = req.query.sessionId as string;
-  const session = sessions.get(sessionId);
 
-  if (!session) {
+  // Resolve session metadata — Redis first (cross-instance), then local fallback
+  let orgId: string | undefined;
+  let agentId: string | undefined;
+
+  const redis = await getRedisClient();
+  if (redis) {
+    const meta = await redis.hgetall(`mcp:meta:${sessionId}`);
+    if (meta?.orgId) {
+      orgId = meta.orgId;
+      agentId = meta.agentId || undefined;
+    }
+  }
+
+  if (!orgId) {
+    const local = localSessions.get(sessionId);
+    if (local) { orgId = local.orgId; agentId = local.agentId; }
+  }
+
+  if (!orgId) {
     res.status(400).json({ error: 'Unknown sessionId — open an SSE connection first' });
     return;
   }
 
   const msg = req.body;
   if (!msg || msg.jsonrpc !== '2.0' || !msg.method) {
-    session.res.write(`event: message\ndata: ${JSON.stringify(rpcErr(msg?.id ?? null, -32600, 'Invalid JSON-RPC request'))}\n\n`);
+    await publishReply(sessionId, rpcErr(msg?.id ?? null, -32600, 'Invalid JSON-RPC request'));
     res.status(202).end();
     return;
   }
 
-  // Acknowledge receipt immediately; response travels over SSE
+  // Acknowledge receipt immediately; response travels over SSE / Redis
   res.status(202).end();
 
   try {
-    const reply = await dispatchRpc(msg, session);
+    const reply = await dispatchRpc(msg, { res: res as any, orgId, agentId });
     if (reply !== null) {
-      session.res.write(`event: message\ndata: ${JSON.stringify(reply)}\n\n`);
+      await publishReply(sessionId, reply);
     }
   } catch (err: any) {
     logger.error('MCP RPC dispatch error', { error: err?.message, method: msg.method });
-    session.res.write(`event: message\ndata: ${JSON.stringify(rpcErr(msg.id, -32603, err?.message || 'Internal error'))}\n\n`);
+    await publishReply(sessionId, rpcErr(msg.id, -32603, err?.message || 'Internal error'));
   }
 });
 
