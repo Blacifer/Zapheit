@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, Shield, Eye, Plus, Trash2, Save, Loader2, CheckCircle2 } from 'lucide-react';
+import { Globe, Shield, Eye, Plus, Trash2, Save, Loader2, CheckCircle2, KeyRound, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 
 const DATA_REGIONS = [
@@ -7,6 +7,14 @@ const DATA_REGIONS = [
   { value: 'us-central1', label: 'United States (Central 1)', badge: 'Data stored in USA' },
   { value: 'eu-west1', label: 'Europe (West 1)', badge: 'Data stored in EU' },
 ] as const;
+
+interface SsoConfig {
+  id: string;
+  provider: string;
+  metadata_url?: string;
+  domain_hint?: string;
+  enabled: boolean;
+}
 
 interface ShadowAiSummary {
   total: number;
@@ -26,6 +34,9 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [shadowAi, setShadowAi] = useState<ShadowAiSummary | null>(null);
+  const [ssoConfigs, setSsoConfigs] = useState<SsoConfig[]>([]);
+  const [ssoForm, setSsoForm] = useState({ provider: 'okta', metadata_url: '', domain_hint: '' });
+  const [savingSso, setSavingSso] = useState(false);
 
   const token = (user as any)?._jwt || localStorage.getItem('sb-access-token') || '';
   const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
@@ -33,11 +44,14 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
   useEffect(() => {
     async function load() {
       try {
-        const [settingsRes, shadowRes] = await Promise.all([
+        const [settingsRes, shadowRes, ssoRes] = await Promise.all([
           fetch(`${apiBase}/api/enterprise/settings`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${apiBase}/api/enterprise/shadow-ai`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+          fetch(`${apiBase}/api/sso`, {
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null),
         ]);
@@ -49,6 +63,10 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
         }
         if (shadowRes?.ok) {
           setShadowAi(await shadowRes.json());
+        }
+        if (ssoRes?.ok) {
+          const d = await ssoRes.json();
+          setSsoConfigs(d.data ?? []);
         }
       } catch {
         // non-fatal
@@ -235,6 +253,107 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
           </div>
         </div>
       )}
+
+      {/* SAML/SSO */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-cyan-500/10 rounded-xl"><KeyRound className="w-5 h-5 text-cyan-400" /></div>
+          <div>
+            <h3 className="text-base font-semibold text-white">SAML / SSO</h3>
+            <p className="text-sm text-slate-400">Connect Okta, Azure AD, or Google Workspace for single sign-on.</p>
+          </div>
+        </div>
+
+        {ssoConfigs.length > 0 && (
+          <div className="space-y-2">
+            {ssoConfigs.map((cfg) => (
+              <div key={cfg.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-700/40 border border-slate-700/50">
+                <div>
+                  <p className="text-sm font-semibold text-white capitalize">{cfg.provider.replace('_', ' ')}</p>
+                  {cfg.domain_hint && <p className="text-xs text-slate-400 mt-0.5">{cfg.domain_hint}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-600/20 text-slate-400'}`}>
+                    {cfg.enabled ? 'Active' : 'Disabled'}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      onClick={async () => {
+                        await fetch(`${apiBase}/api/sso/${cfg.provider}`, {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        setSsoConfigs((prev) => prev.filter((c) => c.id !== cfg.id));
+                      }}
+                      className="text-slate-500 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select
+                value={ssoForm.provider}
+                onChange={(e) => setSsoForm((f) => ({ ...f, provider: e.target.value }))}
+                className="bg-slate-700/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/60"
+              >
+                <option value="okta">Okta</option>
+                <option value="azure_ad">Azure AD</option>
+                <option value="google">Google Workspace</option>
+                <option value="custom">Custom SAML</option>
+              </select>
+              <input
+                type="url"
+                value={ssoForm.metadata_url}
+                onChange={(e) => setSsoForm((f) => ({ ...f, metadata_url: e.target.value }))}
+                placeholder="IdP metadata URL"
+                className="bg-slate-700/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/60"
+              />
+              <input
+                type="text"
+                value={ssoForm.domain_hint}
+                onChange={(e) => setSsoForm((f) => ({ ...f, domain_hint: e.target.value }))}
+                placeholder="Domain (e.g. acme.com)"
+                className="bg-slate-700/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/60"
+              />
+            </div>
+            <button
+              disabled={savingSso || !ssoForm.metadata_url}
+              onClick={async () => {
+                setSavingSso(true);
+                try {
+                  const res = await fetch(`${apiBase}/api/sso`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify(ssoForm),
+                  });
+                  if (res.ok) {
+                    const d = await res.json();
+                    setSsoConfigs((prev) => {
+                      const filtered = prev.filter((c) => c.provider !== ssoForm.provider);
+                      return d.data ? [...filtered, d.data] : filtered;
+                    });
+                    setSsoForm({ provider: 'okta', metadata_url: '', domain_hint: '' });
+                  }
+                } finally {
+                  setSavingSso(false);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 border border-slate-600/50 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              {savingSso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Add SSO provider
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Save */}
       {isAdmin && (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays, ShieldCheck, FileSearch, RefreshCw, Plus, X, Check, Loader2, Sparkles, AlertTriangle, Clock,
   Fingerprint, UserCheck, Trash2, Eye, FileOutput, AlertOctagon, FileBarChart, Bell, BellOff,
-  IndianRupee, Send, RotateCw,
+  IndianRupee, Send, RotateCw, Globe,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
@@ -12,7 +12,7 @@ import { filingsApi } from '../../lib/api/filings';
 import { complianceApi } from '../../lib/api/governance';
 import type { FilingDeadline, FilingSubmission, FilingAlert, FilingDashboard } from '../../lib/api/filings';
 
-type TabId = 'calendar' | 'posture' | 'evidence' | 'dpdp' | 'filings';
+type TabId = 'calendar' | 'posture' | 'evidence' | 'dpdp' | 'gdpr' | 'filings';
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -69,6 +69,10 @@ export default function ComplianceHubPage() {
   const [dpdpSubTab, setDpdpSubTab] = useState<'overview' | 'consents' | 'requests' | 'scorecard'>('overview');
   const [exportingDpdp, setExportingDpdp] = useState(false);
   const [exportDone, setExportDone] = useState<{ id: string; url: string } | null>(null);
+
+  // GDPR state
+  const [exportingGdpr, setExportingGdpr] = useState(false);
+  const [gdprExportDone, setGdprExportDone] = useState<{ id: string; url: string } | null>(null);
 
   // Filings state
   const [filingDeadlines, setFilingDeadlines] = useState<FilingDeadline[]>([]);
@@ -260,6 +264,7 @@ export default function ComplianceHubPage() {
     { id: 'posture', label: 'Posture', icon: ShieldCheck },
     { id: 'evidence', label: 'Evidence', icon: FileSearch },
     { id: 'dpdp', label: 'DPDP', icon: Fingerprint },
+    { id: 'gdpr', label: 'GDPR', icon: Globe },
     { id: 'filings', label: 'Filings', icon: FileBarChart },
   ];
 
@@ -901,6 +906,78 @@ export default function ComplianceHubPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* GDPR Tab */}
+      {tab === 'gdpr' && (
+        <div className="space-y-6">
+          {/* One-click GDPR export */}
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-white">GDPR Compliance Export</p>
+                <p className="text-xs text-slate-400 mt-0.5">Download your audit-ready GDPR report — timestamped, auto-populated from activity history, data subject requests, and processing records.</p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {gdprExportDone && (
+                  <a
+                    href={gdprExportDone.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+                  >
+                    <FileOutput className="w-3.5 h-3.5" /> Download
+                  </a>
+                )}
+                <button
+                  disabled={exportingGdpr}
+                  onClick={async () => {
+                    setExportingGdpr(true);
+                    setGdprExportDone(null);
+                    try {
+                      const res = await complianceApi.requestExport({ export_type: 'gdpr' });
+                      if (res?.data?.id) {
+                        setGdprExportDone({ id: res.data.id, url: `/api/compliance/exports/${res.data.id}/download` });
+                        toast.success('GDPR report ready — click Download');
+                      }
+                    } catch {
+                      toast.error('Failed to generate GDPR export');
+                    } finally {
+                      setExportingGdpr(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-medium hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
+                >
+                  {exportingGdpr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileOutput className="w-3.5 h-3.5" />}
+                  {exportingGdpr ? 'Generating…' : 'Export GDPR Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* GDPR article summary */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              { article: 'Art. 15', label: 'Right of access', color: 'text-blue-400' },
+              { article: 'Art. 17', label: 'Right to erasure', color: 'text-rose-400' },
+              { article: 'Art. 20', label: 'Data portability', color: 'text-purple-400' },
+              { article: 'Art. 22', label: 'Automated decisions', color: 'text-amber-400' },
+              { article: 'Art. 30', label: 'Processing records', color: 'text-emerald-400' },
+              { article: 'Art. 35', label: 'DPIAs', color: 'text-cyan-400' },
+            ].map((item) => (
+              <div key={item.article} className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
+                <p className={`text-xs font-semibold ${item.color}`}>{item.article}</p>
+                <p className="text-sm text-white mt-1">{item.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-1">Data Subject Requests</p>
+            <p className="text-xs text-slate-400">Submit and track erasure, access, and portability requests. All requests logged to the immutable audit trail.</p>
+            <p className="mt-3 text-xs text-slate-500 italic">No open requests. Use the GDPR export to generate a full audit report.</p>
+          </div>
         </div>
       )}
 

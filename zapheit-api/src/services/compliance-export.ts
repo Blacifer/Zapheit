@@ -58,6 +58,36 @@ export async function generateComplianceExport(
     )) as any[];
     exportData.data.policy_packs = policyPacks || [];
 
+    // GDPR-specific data
+    if (exportType === 'gdpr') {
+      const gdprRequests = (await supabaseRestAsService(
+        'gdpr_requests',
+        `select=*&organization_id=${eq(organizationId)}&order=created_at.desc`
+      ).catch(() => [])) as any[];
+      exportData.data.gdpr_requests = gdprRequests;
+
+      const processingRecords = (await supabaseRestAsService(
+        'gdpr_processing_records',
+        `select=*&organization_id=${eq(organizationId)}`
+      ).catch(() => [])) as any[];
+      exportData.data.gdpr_processing_records = processingRecords;
+    }
+
+    // DPDP-specific data
+    if (exportType === 'dpdp') {
+      const consentRecords = (await supabaseRestAsService(
+        'consent_records',
+        `select=*&organization_id=${eq(organizationId)}&order=created_at.desc`
+      ).catch(() => [])) as any[];
+      exportData.data.consent_records = consentRecords;
+
+      const dprRequests = (await supabaseRestAsService(
+        'data_principal_requests',
+        `select=*&organization_id=${eq(organizationId)}&order=created_at.desc`
+      ).catch(() => [])) as any[];
+      exportData.data.data_principal_requests = dprRequests;
+    }
+
     const exportJson = JSON.stringify(exportData, null, 2);
     const fileSize = Buffer.byteLength(exportJson, 'utf8');
     const recordCount =

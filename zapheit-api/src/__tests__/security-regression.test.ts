@@ -45,6 +45,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'billing.ts'),
   // Enterprise settings: reads/patches organizations.data_region + ip_allowlist using service-role (no user-scoped org write path for these columns).
   path.join(ROUTES_DIR, 'enterprise-settings.ts'),
+  // SSO: upserts sso_configurations using service-role; Supabase Auth SAML requires server-side metadata write.
+  path.join(ROUTES_DIR, 'sso.ts'),
   // Embed proxy: API-key-only endpoint (no user JWT); uses supabaseRest to validate the embed API key.
   path.join(ROUTES_DIR, 'embed.ts'),
 ]);
