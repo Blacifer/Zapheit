@@ -41,6 +41,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'dpdp.ts'),
   // Cashfree webhook: inbound payment callbacks arrive without a user JWT; HMAC-verified and must reconcile server-side order state.
   path.join(ROUTES_DIR, 'cashfree-webhook.ts'),
+  // Billing: plan activation (activatePlan) patches organizations + payment_orders using service-role; also imported by cashfree-webhook.
+  path.join(ROUTES_DIR, 'billing.ts'),
 ]);
 
 function walk(dir: string): string[] {
