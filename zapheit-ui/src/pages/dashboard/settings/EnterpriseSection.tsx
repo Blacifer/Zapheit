@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, Shield, Eye, Plus, Trash2, Save, Loader2, CheckCircle2, KeyRound, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Globe, Shield, Eye, Plus, Trash2, Save, Loader2, CheckCircle2, KeyRound, Palette } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 
 const DATA_REGIONS = [
@@ -38,13 +38,21 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
   const [ssoForm, setSsoForm] = useState({ provider: 'okta', metadata_url: '', domain_hint: '' });
   const [savingSso, setSavingSso] = useState(false);
 
+  const [wlEnabled, setWlEnabled] = useState(false);
+  const [wlForm, setWlForm] = useState({
+    wl_logo_url: '', wl_primary_color: '#6366f1', wl_custom_domain: '',
+    wl_product_name: '', wl_support_email: '', wl_email_from_name: '',
+  });
+  const [savingWl, setSavingWl] = useState(false);
+  const [wlSaved, setWlSaved] = useState(false);
+
   const token = (user as any)?._jwt || localStorage.getItem('sb-access-token') || '';
   const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
   useEffect(() => {
     async function load() {
       try {
-        const [settingsRes, shadowRes, ssoRes] = await Promise.all([
+        const [settingsRes, shadowRes, ssoRes, wlRes] = await Promise.all([
           fetch(`${apiBase}/api/enterprise/settings`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -52,6 +60,9 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null),
           fetch(`${apiBase}/api/sso`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+          fetch(`${apiBase}/api/white-label`, {
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null),
         ]);
@@ -67,6 +78,18 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
         if (ssoRes?.ok) {
           const d = await ssoRes.json();
           setSsoConfigs(d.data ?? []);
+        }
+        if (wlRes?.ok) {
+          const d = await wlRes.json();
+          setWlEnabled(d.white_label_enabled ?? false);
+          setWlForm({
+            wl_logo_url: d.wl_logo_url ?? '',
+            wl_primary_color: d.wl_primary_color ?? '#6366f1',
+            wl_custom_domain: d.wl_custom_domain ?? '',
+            wl_product_name: d.wl_product_name ?? '',
+            wl_support_email: d.wl_support_email ?? '',
+            wl_email_from_name: d.wl_email_from_name ?? '',
+          });
         }
       } catch {
         // non-fatal
@@ -253,6 +276,85 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
           </div>
         </div>
       )}
+
+      {/* White-label */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-violet-500/10 rounded-xl"><Palette className="w-5 h-5 text-violet-400" /></div>
+            <div>
+              <h3 className="text-base font-semibold text-white">White-label</h3>
+              <p className="text-sm text-slate-400">Custom logo, domain, and product name for system integrators.</p>
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                const next = !wlEnabled;
+                setWlEnabled(next);
+                await fetch(`${apiBase}/api/white-label`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ white_label_enabled: next }),
+                });
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${wlEnabled ? 'bg-violet-500' : 'bg-slate-600'}`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${wlEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          )}
+        </div>
+
+        {wlEnabled && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { field: 'wl_product_name', label: 'Product name', placeholder: 'e.g. AcmeAI' },
+                { field: 'wl_custom_domain', label: 'Custom domain', placeholder: 'ai.acme.com' },
+                { field: 'wl_logo_url', label: 'Logo URL', placeholder: 'https://cdn.acme.com/logo.png' },
+                { field: 'wl_primary_color', label: 'Primary colour', placeholder: '#1a73e8' },
+                { field: 'wl_support_email', label: 'Support email', placeholder: 'support@acme.com' },
+                { field: 'wl_email_from_name', label: 'Email sender name', placeholder: 'AcmeAI Support' },
+              ].map(({ field, label, placeholder }) => (
+                <div key={field}>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">{label}</label>
+                  <input
+                    type="text"
+                    value={wlForm[field as keyof typeof wlForm]}
+                    onChange={(e) => setWlForm((f) => ({ ...f, [field]: e.target.value }))}
+                    disabled={!isAdmin}
+                    placeholder={placeholder}
+                    className="w-full bg-slate-700/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500/60 disabled:opacity-50"
+                  />
+                </div>
+              ))}
+            </div>
+            {isAdmin && (
+              <button
+                disabled={savingWl}
+                onClick={async () => {
+                  setSavingWl(true);
+                  setWlSaved(false);
+                  try {
+                    const res = await fetch(`${apiBase}/api/white-label`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify(wlForm),
+                    });
+                    if (res.ok) { setWlSaved(true); setTimeout(() => setWlSaved(false), 3000); }
+                  } finally {
+                    setSavingWl(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors"
+              >
+                {savingWl ? <Loader2 className="w-4 h-4 animate-spin" /> : wlSaved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                {savingWl ? 'Saving…' : wlSaved ? 'Saved' : 'Save white-label'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* SAML/SSO */}
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">

@@ -47,6 +47,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'enterprise-settings.ts'),
   // SSO: upserts sso_configurations using service-role; Supabase Auth SAML requires server-side metadata write.
   path.join(ROUTES_DIR, 'sso.ts'),
+  // White-label: reads/patches organizations white_label_* columns using service-role (same justification as enterprise-settings).
+  path.join(ROUTES_DIR, 'white-label.ts'),
   // Embed proxy: API-key-only endpoint (no user JWT); uses supabaseRest to validate the embed API key.
   path.join(ROUTES_DIR, 'embed.ts'),
 ]);
