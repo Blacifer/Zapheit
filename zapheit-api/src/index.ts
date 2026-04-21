@@ -46,6 +46,7 @@ import trustRoutes from './routes/trust';
 import portalRoutes from './routes/portal';
 import tracesRoutes from './routes/traces';
 import paymentsRoutes from './routes/payments';
+import billingRoutes from './routes/billing';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -484,6 +485,7 @@ if (connectorsEnabled) {
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api', paymentsRoutes);
+app.use('/api', billingRoutes);
 app.use('/api', webhooksRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/policies', policiesRoutes);

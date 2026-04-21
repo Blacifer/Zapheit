@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, RefreshCw, ArrowRight, Zap, Users, Bot, Clock, AlertTriangle } from 'lucide-react';
+import { BarChart3, RefreshCw, ArrowRight, Zap, Users, Bot, Clock, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { authenticatedFetch } from '../../lib/api/_helpers';
+import { useApp } from '../../context/AppContext';
 
 interface UsageData {
   plan: string;
@@ -39,14 +40,66 @@ function textColor(p: number): string {
   return 'text-slate-300';
 }
 
-const PLAN_ORDER = ['free', 'pro', 'business', 'enterprise'];
 const PLAN_LABELS: Record<string, string> = { free: 'Free', pro: 'Pro', business: 'Business', enterprise: 'Enterprise' };
 const NEXT_PLAN: Record<string, string> = { free: 'Pro', pro: 'Business', business: 'Enterprise', enterprise: '' };
+const NEXT_OFFER: Record<string, string> = { free: 'pro_monthly', pro: 'business_monthly' };
+const PLAN_PRICES: Record<string, { monthly: number; annual: number; monthlyOffer: string; annualOffer: string }> = {
+  pro:      { monthly: 4999,    annual: 49999,   monthlyOffer: 'pro_monthly',      annualOffer: 'pro_annual' },
+  business: { monthly: 19999,   annual: 199999,  monthlyOffer: 'business_monthly', annualOffer: 'business_annual' },
+};
+
+interface CheckoutModalState {
+  targetPlan: string;
+  annual: boolean;
+}
 
 export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) => void }) {
+  const { user } = useApp();
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutModal, setCheckoutModal] = useState<CheckoutModalState | null>(null);
+  const [checkoutForm, setCheckoutForm] = useState({ phone: '', company: '' });
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const openCheckout = (targetPlan: string) => {
+    setCheckoutModal({ targetPlan, annual: false });
+    setCheckoutError(null);
+  };
+
+  const handleCheckout = async () => {
+    if (!checkoutModal) return;
+    const phone = checkoutForm.phone.trim();
+    if (phone.length < 10) { setCheckoutError('Please enter a valid 10-digit phone number.'); return; }
+
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      const prices = PLAN_PRICES[checkoutModal.targetPlan];
+      const offerCode = checkoutModal.annual ? prices.annualOffer : prices.monthlyOffer;
+      const res = await authenticatedFetch<{ success: boolean; data: { checkout_url: string } }>('/billing/checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          offer_code: offerCode,
+          customer_name: user?.email?.split('@')[0] || 'Customer',
+          customer_email: user?.email || '',
+          customer_phone: phone,
+          company_name: checkoutForm.company || undefined,
+        }),
+      });
+      const checkoutUrl = (res as any)?.data?.checkout_url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      } else {
+        setCheckoutError('Could not initiate checkout. Please try again.');
+      }
+    } catch (e: any) {
+      setCheckoutError(e?.message || 'Checkout failed. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -132,9 +185,9 @@ export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) 
               <p className="text-xs text-slate-400 mt-0.5">Resets {resetLabel}</p>
             </div>
           </div>
-          {nextPlan && (
+          {nextPlan && NEXT_OFFER[plan] && (
             <button
-              onClick={() => onNavigate?.('settings')}
+              onClick={() => openCheckout(nextPlan.toLowerCase())}
               className="flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-colors"
             >
               Upgrade to {nextPlan}
@@ -211,7 +264,7 @@ export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) 
                 Upgrade to Pro for 10 assistants, 50,000 messages/month, and 90-day activity history.
               </p>
               <button
-                onClick={() => onNavigate?.('settings')}
+                onClick={() => openCheckout('pro')}
                 className="mt-4 flex items-center gap-1.5 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-400 transition-colors"
               >
                 Upgrade to Pro — from ₹4,999/mo
@@ -232,6 +285,90 @@ export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) 
           </p>
         </div>
       )}
+
+      {/* Checkout modal */}
+      {checkoutModal && (() => {
+        const prices = PLAN_PRICES[checkoutModal.targetPlan];
+        const price = checkoutModal.annual ? prices.annual : prices.monthly;
+        const planLabel = PLAN_LABELS[checkoutModal.targetPlan] || checkoutModal.targetPlan;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-slate-900 p-6 space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">Upgrade to {planLabel}</h2>
+                <button onClick={() => setCheckoutModal(null)} className="text-slate-400 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Annual/Monthly toggle */}
+              <div className="flex rounded-xl border border-white/[0.08] bg-white/[0.04] p-1">
+                {(['monthly', 'annual'] as const).map((cycle) => (
+                  <button
+                    key={cycle}
+                    onClick={() => setCheckoutModal(m => m ? { ...m, annual: cycle === 'annual' } : m)}
+                    className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${checkoutModal.annual === (cycle === 'annual') ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    {cycle === 'annual' ? 'Annual (save 17%)' : 'Monthly'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3">
+                <p className="text-2xl font-bold text-white">
+                  ₹{price.toLocaleString('en-IN')}
+                  <span className="text-sm font-normal text-slate-400">
+                    {checkoutModal.annual ? '/year' : '/month'}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">+ 18% GST · Secured by Cashfree</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">Phone number *</label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit mobile number"
+                    value={checkoutForm.phone}
+                    onChange={e => setCheckoutForm(f => ({ ...f, phone: e.target.value }))}
+                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">Company name (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Your company"
+                    value={checkoutForm.company}
+                    onChange={e => setCheckoutForm(f => ({ ...f, company: e.target.value }))}
+                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+                  />
+                </div>
+              </div>
+
+              {checkoutError && (
+                <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-sm text-rose-300">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {checkoutError}
+                </div>
+              )}
+
+              <button
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-400 transition-colors disabled:opacity-60"
+              >
+                {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {checkoutLoading ? 'Redirecting to payment…' : `Pay ₹${price.toLocaleString('en-IN')} →`}
+              </button>
+              <p className="text-center text-xs text-slate-500">
+                You'll be redirected to Cashfree's secure payment page.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

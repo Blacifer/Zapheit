@@ -38,6 +38,7 @@ const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const ROIPage = lazy(() => import('./dashboard/ROIPage'));
+const BillingSuccessPage = lazy(() => import('./dashboard/BillingSuccessPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
 const SettingsPage = lazy(() => import('./dashboard/SettingsPage'));
 const ApiAnalyticsPage = lazy(() => import('./dashboard/ApiAnalyticsPage'));
@@ -1298,6 +1299,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="roi" element={
                     <SectionErrorBoundary fallbackMessage="ROI dashboard failed to load">
                       <ROIPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="billing/success" element={
+                    <SectionErrorBoundary fallbackMessage="Billing confirmation failed to load">
+                      <BillingSuccessPage onNavigate={navigateTo} />
                     </SectionErrorBoundary>
                   } />
                   <Route path="*" element={<Navigate to="overview" replace />} />

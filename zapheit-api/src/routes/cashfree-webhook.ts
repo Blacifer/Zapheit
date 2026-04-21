@@ -8,6 +8,7 @@ import {
 } from '../lib/cashfree';
 import { logger } from '../lib/logger';
 import { eq, supabaseRestAsService } from '../lib/supabase-rest';
+import { activatePlan } from './billing';
 
 const router = express.Router();
 
@@ -346,43 +347,23 @@ async function processCashfreeWebhook(payload: CashfreeWebhookPayload, headers: 
   const row = updated?.[0] || existing;
 
   if (finalStatus === 'paid') {
+    // Auto-activate plan immediately
     try {
-      const reviewWorkItem = await ensurePaymentReviewWorkItem({
-        order: row,
-        payload,
-        providerEventId,
-      });
-      const reviewedRow = await updatePaymentOrderFulfillmentState({
-        order: row,
-        workItemId: reviewWorkItem.id,
-      });
-
-      await persistOrganizationBillingState({
-        order: reviewedRow,
-        providerEventId,
-        workItemId: reviewWorkItem.id,
-      });
-
-      if (reviewWorkItem.created) {
-        await auditLog.log({
-          user_id: reviewedRow.created_by || '',
-          action: 'payments.review.queued',
-          resource_type: 'payment_order',
-          resource_id: reviewedRow.id,
-          organization_id: reviewedRow.organization_id,
-          metadata: {
-            merchant_order_id: reviewedRow.merchant_order_id,
-            work_item_id: reviewWorkItem.id,
-            provider_event_id: providerEventId,
-          },
-        });
-      }
-    } catch (error: any) {
-      logger.warn('Cashfree payment fulfilled but manual review sync failed', {
+      const planCode = (row.metadata?.plan_code as string) || (row.offer_code as string)?.split('_')[0] || 'pro';
+      await activatePlan(row.organization_id, planCode, row.merchant_order_id);
+    } catch (activationError: any) {
+      logger.error('Plan auto-activation failed in webhook — falling back to manual review', {
         paymentOrderId: row.id,
-        merchantOrderId: row.merchant_order_id,
-        error: error?.message || String(error),
+        error: activationError?.message || String(activationError),
       });
+      // Fall back to manual review queue so no payment is lost
+      try {
+        const reviewWorkItem = await ensurePaymentReviewWorkItem({ order: row, payload, providerEventId });
+        const reviewedRow = await updatePaymentOrderFulfillmentState({ order: row, workItemId: reviewWorkItem.id });
+        await persistOrganizationBillingState({ order: reviewedRow, providerEventId, workItemId: reviewWorkItem.id });
+      } catch (fallbackError: any) {
+        logger.warn('Manual review fallback also failed', { paymentOrderId: row.id, error: fallbackError?.message });
+      }
     }
   }
 
