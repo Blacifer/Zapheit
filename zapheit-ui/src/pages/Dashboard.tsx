@@ -790,7 +790,13 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         )}
       </AnimatePresence>
 
-      <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''} md:pt-0`}>
+      <div className={cn(
+        'flex flex-1 w-full min-h-screen md:pt-0',
+        isDemoMode && error ? 'pt-[94px]' :
+        isDemoMode ? 'pt-[46px]' :
+        error ? 'pt-12' :
+        undefined,
+      )}>
         {/* Sidebar — desktop only */}
         <Sidebar
           currentPage={currentPage}
@@ -1045,7 +1051,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             </div>
           )}
           <MfaNudgeBanner user={user} onNavigateToSecurity={() => navigateTo('settings/security')} />
-          <div className="p-8">
+          <div className="p-4 sm:p-8">
           {loading ? (
             <DashboardSectionLoading />
           ) : (

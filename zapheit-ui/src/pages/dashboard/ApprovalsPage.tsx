@@ -661,10 +661,10 @@ export default function ApprovalsPage() {
         <button
           onClick={() => void load(true)}
           disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors text-sm disabled:opacity-50"
+          className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors text-sm disabled:opacity-50"
         >
           <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
 

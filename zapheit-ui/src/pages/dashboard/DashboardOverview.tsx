@@ -802,7 +802,7 @@ const hasData = agents.length > 0;
           <button
             onClick={handleKillSwitch}
             disabled={killSwitchLoading}
-            className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60 ${allPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/25'}`}
+            className={`shrink-0 flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60 ${allPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/25'}`}
           >
             {killSwitchLoading
               ? <RefreshCw className="h-4 w-4 animate-spin" />
