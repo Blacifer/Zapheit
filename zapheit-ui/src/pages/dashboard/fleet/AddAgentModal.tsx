@@ -65,6 +65,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
   const [documents, setDocuments] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [model, setModel] = useState('gpt-4o-mini');
+  const [temperature, setTemperature] = useState(0.7);
   const [budgetLimit, setBudgetLimit] = useState(1000);
 
   // When type changes seed defaults
@@ -101,6 +102,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
       platform: 'api',
       model_name: model,
       system_prompt: systemPromptParts,
+      temperature,
       status: 'active',
       lifecycle_state: 'idle',
       risk_level: 'low',
@@ -286,6 +288,22 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
                       <option value="claude-3-5-haiku-20241022">Claude Haiku</option>
                       <option value="claude-3-5-sonnet-20241022">Claude Sonnet</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-400">
+                      <span>Creativity level</span>
+                      <span className="text-slate-300">{temperature === 0 ? 'Precise' : temperature <= 0.4 ? 'Focused' : temperature <= 0.7 ? 'Balanced' : 'Creative'} ({temperature})</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={0} max={1} step={0.1}
+                      value={temperature}
+                      onChange={(e) => setTemperature(Number(e.target.value))}
+                      className="w-full accent-cyan-400"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-600 mt-0.5">
+                      <span>Precise</span><span>Balanced</span><span>Creative</span>
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-slate-400">Monthly budget cap (₹)</label>

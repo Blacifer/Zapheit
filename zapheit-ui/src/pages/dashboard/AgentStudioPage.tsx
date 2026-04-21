@@ -1,10 +1,11 @@
 import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Zap, Bot, FileText, Wand2 } from 'lucide-react';
+import { Zap, Bot, FileText, Wand2, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
 import type { AgentTemplate } from '../../config/agentTemplates';
+import { AddAgentModal } from './fleet/AddAgentModal';
 
 const AgentTemplatesPage = lazy(() => import('./AgentTemplatesPage'));
 const DomainAgentLibraryPage = lazy(() => import('./DomainAgentLibraryPage'));
@@ -52,6 +53,7 @@ export default function AgentStudioPage({
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTab || (tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'templates'),
   );
+  const [showWizard, setShowWizard] = useState(false);
 
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab);
@@ -61,19 +63,28 @@ export default function AgentStudioPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 border border-violet-500/20 flex items-center justify-center">
-          <Wand2 className="w-5 h-5 text-violet-300" />
-        </div>
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-white">Create an Assistant</h1>
-            <span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-              Core
-            </span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 border border-violet-500/20 flex items-center justify-center">
+            <Wand2 className="w-5 h-5 text-violet-300" />
           </div>
-          <p className="text-sm text-slate-400">Launch governed agents, reusable templates, and playbook automation from one workspace.</p>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-white">Create an Assistant</h1>
+              <span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                Core
+              </span>
+            </div>
+            <p className="text-sm text-slate-400">Launch governed agents, reusable templates, and playbook automation from one workspace.</p>
+          </div>
         </div>
+        <button
+          onClick={() => setShowWizard(true)}
+          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-cyan-500/20"
+        >
+          <Plus className="w-4 h-4" />
+          Build from scratch
+        </button>
       </div>
 
       {/* Tabs */}
@@ -112,6 +123,17 @@ export default function AgentStudioPage({
           <PlaybooksPage agents={agents} onNavigate={onNavigate} />
         )}
       </Suspense>
+
+      {showWizard && (
+        <AddAgentModal
+          onClose={() => setShowWizard(false)}
+          onAdd={async (agentData) => {
+            await onDeployLibraryAgent(agentData);
+            setShowWizard(false);
+            onNavigate?.('agents');
+          }}
+        />
+      )}
     </div>
   );
 }
