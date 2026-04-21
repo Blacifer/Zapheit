@@ -227,8 +227,8 @@ export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) 
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
           <p className="text-xs text-slate-500">
             {plan === 'pro'
-              ? 'Pro overage: ₹0.40 per message after 50,000. You'll receive an email alert at 50%, 80%, and 100% of your limit.'
-              : 'Business overage: ₹0.30 per message after 2,50,000. You'll receive an email alert at 50%, 80%, and 100% of your limit.'}
+              ? "Pro overage: \u20b90.40 per message after 50,000. You'll receive an email alert at 50%, 80%, and 100% of your limit."
+              : "Business overage: \u20b90.30 per message after 2,50,000. You'll receive an email alert at 50%, 80%, and 100% of your limit."}
           </p>
         </div>
       )}
