@@ -96,7 +96,7 @@ export default function CostsChartsSection({
                     : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white'
                 }`}
               >
-                {mode}
+                {mode === 'tokens' ? 'Advanced' : mode}
               </button>
             ))}
           </div>

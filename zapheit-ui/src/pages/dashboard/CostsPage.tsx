@@ -266,7 +266,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           {
             label: 'Messages sent',
             value: messagesDisplay,
-            sub: estimatedMessages === 0 ? 'No messages tracked yet' : `≈ ${totalRequests.toLocaleString()} AI requests · ${(totalTokens / 1000).toFixed(0)}k tokens`,
+            sub: estimatedMessages === 0 ? 'No messages tracked yet' : `Across ${totalRequests.toLocaleString()} AI requests`,
             icon: <Cpu className="w-5 h-5 text-blue-400" />,
             bg: 'bg-blue-500/10',
             glow: 'group-hover:bg-blue-500/5',
@@ -274,7 +274,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           {
             label: 'AI requests',
             value: totalRequests.toLocaleString(),
-            sub: totalRequests === 0 ? 'No Zapheit-tracked requests yet' : `~${Math.round(totalTokens / Math.max(totalRequests, 1))} tokens per request`,
+            sub: totalRequests === 0 ? 'No Zapheit-tracked requests yet' : `≈${Math.round(totalTokens / Math.max(totalRequests, 1) / 800)} messages/request on average`,
             icon: <Activity className="w-5 h-5 text-purple-400" />,
             bg: 'bg-purple-500/10',
             glow: 'group-hover:bg-purple-500/5',
