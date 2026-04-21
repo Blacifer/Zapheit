@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   User, Building2, Users, Bell, Shield,
   Save, ChevronRight, X, RefreshCw, Copy, Zap,
-  Sparkles, DollarSign, Mail, Edit3, Check, ImagePlus, MessageCircle, Globe
+  Sparkles, DollarSign, Mail, Edit3, Check, ImagePlus, MessageCircle, Globe, Moon, Sun
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { PageHero } from '../../components/dashboard/PageHero';
@@ -61,7 +61,7 @@ function normalizeSettingsTab(value: string | null | undefined): SettingsTab | n
 }
 
 // ==================== MAIN COMPONENT ====================
-export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNavigate?: (page: string) => void; isDemoMode?: boolean }) {
+export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMode = false, onToggleTheme }: { onNavigate?: (page: string) => void; isDemoMode?: boolean; isLightMode?: boolean; onToggleTheme?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const pathSuffix = location.pathname.replace(/^.*\/dashboard\/settings\/?/, '');
@@ -384,12 +384,25 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
               <button onClick={() => { navigator.clipboard.writeText(user?.id || ''); toast.success('Copied!'); }} className="p-1 text-slate-500 hover:text-cyan-400 transition-colors"><Copy className="w-3.5 h-3.5" /></button>
             </div>
           </div>
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
             <div>
               <p className="text-sm font-medium text-slate-300">Member Since</p>
               <p className="text-xs text-slate-500 mt-0.5">When you joined the platform</p>
             </div>
             <span className="text-sm text-white">{memberSince ?? '…'}</span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium text-slate-300">Appearance</p>
+              <p className="text-xs text-slate-500 mt-0.5">Choose light or dark interface</p>
+            </div>
+            <button
+              onClick={onToggleTheme}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-sm text-slate-300 transition-colors"
+            >
+              {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              {isLightMode ? 'Dark mode' : 'Light mode'}
+            </button>
           </div>
         </div>
       </div>

@@ -1219,7 +1219,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="webhooks" element={<Navigate to="/dashboard/api-webhooks?tab=webhooks" replace />} />
                   <Route path="settings/*" element={
                     <SectionErrorBoundary fallbackMessage="Settings failed to load">
-                      <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />
+                      <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} isLightMode={isLightMode} onToggleTheme={() => setIsLightMode((v: boolean) => !v)} />
                     </SectionErrorBoundary>
                   } />
                   <Route path="developer" element={
