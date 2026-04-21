@@ -123,6 +123,9 @@ function computeRiskScore(request: ApprovalRequest): number {
   if (action.includes('execute') || action.includes('webhook') || action.includes('api_call')) score += 20;
   const payloadStr = JSON.stringify(request.action_payload || '').toLowerCase();
   if (/\b(aadhaar|pan|passport|password|secret|token|key)\b/.test(payloadStr)) score += 20;
+  // External recipient: any email/phone/external URL in payload raises risk
+  if (/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/.test(payloadStr)) score += 10;
+  if (/\bhttps?:\/\/(?!localhost|127\.0\.0\.1)/.test(payloadStr)) score += 5;
   return Math.min(100, score);
 }
 
@@ -230,6 +233,8 @@ function PendingCard({
     await api.approvals.updateSubTasks(request.id, updated);
   };
 
+  const riskScore = computeRiskScore(request);
+
   return (
     <div className={cn(
       'rounded-xl border p-5 space-y-4 transition-colors',
@@ -257,7 +262,7 @@ function PendingCard({
             {request.service ? <span className="text-slate-400 font-normal text-sm"> via {request.service}</span> : null}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <RiskBadge score={computeRiskScore(request)} />
+            <RiskBadge score={riskScore} />
             <SlaCountdown createdAt={request.created_at} slaHours={(request as any).sla_hours} escalatedAt={(request as any).escalated_at} />
             {(request as any).delegate_to_user_id && (
               <span className="inline-flex items-center gap-1 text-xs text-violet-400"><UserCheck className="w-3 h-3" />Delegated</span>
@@ -410,6 +415,18 @@ function PendingCard({
                 </button>
               </div>
             </div>
+          )}
+          {riskScore < 30 && (
+            <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Low risk — will be auto-approved if no response in 2 hours
+            </p>
+          )}
+          {riskScore >= 70 && (
+            <p className="text-xs text-rose-400 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              High risk — will be escalated to manager if no response in 2 hours
+            </p>
           )}
           <div className="flex items-center gap-3 flex-wrap">
             <button
@@ -740,6 +757,45 @@ export default function ApprovalsPage() {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Smart bulk groups: 3+ identical action types get a one-click group approve */}
+            {(() => {
+              const actionGroups: Record<string, ApprovalRequest[]> = {};
+              pending.forEach(r => {
+                const key = r.action || 'unknown';
+                actionGroups[key] = [...(actionGroups[key] || []), r];
+              });
+              const groups = Object.entries(actionGroups).filter(([, items]) => items.length >= 3);
+              if (groups.length === 0) return null;
+              return (
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-2">
+                  <p className="text-xs font-semibold text-cyan-300 uppercase tracking-wide">Similar requests — approve in bulk</p>
+                  <div className="flex flex-wrap gap-2">
+                    {groups.map(([action, items]) => (
+                      <button
+                        key={action}
+                        disabled={bulkSubmitting}
+                        onClick={async () => {
+                          setBulkSubmitting(true);
+                          const res = await api.approvals.bulkApprove(items.map(i => i.id));
+                          setBulkSubmitting(false);
+                          if (res.success) {
+                            toast.success(`Approved ${items.length} ${friendlyAction(action)} requests`);
+                            const ids = new Set(items.map(i => i.id));
+                            setAll(prev => prev.map(r => ids.has(r.id) ? { ...r, status: 'approved', reviewed_at: new Date().toISOString() } : r));
+                          } else {
+                            toast.error(res.error || 'Bulk approve failed');
+                          }
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/20 text-emerald-300 text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Approve all {items.length} &ldquo;{friendlyAction(action)}&rdquo; requests
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {pending.map(r => (
               <PendingCard
                 key={r.id}
