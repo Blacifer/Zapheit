@@ -5,6 +5,7 @@ import {
   AlertTriangle, TrendingDown, AlertCircle, TrendingUp,
   Download, Zap, BarChart2, ArrowUpRight, ArrowDownRight, Minus,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
 
 import { CostData, AIAgent, Incident } from '../../types';
 import { toast } from '../../lib/toast';
@@ -210,6 +211,17 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           </button>
         </div>
       </div>
+
+      {/* Empty state — no gateway traffic yet */}
+      {filteredCostData.length === 0 && (
+        <EmptyState
+          icon={DollarSign}
+          title="No spending data yet"
+          description="Cost data appears once an AI assistant handles its first message through Zapheit. Connect an assistant and send a test message to get started."
+          action={{ label: 'Create an assistant', onClick: () => onNavigate('agent-studio') }}
+          secondaryAction={{ label: 'View AI workforce', onClick: () => onNavigate('agents') }}
+        />
+      )}
 
       {/* Plain-language summary */}
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 text-sm text-white">
