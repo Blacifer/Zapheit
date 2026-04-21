@@ -5,6 +5,7 @@ import { authHelpers, supabase } from './lib/supabase-client';
 import { getFrontendConfig } from './lib/config';
 import { STORAGE_KEYS } from './lib/utils';
 import { MfaEnrollmentGate } from './components/MfaEnrollmentGate';
+import { identifyUser, resetAnalytics, analytics } from './lib/analytics';
 
 // Lazy load all page components
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -137,6 +138,7 @@ function App() {
           const userData = await buildAuthUser(authUser);
           setUser(userData);
           localStorage.setItem('has_session', 'true');
+          identifyUser(authUser.id, { email: authUser.email, role: userData.role, org_name: userData.organizationName });
 
           // If landing on auth pages while authenticated, redirect to dashboard.
           if (!isAcceptInvite && (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/signup')) {
@@ -174,6 +176,7 @@ function App() {
     setUser(demoUser);
     setIsDemoMode(true);
     localStorage.setItem('has_session', 'true');
+    analytics.demoEntered();
     navigate('/dashboard');
   };
 
@@ -281,6 +284,7 @@ function App() {
 
     setUser(null);
     setIsDemoMode(false);
+    resetAnalytics();
     navigate('/login');
   };
 
