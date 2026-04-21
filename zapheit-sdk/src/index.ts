@@ -86,11 +86,112 @@ class EventsClient {
   }
 }
 
+// ── Approvals ────────────────────────────────────────────────────────────────
+
+export interface ApprovalRequest {
+  id: string;
+  agent_id: string;
+  action_type: string;
+  payload: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'rejected' | 'auto_approved' | 'timed_out';
+  risk_score?: number | null;
+  created_at: string;
+  reviewed_at?: string | null;
+  reviewer_note?: string | null;
+}
+
+class ApprovalsClient {
+  constructor(private readonly http: HttpClient) {}
+
+  async list(options: { status?: string; limit?: number } = {}): Promise<ApprovalRequest[]> {
+    const params = new URLSearchParams();
+    if (options.status) params.set('status', options.status);
+    if (options.limit) params.set('limit', String(options.limit));
+    return this.http.get<ApprovalRequest[]>('/approvals?' + params.toString());
+  }
+
+  async get(id: string): Promise<ApprovalRequest> {
+    return this.http.get<ApprovalRequest>('/approvals/' + id);
+  }
+
+  async resolve(id: string, decision: 'approved' | 'rejected', note?: string): Promise<ApprovalRequest> {
+    return this.http.post<ApprovalRequest>('/approvals/' + id + '/resolve', { decision, note });
+  }
+}
+
+// ── Conversations ─────────────────────────────────────────────────────────────
+
+export interface Conversation {
+  id: string;
+  agent_id: string;
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count?: number;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
+}
+
+class ConversationsClient {
+  constructor(private readonly http: HttpClient) {}
+
+  async list(agentId?: string): Promise<Conversation[]> {
+    const params = agentId ? '?agent_id=' + agentId : '';
+    return this.http.get<Conversation[]>('/chat/sessions' + params);
+  }
+
+  async get(id: string): Promise<Conversation> {
+    return this.http.get<Conversation>('/chat/sessions/' + id);
+  }
+
+  async messages(conversationId: string): Promise<ConversationMessage[]> {
+    return this.http.get<ConversationMessage[]>('/chat/sessions/' + conversationId + '/messages');
+  }
+}
+
+// ── Playbooks ─────────────────────────────────────────────────────────────────
+
+export interface PlaybookTriggerResult {
+  run_id: string;
+  playbook_id: string;
+  status: 'triggered' | 'running' | 'completed' | 'failed';
+  started_at: string;
+}
+
+class PlaybooksClient {
+  constructor(private readonly http: HttpClient) {}
+
+  async trigger(playbookId: string, context: Record<string, unknown> = {}): Promise<PlaybookTriggerResult> {
+    return this.http.post<PlaybookTriggerResult>('/playbooks/' + playbookId + '/run', { context });
+  }
+}
+
+// ── HTTP client ───────────────────────────────────────────────────────────────
+
 class HttpClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
   ) {}
+
+  async get<T>(path: string): Promise<T> {
+    const url = this.baseUrl.replace(/\/$/, '') + path;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new ZapheitError(res.status, text);
+    }
+    return res.json() as Promise<T>;
+  }
 
   async post<T>(path: string, body: unknown): Promise<T> {
     const url = this.baseUrl.replace(/\/$/, '') + path;
@@ -126,6 +227,9 @@ export class ZapheitClient {
   readonly agents: AgentsClient;
   readonly chat: ChatClient;
   readonly events: EventsClient;
+  readonly approvals: ApprovalsClient;
+  readonly conversations: ConversationsClient;
+  readonly playbooks: PlaybooksClient;
 
   constructor(options: ZapheitClientOptions) {
     if (!options.apiKey) {
@@ -136,5 +240,8 @@ export class ZapheitClient {
     this.agents = new AgentsClient(http);
     this.chat = new ChatClient(http);
     this.events = new EventsClient(http);
+    this.approvals = new ApprovalsClient(http);
+    this.conversations = new ConversationsClient(http);
+    this.playbooks = new PlaybooksClient(http);
   }
 }

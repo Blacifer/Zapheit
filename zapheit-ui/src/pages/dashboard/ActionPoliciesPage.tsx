@@ -467,6 +467,52 @@ function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, sa
   );
 }
 
+function parseNaturalLanguagePolicy(text: string): Partial<Editor> | null {
+  const t = text.toLowerCase();
+  if (!t.trim()) return null;
+
+  const patch: Partial<Editor> = { require_approval: true, required_role: 'manager', notes: text };
+
+  // Role detection
+  if (/\badmin\b/.test(t)) patch.required_role = 'admin';
+  else if (/\bmanager\b/.test(t)) patch.required_role = 'manager';
+  else if (/\bviewer\b/.test(t)) patch.required_role = 'viewer';
+
+  // Service detection
+  if (/\bslack\b/.test(t)) patch.service = 'slack';
+  else if (/\bstripe\b|\bpayment\b|\brefund\b/.test(t)) patch.service = 'stripe';
+  else if (/\bcashfree\b/.test(t)) patch.service = 'cashfree';
+  else if (/\bwebhook\b/.test(t)) patch.service = 'webhook';
+  else if (/\bzendesk\b|\bticket\b/.test(t)) patch.service = 'zendesk';
+  else if (/\bhubspot\b|\bcrm\b/.test(t)) patch.service = 'hubspot';
+  else if (/\bjira\b/.test(t)) patch.service = 'jira';
+  else if (/\bemail\b|\bmail\b/.test(t)) patch.service = 'email';
+  else patch.service = 'internal';
+
+  // Action detection
+  if (/\bdelete\b|\bremove\b/.test(t)) patch.action = 'data.record.delete';
+  else if (/\bexport\b|\bdownload\b/.test(t)) patch.action = 'data.records.export';
+  else if (/\brefund\b/.test(t)) patch.action = 'create_refund';
+  else if (/\bpayroll\b/.test(t)) patch.action = 'run_payroll';
+  else if (/\bpermission\b|\brole\b|\baccess\b/.test(t)) patch.action = 'iam.role.assign';
+  else if (/\bticket\b/.test(t)) patch.action = 'support.ticket.create';
+  else if (/\bmessage\b|\bsend\b|\bnotif/.test(t)) patch.action = 'messaging.user.send';
+  else if (/\bwebhook\b|\bcall\b/.test(t)) patch.action = 'webhook.call';
+  else if (/\bpii\b|\bpersonal\b/.test(t)) patch.action = 'compliance.sensitive_data.access';
+  else if (patch.service !== 'internal') patch.action = patch.service + '.action';
+  else patch.action = 'internal.action';
+
+  // Approval intent
+  if (/\bblock\b|\bprevent\b|\bdeny\b|\bforbid\b/.test(t)) {
+    patch.require_approval = false;
+    patch.enabled = true;
+  } else if (/\bno approval\b|\bautomatic\b|\bauto.?approv/.test(t)) {
+    patch.require_approval = false;
+  }
+
+  return patch;
+}
+
 export default function ActionPoliciesPage() {
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<ActionPolicyRow[]>([]);
@@ -511,6 +557,8 @@ export default function ActionPoliciesPage() {
   const [openApiLoading, setOpenApiLoading] = useState(false);
   const [openApiPreview, setOpenApiPreview] = useState<ActionPolicyRow[]>([]);
   const [openApiChecked, setOpenApiChecked] = useState<Set<string>>(new Set());
+  const [nlInput, setNlInput] = useState('');
+  const [nlPreview, setNlPreview] = useState<Partial<Editor> | null>(null);
   const [editor, setEditor] = useState<Editor>({
     service: 'internal',
     action: 'support.ticket.create',
@@ -875,6 +923,46 @@ export default function ActionPoliciesPage() {
                 Delete
               </button>
             ) : null}
+          </div>
+
+          {/* Plain-English policy builder */}
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-4 space-y-3">
+            <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+              <BrainCircuit className="w-3.5 h-3.5" />
+              Describe your rule in plain English
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={nlInput}
+                onChange={(e) => { setNlInput(e.target.value); setNlPreview(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const p = parseNaturalLanguagePolicy(nlInput); setNlPreview(p); } }}
+                placeholder="e.g. Require admin approval before deleting any data"
+                className="flex-1 rounded-lg border border-white/[0.08] bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500/50"
+              />
+              <button
+                onClick={() => { const p = parseNaturalLanguagePolicy(nlInput); setNlPreview(p); }}
+                className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-colors"
+              >
+                Preview
+              </button>
+            </div>
+            {nlPreview && (
+              <div className="rounded-lg border border-white/[0.06] bg-slate-900/40 p-3 space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Parsed rule:</span>
+                  <button
+                    onClick={() => { setEditor((p) => ({ ...p, ...nlPreview })); setNlPreview(null); setNlInput(''); toast.success('Rule applied — review and save'); }}
+                    className="rounded-lg bg-cyan-500 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-400 transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+                <p><span className="text-slate-500">Service:</span> <span className="text-white">{nlPreview.service}</span></p>
+                <p><span className="text-slate-500">Action:</span> <span className="text-white">{nlPreview.action}</span></p>
+                <p><span className="text-slate-500">Requires approval:</span> <span className="text-white">{nlPreview.require_approval ? 'Yes' : 'No'}</span></p>
+                <p><span className="text-slate-500">Minimum role:</span> <span className="text-white">{nlPreview.required_role}</span></p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
