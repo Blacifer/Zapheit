@@ -21,20 +21,20 @@ function StatCard({ icon: Icon, value, label, color }: { icon: React.ElementType
 }
 
 export default function ROIPage() {
-  const { data: agents = [] } = useAgents();
-  const { data: incidents = [] } = useIncidents();
-  const { data: costData = [] } = useCostData();
+  const { agents } = useAgents();
+  const { incidents } = useIncidents();
+  const { costData } = useCostData();
   const [hourlyRate, setHourlyRate] = useState(500);
   const [copied, setCopied] = useState(false);
 
   const metrics = useMemo(() => {
-    const totalMessages = costData.reduce((s, d) => s + Math.round(d.tokens / TOKENS_PER_MESSAGE), 0);
+    const totalMessages = costData.reduce((s: number, d: { tokens: number }) => s + Math.round(d.tokens / TOKENS_PER_MESSAGE), 0);
     const incidentsCaught = incidents.filter((i) => i.status === 'resolved' || i.status === 'open').length;
     const hoursAutoSaved = Math.round(totalMessages / MESSAGES_PER_HOUR_SAVED);
     const hoursIncidentSaved = incidentsCaught * HOURS_PER_INCIDENT;
     const totalHoursSaved = hoursAutoSaved + hoursIncidentSaved;
     const valueSavedINR = totalHoursSaved * hourlyRate;
-    const totalCostINR = costData.reduce((s, d) => s + d.cost * 83, 0);
+    const totalCostINR = costData.reduce((s: number, d: { cost: number }) => s + d.cost * 83, 0);
     const roiMultiple = totalCostINR > 0 ? Math.round(valueSavedINR / totalCostINR) : 0;
     return { totalMessages, incidentsCaught, totalHoursSaved, valueSavedINR, totalCostINR, roiMultiple, activeAgents: agents.filter((a) => a.status === 'active').length };
   }, [agents, incidents, costData, hourlyRate]);

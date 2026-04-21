@@ -54,7 +54,7 @@ export default function UsagePage({ onNavigate }: { onNavigate?: (page: string) 
     try {
       const res = await authenticatedFetch<UsageData>('/usage');
       if ('error' in res) throw new Error(res.error as string);
-      setData(res as UsageData);
+      setData(res as unknown as UsageData);
     } catch (e: any) {
       setError(e?.message || 'Failed to load usage data');
     } finally {

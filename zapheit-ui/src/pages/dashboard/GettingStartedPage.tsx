@@ -191,6 +191,7 @@ export default function GettingStartedPage({
     try {
       await api.agents.create({
         name: selectedUseCase.agentName,
+        agent_type: useCase ?? 'custom',
         platform: channel === 'slack' ? 'slack' : 'web',
         model_name: 'google/gemini-2.0-flash',
         system_prompt: `You are a helpful ${selectedUseCase.label} assistant. Answer questions clearly and concisely. When unsure, say so and offer to escalate.`,
