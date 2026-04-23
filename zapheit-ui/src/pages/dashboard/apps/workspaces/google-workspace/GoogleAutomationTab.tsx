@@ -9,7 +9,7 @@ import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { useAgents } from '../../../../../hooks/useData';
 
-const CONNECTOR_ID = 'google-workspace';
+const CONNECTOR_ID = 'google_workspace';
 
 type TriggerType = 'email_received' | 'event_starting' | 'file_shared' | 'user_created';
 

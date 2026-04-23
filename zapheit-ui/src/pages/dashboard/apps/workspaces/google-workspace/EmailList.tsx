@@ -42,6 +42,7 @@ interface EmailListProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  onEmailActionComplete?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -75,12 +76,14 @@ function senderInitial(from?: string): string {
 /* ------------------------------------------------------------------ */
 
 interface ComposeProps {
+  connectorId: string;
   mode: 'compose' | 'reply' | 'forward';
   email?: EmailDetail;
   onClose: () => void;
+  onSubmitted?: () => void;
 }
 
-function ComposeBox({ mode, email, onClose }: ComposeProps) {
+function ComposeBox({ connectorId, mode, email, onClose, onSubmitted }: ComposeProps) {
   const [to, setTo] = useState(mode === 'reply' ? (email?.replyTo || email?.from || '') : '');
   const [subject, setSubject] = useState(
     mode === 'reply' ? `Re: ${email?.subject ?? ''}` :
@@ -104,9 +107,15 @@ function ComposeBox({ mode, email, onClose }: ComposeProps) {
       if (mode === 'reply' && email?.threadId) data.threadId = email.threadId;
       if (mode === 'reply' && email?.messageId) data.messageId = email.messageId;
       const action = mode === 'reply' ? 'reply_email' : mode === 'forward' ? 'forward_email' : 'send_email';
-      const res = await api.unifiedConnectors.executeAction('google-workspace', action, data);
+      const res = await api.unifiedConnectors.executeAction(connectorId, action, data);
       if (res.success) {
-        toast.success(mode === 'reply' ? 'Reply sent' : mode === 'forward' ? 'Forwarded' : 'Email sent');
+        if ((res as any).pending) {
+          toast.info((res as any).message || 'Action sent for approval');
+          onSubmitted?.();
+        } else {
+          toast.success(mode === 'reply' ? 'Reply sent' : mode === 'forward' ? 'Forwarded' : 'Email sent');
+          onSubmitted?.();
+        }
         onClose();
       } else {
         toast.error((res as any).error || 'Failed to send');
@@ -158,12 +167,14 @@ function ComposeBox({ mode, email, onClose }: ComposeProps) {
 /* ------------------------------------------------------------------ */
 
 interface EmailDetailViewProps {
+  connectorId: string;
   emailMeta: GmailMessage;
   onBack: () => void;
   onArchived: (id: string) => void;
+  onActionComplete?: () => void;
 }
 
-function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps) {
+function EmailDetailView({ connectorId, emailMeta, onBack, onArchived, onActionComplete }: EmailDetailViewProps) {
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState<'reply' | 'forward' | null>(null);
@@ -176,7 +187,7 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
     (async () => {
       setLoading(true);
       try {
-        const res = await api.unifiedConnectors.executeAction('google-workspace', 'get_email', { id: emailMeta.id });
+        const res = await api.unifiedConnectors.executeAction(connectorId, 'get_email', { id: emailMeta.id });
         const payload = res.data as any;
         if (res.success && payload?.data) setDetail(payload.data);
         else setDetail({ ...emailMeta });
@@ -188,14 +199,39 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
   const handleArchive = async () => {
     setArchiving(true);
     try {
-      const res = await api.unifiedConnectors.executeAction('google-workspace', 'archive_email', { id: emailMeta.id });
+      const res = await api.unifiedConnectors.executeAction(connectorId, 'archive_email', { id: emailMeta.id });
       if (res.success) {
         toast.success('Archived');
         onArchived(emailMeta.id);
+        onActionComplete?.();
         onBack();
       } else toast.error('Failed to archive');
     } catch { toast.error('Network error'); }
     finally { setArchiving(false); }
+  };
+
+  const handleMarkState = async (nextUnread: boolean) => {
+    try {
+      const res = await api.unifiedConnectors.executeAction(
+        connectorId,
+        nextUnread ? 'mark_email_unread' : 'mark_email_read',
+        { id: emailMeta.id },
+      );
+      if (res.success) {
+        setDetail((prev) => prev ? {
+          ...prev,
+          labelIds: nextUnread
+            ? Array.from(new Set([...(prev.labelIds || []), 'UNREAD']))
+            : (prev.labelIds || []).filter((label) => label !== 'UNREAD'),
+        } : prev);
+        toast.success(nextUnread ? 'Marked unread' : 'Marked read');
+        onActionComplete?.();
+      } else {
+        toast.error((res as any).error || 'Failed to update email state');
+      }
+    } catch {
+      toast.error('Network error');
+    }
   };
 
   const email = detail ?? emailMeta;
@@ -219,6 +255,12 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors"
         >
           <Forward className="w-3.5 h-3.5" /> Forward
+        </button>
+        <button
+          onClick={() => void handleMarkState(!(email.labelIds || []).includes('UNREAD'))}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors"
+        >
+          <Mail className="w-3.5 h-3.5" /> {(email.labelIds || []).includes('UNREAD') ? 'Mark read' : 'Mark unread'}
         </button>
         <button
           onClick={handleArchive}
@@ -258,6 +300,18 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
             </div>
 
             {/* Body */}
+            {(email.labelIds || []).length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                {(email.labelIds || []).map((label) => (
+                  <span
+                    key={label}
+                    className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-slate-400"
+                  >
+                    {label.toLowerCase()}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
               {(detail as EmailDetail | null)?.body || email.snippet || '(empty)'}
             </div>
@@ -268,9 +322,11 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
       {/* Compose area */}
       {compose && (
         <ComposeBox
+          connectorId={connectorId}
           mode={compose}
           email={detail ?? undefined}
           onClose={() => setCompose(null)}
+          onSubmitted={onActionComplete}
         />
       )}
     </div>
@@ -285,6 +341,7 @@ export function EmailList({
   emails, loading,
   pendingApprovals = [], onApprovalResolved,
   hasMore = false, loadingMore = false, onLoadMore,
+  onEmailActionComplete,
 }: EmailListProps) {
   const [search, setSearch] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -319,9 +376,11 @@ export function EmailList({
   if (openEmail) {
     return (
       <EmailDetailView
+        connectorId="google_workspace"
         emailMeta={openEmail}
         onBack={() => setOpenEmail(null)}
         onArchived={handleArchived}
+        onActionComplete={onEmailActionComplete}
       />
     );
   }
@@ -385,7 +444,12 @@ export function EmailList({
 
       {/* Compose */}
       {showCompose && (
-        <ComposeBox mode="compose" onClose={() => setShowCompose(false)} />
+        <ComposeBox
+          connectorId="google_workspace"
+          mode="compose"
+          onClose={() => setShowCompose(false)}
+          onSubmitted={onEmailActionComplete}
+        />
       )}
 
       {/* List */}

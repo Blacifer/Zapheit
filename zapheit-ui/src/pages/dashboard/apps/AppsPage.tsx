@@ -1,23 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, Loader2, RefreshCw } from 'lucide-react';
-import { api } from '../../../lib/api-client';
+import { Loader2 } from 'lucide-react';
 import { toast } from '../../../lib/toast';
-import { cn } from '../../../lib/utils';
 import type { AIAgent } from '../../../types';
-import type { UnifiedApp, DrawerTab } from './types';
+import { PageHero } from '../../../components/dashboard/PageHero';
 import { useAppsData } from './hooks/useAppsData';
 import { useAppActions } from './hooks/useAppActions';
-import { StatsBar } from './components/StatsBar';
-import { AgentContextBanner } from './components/AgentContextBanner';
-import { CategorySidebar } from './components/CategorySidebar';
-import { ConnectedAppRow } from './components/ConnectedAppRow';
-import { ConnectWizard } from './connect-wizard/ConnectWizard';
-import { BrowseView } from './components/BrowseView';
-import { RequestIntegrationModal } from './components/RequestIntegrationModal';
-import { MobileBottomSheet } from './components/MobileBottomSheet';
-import { DetailDrawer } from './drawer/DetailDrawer';
-import { PageHero } from '../../../components/dashboard/PageHero';
+import { AppLogo } from './components/AppLogo';
+import type { UnifiedApp } from './types';
 import { getAppServiceId } from './helpers';
 
 interface AppsPageProps {
@@ -25,438 +15,259 @@ interface AppsPageProps {
   onNavigate?: (route: string) => void;
 }
 
+type SupportedAppConfig = {
+  appId: 'google-workspace' | 'slack';
+  serviceId: 'google_workspace' | 'slack';
+  name: string;
+  description: string;
+  logoLetter: string;
+  colorHex: string;
+};
+
+const SUPPORTED_APPS: SupportedAppConfig[] = [
+  {
+    appId: 'google-workspace',
+    serviceId: 'google_workspace',
+    name: 'Google Workspace',
+    description: 'Open Gmail and Calendar directly inside Zapheit, with full inbox and scheduling control.',
+    logoLetter: 'G',
+    colorHex: '#4285F4',
+  },
+  {
+    appId: 'slack',
+    serviceId: 'slack',
+    name: 'Slack',
+    description: 'Connect Slack so Zapheit can read channels and write messages.',
+    logoLetter: 'S',
+    colorHex: '#4A154B',
+  },
+];
+
+function buildFallbackApp(config: SupportedAppConfig): UnifiedApp {
+  return {
+    id: `integration:${config.appId}`,
+    appId: config.appId,
+    name: config.name,
+    description: config.description,
+    category: 'productivity',
+    source: 'integration',
+    connectionType: 'oauth_connector',
+    primarySetupMode: 'oauth',
+    advancedSetupModes: ['oauth'],
+    logoLetter: config.logoLetter,
+    colorHex: config.colorHex,
+    installCount: 0,
+    comingSoon: false,
+    connected: false,
+    status: 'disconnected',
+    authType: 'oauth2',
+    integrationData: { id: config.serviceId },
+    primaryServiceId: config.serviceId,
+    supportsHealthTest: false,
+    healthStatus: 'not_connected',
+    healthTestMode: 'none',
+  };
+}
+
+function getConnectionStatus(app: UnifiedApp): 'Connected' | 'Disconnected' | 'Error' {
+  if (app.status === 'connected') return 'Connected';
+  if (app.status === 'error' || app.status === 'expired') return 'Error';
+  return 'Disconnected';
+}
+
+function statusTone(status: 'Connected' | 'Disconnected' | 'Error') {
+  if (status === 'Connected') return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300';
+  if (status === 'Error') return 'border-rose-400/20 bg-rose-500/10 text-rose-300';
+  return 'border-white/10 bg-white/[0.04] text-slate-300';
+}
+
+function ConnectionCard({
+  app,
+  busy,
+  onOpenWorkspace,
+  onConnect,
+  onDisconnect,
+}: {
+  app: UnifiedApp;
+  busy: boolean;
+  onOpenWorkspace: (app: UnifiedApp) => void;
+  onConnect: (app: UnifiedApp) => void;
+  onDisconnect: (app: UnifiedApp) => void;
+}) {
+  const status = getConnectionStatus(app);
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_20px_80px_rgba(2,6,23,0.28)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="md" />
+          <div>
+            <h3 className="text-lg font-semibold text-white">{app.name}</h3>
+            <p className="mt-1 max-w-xl text-sm text-slate-400">{app.description}</p>
+          </div>
+        </div>
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(status)}`}>
+          {status}
+        </span>
+      </div>
+
+      {app.lastErrorMsg && status === 'Error' && (
+        <p className="mt-4 rounded-2xl border border-rose-400/15 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {app.lastErrorMsg}
+        </p>
+      )}
+
+      <div className="mt-5 flex items-center justify-between gap-4">
+        <div className="text-xs text-slate-500">
+          {app.appId === 'google-workspace'
+            ? 'Scopes: gmail.modify, gmail.send, calendar'
+            : 'Scopes: channels:read, chat:write'}
+        </div>
+        {status === 'Connected' ? (
+          <div className="flex items-center gap-2">
+            {app.appId === 'google-workspace' && (
+              <button
+                type="button"
+                onClick={() => onOpenWorkspace(app)}
+                disabled={busy}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Open workspace
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onDisconnect(app)}
+              disabled={busy}
+              className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onConnect(app)}
+            disabled={busy}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? 'Redirecting…' : 'Connect'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [pendingService, setPendingService] = useState<string | null>(null);
+  const oauthStatus = searchParams.get('status');
+  const oauthService = searchParams.get('service') || searchParams.get('provider');
+  const oauthMessage = searchParams.get('message');
 
-  // URL params
-  const agentIdParam = searchParams.get('agentId');
-  const domainParam = searchParams.get('domain');
-  const serviceParam = searchParams.get('service');
-  const drawerTabParam = searchParams.get('drawerTab') as DrawerTab | null;
-  const oauthConnected = searchParams.get('marketplace_connected') === 'true';
-  const oauthApp = searchParams.get('marketplace_app');
-  const intOauthStatus = searchParams.get('status');
-  const intOauthProvider = searchParams.get('provider');
-  const oauthError = searchParams.get('marketplace_error') || (intOauthStatus === 'error' ? searchParams.get('message') : null);
-
-  // Data
   const {
-    allApps, browseList, connectedList, myApps, featured,
-    loading, reload, markConnected, markDisconnected,
-    agentNamesFor, totalActions, errorCount, governedCount,
-  } = useAppsData(agents);
-
-  // View state
-  const [activeTab, setActiveTab] = useState<'my' | 'browse'>('my');
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
-  const [showMyApps, setShowMyApps] = useState(false);
-  const [showCategories, setShowCategories] = useState(true);
-  const [search, setSearch] = useState('');
-
-  // Overlay state
-  const [drawerApp, setDrawerApp] = useState<UnifiedApp | null>(null);
-  const [connectTarget, setConnectTarget] = useState<UnifiedApp | null>(null);
-  const [postOAuthApp, setPostOAuthApp] = useState<UnifiedApp | null>(null);
-  // Pending post-OAuth app ID — set after callback, resolved once allApps has loaded
-  const [pendingPostOAuthId, setPendingPostOAuthId] = useState<string | null>(null);
-
-  // Health summary: maps appId → 'ok' | 'error' | null
-  const [healthMap, setHealthMap] = useState<Map<string, 'ok' | 'error'>>(new Map());
-  const [testingAll, setTestingAll] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-
-  const loadHealthSummary = useCallback(async () => {
-    const res = await api.integrations.getHealthSummary();
-    if (res.success && res.data) {
-      const m = new Map<string, 'ok' | 'error'>();
-      for (const entry of res.data) {
-        if (entry.last_test_result === 'ok' || entry.last_test_result === 'error') {
-          m.set(entry.service, entry.last_test_result as 'ok' | 'error');
-        }
-      }
-      setHealthMap(m);
-    }
-  }, []);
-
-  useEffect(() => { void loadHealthSummary(); }, [loadHealthSummary]);
-
-  const testAll = async () => {
-    if (connectedList.length === 0) { toast.info('No connected apps to test'); return; }
-    setTestingAll(true);
-    let ok = 0; let fail = 0; let skipped = 0;
-    for (const app of connectedList) {
-      if (!app.supportsHealthTest) {
-        skipped++;
-        continue;
-      }
-      const res = app.source === 'marketplace'
-        ? await api.marketplace.testConnection(app.appId)
-        : await api.integrations.test(app.appId);
-      const result: 'ok' | 'error' = res.success ? 'ok' : 'error';
-      if (res.success) ok++; else fail++;
-      setHealthMap((prev) => new Map(prev).set(app.appId, result));
-    }
-    toast.success(`Health check done — ${ok} healthy, ${fail} failed, ${skipped} skipped`);
-    setTestingAll(false);
-  };
-
-  const linkedAgent = agentIdParam ? agents.find((a) => a.id === agentIdParam) : null;
-
-  // Actions
-  const { handleConnect, handleDisconnect } = useAppActions({
+    allApps,
+    loading,
     reload,
     markConnected,
     markDisconnected,
-    onPostConnect: (app) => {
-      setConnectTarget(null);
-      setDrawerApp(app);
-    },
+  } = useAppsData(agents);
+
+  const {
+    handleDisconnect,
+    handleInitOAuth,
+  } = useAppActions({
+    reload,
+    markConnected,
+    markDisconnected,
   });
 
-  // OAuth callback: marketplace — store the app ID, resolve once allApps loads
   useEffect(() => {
-    if (!oauthConnected && !oauthApp && !oauthError) return;
-    if (oauthError) {
-      toast.error(`Connection failed: ${oauthError}`);
-    } else if (oauthApp) {
+    if (!oauthStatus || !oauthService) return;
+
+    if (oauthStatus === 'connected') {
       void reload().then(() => {
-        setPendingPostOAuthId(oauthApp);
+        const label = oauthService === 'google_workspace' ? 'Google Workspace' : 'Slack';
+        setPendingService(null);
+        toast.success(`${label} connected`);
+        if (oauthService === 'google_workspace' && onNavigate) {
+          onNavigate('apps/google-workspace/workspace');
+        }
+      });
+    } else if (oauthStatus === 'error') {
+      void reload().then(() => {
+        setPendingService(null);
+        toast.error(oauthMessage || 'OAuth connection failed');
       });
     }
-    setSearchParams((p) => {
-      p.delete('marketplace_connected'); p.delete('marketplace_app'); p.delete('marketplace_error');
-      return p;
-    }, { replace: true });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resolve pendingPostOAuthId once allApps is populated after reload
-  useEffect(() => {
-    if (!pendingPostOAuthId || !allApps.length) return;
-    const connected = allApps.find(
-      (a) => a.appId === pendingPostOAuthId || a.name.toLowerCase() === pendingPostOAuthId.toLowerCase(),
-    );
-    setPendingPostOAuthId(null);
-    if (connected) {
-      setPostOAuthApp(connected);
-    } else {
-      toast.success(`${pendingPostOAuthId.charAt(0).toUpperCase() + pendingPostOAuthId.slice(1)} connected successfully`);
-    }
-  }, [pendingPostOAuthId, allApps]);
-
-  // OAuth callback: integration (connectors.ts)
-  useEffect(() => {
-    if (!intOauthStatus) return;
-    if (intOauthStatus === 'connected' && intOauthProvider) {
-      void reload().then(() => {
-        toast.success(`${intOauthProvider.charAt(0).toUpperCase() + intOauthProvider.slice(1)} connected`);
-      });
-    } else if (intOauthStatus === 'error') {
-      toast.error(`Connection failed: ${searchParams.get('message') || 'Unknown error'}`);
-    }
-    setSearchParams((p) => { p.delete('status'); p.delete('provider'); p.delete('message'); return p; }, { replace: true });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Domain param: jump to category
-  useEffect(() => {
-    if (domainParam) setSelectedCat(domainParam);
-  }, [domainParam]);
-
-  // Open drawer when agentId redirects us here
-  const agentFilteredList = useMemo(() => {
-    if (!agentIdParam) return connectedList;
-    return connectedList.filter((app) => agentNamesFor(app).length > 0);
-  }, [connectedList, agentIdParam, agentNamesFor]);
-
-  const displayList = agentIdParam ? agentFilteredList : connectedList;
-  const recommendedAction = linkedAgent
-    ? {
-      label: 'Recommended next step',
-      title: `Connect one useful capability for ${linkedAgent.name}`,
-      detail: 'Start with one app that makes the agent more useful in a real workflow, then return to Agents to run or supervise it.',
-    }
-    : connectedList.length === 0
-      ? {
-        label: 'Recommended next step',
-        title: 'Connect the first app',
-        detail: 'Pick one app that unlocks a real workflow. You do not need a full stack of integrations before the product becomes useful.',
-      }
-      : {
-        label: 'Recommended next step',
-        title: 'Review unhealthy or underused connections',
-        detail: 'Use My Apps to spot weak routing, test connection health, and keep the most useful capabilities connected.',
-      };
-
-  useEffect(() => {
-    if (!serviceParam) return;
-    const target = connectedList.find((app) => {
-      const rawId = getAppServiceId(app);
-      return rawId === serviceParam || app.appId === serviceParam;
-    });
-    if (!target) return;
-    setActiveTab('my');
-    setDrawerApp((current) => current?.id === target.id ? current : target);
-  }, [connectedList, serviceParam]);
-
-  const clearDeepLinkParams = useCallback(() => {
     setSearchParams((params) => {
+      params.delete('status');
       params.delete('service');
-      params.delete('drawerTab');
+      params.delete('provider');
+      params.delete('message');
       return params;
     }, { replace: true });
-  }, [setSearchParams]);
+  }, [oauthMessage, oauthService, oauthStatus, reload, setSearchParams]);
 
-  const closeDrawer = useCallback(() => {
-    setDrawerApp(null);
-    if (serviceParam || drawerTabParam) {
-      clearDeepLinkParams();
+  const apps = useMemo(() => {
+    return SUPPORTED_APPS.map((config) => {
+      const existing = allApps.find((app) => {
+        const serviceId = getAppServiceId(app);
+        return app.appId === config.appId || serviceId === config.serviceId;
+      });
+      return existing ?? buildFallbackApp(config);
+    });
+  }, [allApps]);
+
+  const openWorkspace = (app: UnifiedApp) => {
+    if (app.appId === 'google-workspace' && onNavigate) {
+      onNavigate('apps/google-workspace/workspace');
     }
-  }, [clearDeepLinkParams, drawerTabParam, serviceParam]);
+  };
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#080f1a]">
-      {/* Left sidebar */}
-      <CategorySidebar
-        search={search}
-        onSearchChange={setSearch}
-        selectedCat={selectedCat}
-        onSelectCat={(cat) => { setSelectedCat(cat); setActiveTab('browse'); }}
-        showMyApps={showMyApps}
-        onToggleMyApps={() => setShowMyApps((v) => !v)}
-        myApps={myApps}
-        allApps={allApps}
-        onSelectApp={(app) => setDrawerApp(app)}
-        showCategories={showCategories}
-        onToggleCategories={() => setShowCategories((v) => !v)}
-        onNavigate={onNavigate}
-      />
+    <div className="min-h-full bg-[#080f1a] px-6 py-6">
+      <div className="mx-auto max-w-5xl">
+        <PageHero
+          eyebrow="Connected Apps"
+          title="Google Workspace and Slack"
+          subtitle="Google Workspace now opens into Zapheit’s Gmail and Calendar operating shell, while Slack remains a connection-layer integration."
+          stats={[
+            { label: 'Apps in scope', value: '2', detail: 'Google Workspace and Slack' },
+            { label: 'Auth method', value: 'OAuth 2.0', detail: 'Redirect to provider and return to Zapheit' },
+            { label: 'Stored fields', value: '5', detail: 'Token fields plus connection audit fields' },
+          ]}
+        />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 pt-6 pb-3 shrink-0">
-          <PageHero
-            eyebrow="Connect useful capabilities"
-            title="Connect apps once, then govern work from Zapheit"
-            subtitle="Every connected app becomes one governed workspace for operators and agents, so work can be read, updated, and supervised without hopping across tools."
-            recommendation={recommendedAction}
-            actions={[
-              ...(activeTab === 'my' && connectedList.length > 0
-                ? [{
-                  label: testingAll ? 'Testing…' : 'Test All',
-                  onClick: () => void testAll(),
-                  variant: 'secondary' as const,
-                  icon: testingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />,
-                }]
-                : []),
-              { label: 'Refresh', onClick: () => void reload(), variant: 'secondary' as const, icon: <RefreshCw className="w-4 h-4" /> },
-            ]}
-            stats={[
-              { label: 'Connected', value: `${connectedList.length}`, detail: 'Apps ready for agents or operators' },
-              { label: 'Approval-aware apps', value: `${governedCount}`, detail: 'Connected apps with approval or policy controls' },
-              { label: 'Health issues', value: `${errorCount}`, detail: 'Connections needing attention' },
-            ]}
-          />
-        </div>
-
-        {/* Agent context banner */}
-        {linkedAgent && (
-          <div className="mx-6 mb-2">
-            <AgentContextBanner agent={linkedAgent} />
-          </div>
-        )}
-
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 px-6 py-2 shrink-0">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/8 w-fit">
-            <button
-              onClick={() => setActiveTab('my')}
-              className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', activeTab === 'my' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200')}
-            >
-              My Apps{displayList.length > 0 ? ` (${displayList.length})` : ''}
-            </button>
-            <button
-              onClick={() => setActiveTab('browse')}
-              className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', activeTab === 'browse' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200')}
-            >
-              Browse All
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'my' ? (
-            <div className="h-full overflow-y-auto px-6 pb-6 space-y-4 pt-2">
-              {/* Stats bar */}
-              {!loading && connectedList.length > 0 && (
-                <StatsBar
-                  totalConnected={connectedList.length}
-                  errorCount={errorCount}
-                  totalActions={totalActions}
-                  governedCount={governedCount}
-                />
-              )}
-
-              {loading ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
-                </div>
-              ) : displayList.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-slate-400 text-sm mb-4">
-                    {agentIdParam ? 'No apps linked to this agent yet.' : 'No apps connected yet.'}
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('browse')}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
-                  >
-                    Browse apps
-                  </button>
-                </div>
-              ) : (
-                displayList.map((app) => (
-                  <ConnectedAppRow
-                    key={app.id}
-                    app={app}
-                    agentNames={agentNamesFor(app)}
-                    onClick={(_a) => {
-                      if (app.appId === 'slack' && onNavigate) {
-                        onNavigate('apps/slack/workspace');
-                      } else if (app.appId === 'jira' && onNavigate) {
-                        onNavigate('apps/jira/workspace');
-                      } else if (app.appId === 'github' && onNavigate) {
-                        onNavigate('apps/github/workspace');
-                      } else if (app.appId === 'hubspot' && onNavigate) {
-                        onNavigate('apps/hubspot/workspace');
-                      } else if (app.appId === 'quickbooks' && onNavigate) {
-                        onNavigate('apps/quickbooks/workspace');
-                      } else if (app.appId === 'google-workspace' && onNavigate) {
-                        onNavigate('apps/google-workspace/workspace');
-                      } else if (app.appId === 'microsoft-365' && onNavigate) {
-                        onNavigate('apps/microsoft-365/workspace');
-                      } else if (app.appId === 'zoho-people' && onNavigate) {
-                        onNavigate('apps/zoho/workspace');
-                      } else if (app.appId === 'notion' && onNavigate) {
-                        onNavigate('apps/notion/workspace');
-                      } else if (app.appId === 'whatsapp' && onNavigate) {
-                        onNavigate('apps/whatsapp/workspace');
-                      } else {
-                        setDrawerApp(app);
-                      }
-                    }}
-                    onConfigure={(_a) => setConnectTarget(app)}
-                    onDisconnect={(_a) => void handleDisconnect(app)}
-                    healthResult={healthMap.get(app.appId) ?? null}
-                  />
-                ))
-              )}
+        <div className="mt-8 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-16">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             </div>
           ) : (
-            <BrowseView
-              apps={browseList}
-              agents={agents}
-              featured={featured}
-              initialCategory={selectedCat}
-              onConnect={(app) => setConnectTarget(app)}
-              onManage={(app) => setDrawerApp(app)}
-              onRequestIntegration={() => setShowRequestModal(true)}
-            />
+            apps.map((app) => (
+              <ConnectionCard
+                key={app.id}
+                app={app}
+                busy={pendingService === getAppServiceId(app)}
+                onOpenWorkspace={openWorkspace}
+                onConnect={(target) => {
+                  const serviceId = getAppServiceId(target);
+                  setPendingService(serviceId);
+                  void handleInitOAuth(target).finally(() => setPendingService((current) => current === serviceId ? null : current));
+                }}
+                onDisconnect={(target) => {
+                  const serviceId = getAppServiceId(target);
+                  setPendingService(serviceId);
+                  void handleDisconnect(target).finally(() => setPendingService((current) => current === serviceId ? null : current));
+                }}
+              />
+            ))
           )}
         </div>
       </div>
-
-      {/* Post-OAuth wizard — resumes from Configure step after OAuth redirect */}
-      {postOAuthApp && (
-        <ConnectWizard
-          app={postOAuthApp}
-          agents={agents}
-          initialStep="configure"
-          onConnect={async (app, creds) => { await handleConnect(app, creds); }}
-          onClose={() => setPostOAuthApp(null)}
-          onOpenWorkspace={(app) => {
-            setPostOAuthApp(null);
-            if (app.appId === 'slack' && onNavigate) onNavigate('apps/slack/workspace');
-            else if (app.appId === 'jira' && onNavigate) onNavigate('apps/jira/workspace');
-            else if (app.appId === 'github' && onNavigate) onNavigate('apps/github/workspace');
-            else if (app.appId === 'hubspot' && onNavigate) onNavigate('apps/hubspot/workspace');
-            else if (app.appId === 'quickbooks' && onNavigate) onNavigate('apps/quickbooks/workspace');
-            else if (app.appId === 'google-workspace' && onNavigate) onNavigate('apps/google-workspace/workspace');
-            else if (app.appId === 'microsoft-365' && onNavigate) onNavigate('apps/microsoft-365/workspace');
-            else if (app.appId === 'zoho-people' && onNavigate) onNavigate('apps/zoho/workspace');
-            else if (app.appId === 'notion' && onNavigate) onNavigate('apps/notion/workspace');
-            else if (app.appId === 'whatsapp' && onNavigate) onNavigate('apps/whatsapp/workspace');
-            else setDrawerApp(app);
-          }}
-        />
-      )}
-
-      {/* Connect wizard */}
-      {connectTarget && (
-        <ConnectWizard
-          app={connectTarget}
-          agents={agents}
-          onConnect={async (app, creds) => {
-            await handleConnect(app, creds);
-          }}
-          onClose={() => setConnectTarget(null)}
-          onOpenWorkspace={(app) => {
-            setConnectTarget(null);
-            if (app.appId === 'slack' && onNavigate) {
-              onNavigate('apps/slack/workspace');
-            } else if (app.appId === 'jira' && onNavigate) {
-              onNavigate('apps/jira/workspace');
-            } else if (app.appId === 'github' && onNavigate) {
-              onNavigate('apps/github/workspace');
-            } else if (app.appId === 'hubspot' && onNavigate) {
-              onNavigate('apps/hubspot/workspace');
-            } else if (app.appId === 'quickbooks' && onNavigate) {
-              onNavigate('apps/quickbooks/workspace');
-            } else if (app.appId === 'google-workspace' && onNavigate) {
-              onNavigate('apps/google-workspace/workspace');
-            } else if (app.appId === 'microsoft-365' && onNavigate) {
-              onNavigate('apps/microsoft-365/workspace');
-            } else if (app.appId === 'zoho-people' && onNavigate) {
-              onNavigate('apps/zoho/workspace');
-            } else if (app.appId === 'notion' && onNavigate) {
-              onNavigate('apps/notion/workspace');
-            } else {
-              setDrawerApp(app);
-            }
-          }}
-        />
-      )}
-
-      {/* Detail drawer — desktop */}
-      {drawerApp && (
-        <div className="hidden md:block">
-          <DetailDrawer
-            app={drawerApp}
-            agents={agents}
-            initialTab={drawerTabParam || 'overview'}
-            onClose={closeDrawer}
-            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); clearDeepLinkParams(); }}
-            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); clearDeepLinkParams(); }}
-          />
-        </div>
-      )}
-
-      {/* Detail drawer — mobile bottom sheet */}
-      {drawerApp && (
-        <MobileBottomSheet onClose={closeDrawer}>
-          <DetailDrawer
-            app={drawerApp}
-            agents={agents}
-            initialTab={drawerTabParam || 'overview'}
-            onClose={closeDrawer}
-            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); clearDeepLinkParams(); }}
-            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); clearDeepLinkParams(); }}
-          />
-        </MobileBottomSheet>
-      )}
-
-      {showRequestModal && (
-        <RequestIntegrationModal onClose={() => setShowRequestModal(false)} />
-      )}
     </div>
   );
 }

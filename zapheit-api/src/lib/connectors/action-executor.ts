@@ -141,7 +141,9 @@ export async function executeConnectorAction(
       case 'tally': result = await tallyAction(action, params, credentials); break;
       case 'naukri': result = await naukriAction(action, params, credentials); break;
       case 'cleartax': result = await clearTaxAction(action, params, credentials); break;
-      case 'google-workspace': result = await googleWorkspaceAction(action, params, credentials); break;
+      case 'google-workspace':
+      case 'google_workspace':
+        result = await googleWorkspaceAction(action, params, credentials); break;
       case 'microsoft-365': result = await microsoft365Action(action, params, credentials); break;
       case 'zoho': result = await zohoAction(action, params, credentials); break;
       case 'deel': result = await deelAction(action, params, credentials); break;
@@ -951,6 +953,19 @@ async function googleWorkspaceAction(
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: { archived: true } };
     }
+    case 'mark_email_read':
+    case 'mark_email_unread': {
+      if (!params.id) return { success: false, error: `${action} requires: id` };
+      const payload = action === 'mark_email_read'
+        ? { removeLabelIds: ['UNREAD'] }
+        : { addLabelIds: ['UNREAD'] };
+      const r = await jsonFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${params.id}/modify`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { id: params.id, unread: action === 'mark_email_unread' } };
+    }
     case 'send_email': {
       if (!params.to || !params.subject || !params.body) {
         return { success: false, error: 'send_email requires: to, subject, body' };
@@ -998,6 +1013,41 @@ async function googleWorkspaceAction(
       });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
+    }
+    case 'update_event': {
+      if (!params.eventId) {
+        return { success: false, error: 'update_event requires: eventId' };
+      }
+      const tz = params.timezone || 'Asia/Kolkata';
+      const payload: Record<string, any> = {};
+      if (params.summary) payload.summary = params.summary;
+      if (params.description !== undefined) payload.description = params.description;
+      if (params.location !== undefined) payload.location = params.location;
+      if (params.startDateTime) payload.start = { dateTime: params.startDateTime, timeZone: tz };
+      if (params.endDateTime) payload.end = { dateTime: params.endDateTime, timeZone: tz };
+      if (params.attendees !== undefined) {
+        payload.attendees = String(params.attendees)
+          .split(',')
+          .map((e: string) => e.trim())
+          .filter(Boolean)
+          .map((email: string) => ({ email }));
+      }
+      const r = await jsonFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(String(params.eventId))}`, {
+        method: 'PATCH', headers: h, body: JSON.stringify(payload),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
+    }
+    case 'cancel_event':
+    case 'delete_event': {
+      if (!params.eventId) {
+        return { success: false, error: `${action} requires: eventId` };
+      }
+      const r = await jsonFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(String(params.eventId))}`, {
+        method: 'DELETE', headers: h,
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { eventId: params.eventId, cancelled: true } };
     }
     default:
       return { success: false, error: `Google Workspace action "${action}" not supported`, statusCode: 400 };

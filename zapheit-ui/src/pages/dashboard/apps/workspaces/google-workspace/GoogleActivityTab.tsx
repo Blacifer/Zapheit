@@ -7,7 +7,7 @@ interface GoogleActivityTabProps {
   onApprovalResolved?: () => void;
 }
 
-export function GoogleActivityTab({ connectorId = 'google-workspace', onApprovalResolved }: GoogleActivityTabProps) {
+export function GoogleActivityTab({ connectorId = 'google_workspace', onApprovalResolved }: GoogleActivityTabProps) {
   const [actions, setActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

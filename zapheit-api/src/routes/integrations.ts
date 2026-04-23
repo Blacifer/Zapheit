@@ -50,6 +50,8 @@ export type StoredIntegrationRow = {
   status: IntegrationStatus;
   auth_type: string;
   ai_enabled: boolean;
+  connected_by: string | null;
+  connected_at: string | null;
   last_sync_at: string | null;
   last_error_at: string | null;
   last_error_msg: string | null;
@@ -261,6 +263,78 @@ function writeAgentPublish(agent: StoredAgentRow, updates: {
 }
 
 const WAVE1_POLICY_DEFAULTS: Wave1PolicySeed[] = [
+  {
+    service: 'google_workspace',
+    action: 'archive_email',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: archiving inbox items is allowed directly from the workspace shell.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'mark_email_read',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: marking inbox state is allowed without additional approval.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'mark_email_unread',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: restoring unread state is allowed without additional approval.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'send_email',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: outbound email sends require approval by default.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'reply_email',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: replies require approval by default.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'forward_email',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: forwards require approval by default.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'create_event',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: creating calendar events is allowed directly.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'update_event',
+    enabled: true,
+    require_approval: false,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: editing calendar events is allowed directly.',
+  },
+  {
+    service: 'google_workspace',
+    action: 'cancel_event',
+    enabled: true,
+    require_approval: true,
+    required_role: 'manager',
+    notes: 'Google Workspace Phase 1: cancelling calendar events requires approval by default.',
+  },
   {
     service: 'razorpay',
     action: 'finance.payment.list',
@@ -2978,11 +3052,14 @@ router.get('/oauth/callback/:service', async (req, res) => {
       throw new Error(token?.error_description || token?.error || 'No access token returned by provider');
     }
 
+    const connectedAt = new Date().toISOString();
     const integration = await upsertIntegration(rest, orgId, spec.id, {
       status: 'connected',
       auth_type: spec.authType,
       category: spec.category,
       service_name: spec.name,
+      connected_by: parsedState.userId || req.user?.id || null,
+      connected_at: connectedAt,
       last_error_at: null,
       last_error_msg: null,
       last_sync_at: null,
@@ -2995,21 +3072,20 @@ router.get('/oauth/callback/:service', async (req, res) => {
     if (refreshToken) {
       await upsertCredential(rest, integration.id, 'refresh_token', encryptSecret(String(refreshToken)), true, null);
     }
-    // Persist connection fields (non-sensitive) such as domain for Okta.
-    await Promise.all(Object.entries(connection).map(async ([k, v]) => {
-      if (!v) return;
-      const stored = k === 'domain' || k === 'subdomain' ? normalizeDomainInput(String(v)) : String(v);
-      await upsertCredential(rest, integration.id, k, stored, false, null);
-    }));
-
-    // For Slack: store team_id so the inbound webhook can route events to the correct org.
-    if (service === 'slack' && token?.team?.id) {
-      await upsertCredential(rest, integration.id, 'team_id', String(token.team.id), false, null);
+    if ((service === 'google_workspace' || service === 'slack') && expiresAt) {
+      await upsertCredential(rest, integration.id, 'token_expiry', expiresAt, false, null);
     }
+    if (service !== 'google_workspace' && service !== 'slack') {
+      // Preserve provider-specific connection metadata for existing OAuth integrations.
+      await Promise.all(Object.entries(connection).map(async ([k, v]) => {
+        if (!v) return;
+        const stored = k === 'domain' || k === 'subdomain' ? normalizeDomainInput(String(v)) : String(v);
+        await upsertCredential(rest, integration.id, k, stored, false, null);
+      }));
 
-    // For Zoho: store api_domain returned in the token response (required for API calls).
-    if ((service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn') && token?.api_domain) {
-      await upsertCredential(rest, integration.id, 'api_domain', String(token.api_domain), false, null);
+      if ((service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn') && token?.api_domain) {
+        await upsertCredential(rest, integration.id, 'api_domain', String(token.api_domain), false, null);
+      }
     }
 
     await writeConnectionLog(rest, integration.id, 'connect', 'success', 'OAuth integration connected', { service, authType: 'oauth2' });
@@ -3018,10 +3094,29 @@ router.get('/oauth/callback/:service', async (req, res) => {
     }
 
     const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/apps';
-    const params = new URLSearchParams({ status: 'connected', service });
+    const params = new URLSearchParams({ status: 'connected', service, provider: service });
     return res.redirect(302, `${frontendUrl}${returnTo}?${params.toString()}`);
   } catch (err: any) {
     logger.warn('OAuth callback failed', { service, error: err?.message || String(err) });
+    if (parsedState?.orgId) {
+      try {
+        await upsertIntegration(restAsService, parsedState.orgId, spec.id, {
+          status: 'error',
+          auth_type: spec.authType,
+          category: spec.category,
+          service_name: spec.name,
+          connected_by: null,
+          connected_at: null,
+          last_error_at: new Date().toISOString(),
+          last_error_msg: err?.message || 'OAuth failed',
+        });
+      } catch (persistErr: any) {
+        logger.warn('Failed to persist OAuth error state', {
+          service,
+          error: persistErr?.message || String(persistErr),
+        });
+      }
+    }
     const params = new URLSearchParams({ status: 'error', service, message: err?.message || 'OAuth failed' });
     const errReturnTo = safeReturnPath((parsedState as any)?.returnTo) || '/dashboard/apps';
     return res.redirect(302, `${frontendUrl}${errReturnTo}?${params.toString()}`);
@@ -3233,6 +3328,8 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
     method: 'PATCH',
     body: {
       status: 'disconnected',
+      connected_by: null,
+      connected_at: null,
       last_error_at: null,
       last_error_msg: null,
       updated_at: new Date().toISOString(),

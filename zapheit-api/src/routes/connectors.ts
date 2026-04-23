@@ -4093,6 +4093,7 @@ router.post('/:connectorId/tool-call', authenticateToken, requirePermission('con
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
     const { connectorId } = req.params;
+    const resolvedConnectorId = connectorId === 'google-workspace' ? 'google_workspace' : connectorId;
     const {
       action,
       toolName,
@@ -4112,7 +4113,7 @@ router.post('/:connectorId/tool-call', authenticateToken, requirePermission('con
 
     const outcome = await interceptAgentToolCall({
       orgId,
-      connectorId,
+      connectorId: resolvedConnectorId,
       action: resolvedAction,
       params,
       agentId: agentId || null,
@@ -4129,7 +4130,7 @@ router.post('/:connectorId/tool-call', authenticateToken, requirePermission('con
     }
     return res.json({ success: true, data: outcome });
   } catch (err: any) {
-    logger.error('Agent tool call interception failed', { error: err.message });
+    logger.error('Agent tool call interception failed', { connectorId: req.params.connectorId, error: err.message });
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -4141,12 +4142,13 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
     const { connectorId } = req.params;
+    const resolvedConnectorId = connectorId === 'google-workspace' ? 'google_workspace' : connectorId;
     const { action, params = {}, agentId } = req.body as { action: string; params?: Record<string, any>; agentId?: string };
 
     if (!action) return res.status(400).json({ success: false, error: 'action is required' });
 
     const actorRole = (req as any).user?.role as string | undefined;
-    const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId || null, actorRole);
+    const preflight = await runPreflightGate(orgId, resolvedConnectorId, action, params, agentId || null, actorRole);
     if (!preflight.allowed) {
       const now = new Date().toISOString();
       let approvalId: string | null = null;
@@ -4179,7 +4181,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           organization_id: orgId,
           agent_id: agentId || null,
           integration_id: null,
-          connector_id: connectorId,
+          connector_id: resolvedConnectorId,
           action,
           params,
           result: preflight.approvalRequired ? { pending: true } : { blocked: true },
@@ -4190,7 +4192,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           requested_by: (req as any).user?.id || null,
           policy_snapshot: buildGovernedActionSnapshot({
             source: 'connector_console',
-            service: connectorId,
+            service: resolvedConnectorId,
             action,
             recordedAt: now,
             decision: preflight.approvalRequired ? 'pending_approval' : 'blocked',
@@ -4226,7 +4228,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           organization_id: orgId,
           event_type: 'governed_action.pending_approval',
           entity_type: 'connector_action',
-          entity_id: `${connectorId}:${action}`,
+          entity_id: `${resolvedConnectorId}:${action}`,
           payload: {
             decision: preflight.decision,
             reason_category: preflight.reasonCategory,
@@ -4260,13 +4262,13 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     // Load credentials for the org's integration
     const integrations = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eqFilter(orgId),
-      service_type: eqFilter(connectorId),
+      service_type: eqFilter(resolvedConnectorId),
       select: 'id,status',
       limit: '1',
     }))) as Array<{ id: string; status: string }>;
 
     if (!integrations?.length || integrations[0].status !== 'connected') {
-      return res.status(400).json({ success: false, error: `${connectorId} is not connected` });
+      return res.status(400).json({ success: false, error: `${resolvedConnectorId} is not connected` });
     }
 
     const integrationId = integrations[0].id;
@@ -4281,7 +4283,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     }
 
     const start = Date.now();
-    const result = await executeConnectorAction(connectorId, action, params, credentials, orgId, agentId || null, integrationId);
+    const result = await executeConnectorAction(resolvedConnectorId, action, params, credentials, orgId, agentId || null, integrationId);
     const duration = Date.now() - start;
 
     // Log the action execution
@@ -4292,7 +4294,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           organization_id: orgId,
           agent_id: agentId || null,
           integration_id: integrationId,
-          connector_id: connectorId,
+          connector_id: resolvedConnectorId,
           action,
           params,
           result: result.data || result.error || {},
@@ -4303,7 +4305,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           ...(result.idempotencyKey ? { idempotency_key: result.idempotencyKey } : {}),
           policy_snapshot: buildGovernedActionSnapshot({
             source: 'connector_console',
-            service: connectorId,
+            service: resolvedConnectorId,
             action,
             recordedAt: new Date().toISOString(),
             decision: 'executed',

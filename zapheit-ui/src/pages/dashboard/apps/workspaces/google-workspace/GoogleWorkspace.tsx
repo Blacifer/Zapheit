@@ -15,8 +15,6 @@ import { DriveFiles, type DriveFile, type AgentTouch } from './DriveFiles';
 import { GoogleActivityTab } from './GoogleActivityTab';
 import { GoogleAutomationTab } from './GoogleAutomationTab';
 
-const CONNECTOR_ID = 'google-workspace';
-
 /* ------------------------------------------------------------------ */
 /*  Tab Config                                                         */
 /* ------------------------------------------------------------------ */
@@ -24,9 +22,9 @@ const CONNECTOR_ID = 'google-workspace';
 const TABS = [
   { id: 'email',      label: 'Email',      Icon: Mail },
   { id: 'calendar',   label: 'Calendar',   Icon: Calendar },
-  { id: 'drive',      label: 'Drive',      Icon: HardDrive },
   { id: 'activity',   label: 'Activity',   Icon: Activity },
   { id: 'automation', label: 'Automation', Icon: Bot },
+  { id: 'drive',      label: 'Drive',      Icon: HardDrive },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -34,6 +32,8 @@ type TabId = (typeof TABS)[number]['id'];
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
+
+const CONNECTOR_ID = 'google_workspace';
 
 export default function GoogleWorkspace() {
   const navigate = useNavigate();
@@ -163,13 +163,52 @@ export default function GoogleWorkspace() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'create_event', data);
       if (res.success) {
-        toast.success('Event created');
-        void loadEvents();
+        if ((res as any).pending) {
+          toast.info((res as any).message || 'Event sent for approval');
+          void loadApprovals();
+        } else {
+          toast.success('Event created');
+          void loadEvents();
+        }
       } else {
         toast.error(res.error || 'Failed to create event');
       }
     } catch { toast.error('Network error'); }
-  }, [loadEvents]);
+  }, [loadApprovals, loadEvents]);
+
+  const updateEvent = useCallback(async (data: Record<string, string>) => {
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'update_event', data);
+      if (res.success) {
+        if ((res as any).pending) {
+          toast.info((res as any).message || 'Event update sent for approval');
+          void loadApprovals();
+        } else {
+          toast.success('Event updated');
+          void loadEvents();
+        }
+      } else {
+        toast.error(res.error || 'Failed to update event');
+      }
+    } catch { toast.error('Network error'); }
+  }, [loadApprovals, loadEvents]);
+
+  const cancelEvent = useCallback(async (eventId: string) => {
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'cancel_event', { eventId });
+      if (res.success) {
+        if ((res as any).pending) {
+          toast.info((res as any).message || 'Cancellation sent for approval');
+          void loadApprovals();
+        } else {
+          toast.success('Event cancelled');
+          void loadEvents();
+        }
+      } else {
+        toast.error(res.error || 'Failed to cancel event');
+      }
+    } catch { toast.error('Network error'); }
+  }, [loadApprovals, loadEvents]);
 
   const shareFile = useCallback(async (fileId: string, email: string, role: string) => {
     try {
@@ -225,8 +264,8 @@ export default function GoogleWorkspace() {
   const isLoading = loadingEmails || loadingEvents || loadingFiles;
 
   /* Pending counts per tab */
-  const emailPendingCount  = pendingApprovals.filter((a) => a.action === 'send_email').length;
-  const calendarPendingCount = pendingApprovals.filter((a) => a.action === 'create_event').length;
+  const emailPendingCount  = pendingApprovals.filter((a) => ['send_email', 'reply_email', 'forward_email'].includes(a.action)).length;
+  const calendarPendingCount = pendingApprovals.filter((a) => ['create_event', 'cancel_event'].includes(a.action)).length;
   const drivePendingCount  = pendingApprovals.filter((a) => a.action === 'share_file').length;
   const totalPending = pendingApprovals.length;
 
@@ -266,7 +305,7 @@ export default function GoogleWorkspace() {
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-500">Productivity — Email, Calendar &amp; Drive</p>
+          <p className="text-[10px] text-slate-500">Phase 1 — Gmail and Calendar operate directly inside Zapheit. Drive remains available but secondary.</p>
         </div>
 
         <button
@@ -291,7 +330,9 @@ export default function GoogleWorkspace() {
                 'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
                 activeTab === id
                   ? 'bg-white/[0.08] text-white'
-                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
+                  : id === 'drive'
+                    ? 'text-slate-600 hover:text-slate-300 hover:bg-white/[0.03]'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
               )}
             >
               <Icon className="w-3.5 h-3.5" /> {label}
@@ -311,11 +352,12 @@ export default function GoogleWorkspace() {
           <EmailList
             emails={emails}
             loading={loadingEmails}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'send_email')}
+            pendingApprovals={pendingApprovals.filter((a) => ['send_email', 'reply_email', 'forward_email'].includes(a.action))}
             onApprovalResolved={handleApprovalResolved}
             hasMore={!!emailsNextPageToken}
             loadingMore={loadingMoreEmails}
             onLoadMore={loadMoreEmails}
+            onEmailActionComplete={refreshCurrent}
           />
         </div>
       ) : activeTab === 'calendar' ? (
@@ -324,7 +366,9 @@ export default function GoogleWorkspace() {
             events={events}
             loading={loadingEvents}
             onCreate={createEvent}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'create_event')}
+            onUpdate={updateEvent}
+            onCancelEvent={cancelEvent}
+            pendingApprovals={pendingApprovals.filter((a) => ['create_event', 'cancel_event'].includes(a.action))}
             onApprovalResolved={handleApprovalResolved}
           />
         </div>

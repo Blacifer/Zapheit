@@ -181,6 +181,15 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     localStorage.setItem(themePrefKey, isLightMode ? 'light' : 'dark');
   }, [isLightMode]);
 
+  // Show technical terms toggle (for power users)
+  const techTermsKey = 'zapheit_tech_terms';
+  const [showTechTerms, setShowTechTerms] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem(techTermsKey) === 'true'
+  );
+  useEffect(() => {
+    localStorage.setItem(techTermsKey, showTechTerms ? 'true' : 'false');
+  }, [showTechTerms]);
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Memorable moments

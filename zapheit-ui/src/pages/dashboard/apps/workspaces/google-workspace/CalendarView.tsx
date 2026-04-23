@@ -24,6 +24,8 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   loading: boolean;
   onCreate: (data: Record<string, string>) => void;
+  onUpdate: (data: Record<string, string>) => void;
+  onCancelEvent: (eventId: string) => void;
   pendingApprovals?: ApprovalRequest[];
   onApprovalResolved?: (id: string) => void;
 }
@@ -65,7 +67,28 @@ function rsvpLabel(s?: string) {
 /*  Event detail modal                                                 */
 /* ------------------------------------------------------------------ */
 
-function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
+function EventModal({
+  event,
+  onClose,
+  onUpdate,
+  onCancelEvent,
+}: {
+  event: CalendarEvent;
+  onClose: () => void;
+  onUpdate: (values: Record<string, string>) => void;
+  onCancelEvent: (eventId: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const updateFields: WriteFormField[] = [
+    { name: 'eventId', label: 'Event ID', type: 'hidden', defaultValue: event.id },
+    { name: 'summary', label: 'Title', type: 'text', required: true, defaultValue: event.summary || '' },
+    { name: 'startDateTime', label: 'Start', type: 'text', placeholder: 'YYYY-MM-DDTHH:mm:ss', defaultValue: event.start?.dateTime || '' },
+    { name: 'endDateTime', label: 'End', type: 'text', placeholder: 'YYYY-MM-DDTHH:mm:ss', defaultValue: event.end?.dateTime || '' },
+    { name: 'location', label: 'Location', type: 'text', defaultValue: event.location || '' },
+    { name: 'attendees', label: 'Attendees', type: 'text', defaultValue: event.attendees?.map((attendee) => attendee.email).join(', ') || '' },
+    { name: 'description', label: 'Description', type: 'textarea', defaultValue: event.description || '' },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -87,6 +110,32 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
         </div>
 
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditing((value) => !value)}
+              className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-500/25"
+            >
+              {editing ? 'Close edit' : 'Edit event'}
+            </button>
+            <button
+              onClick={() => onCancelEvent(event.id)}
+              className="inline-flex items-center gap-1 rounded-lg bg-rose-500/12 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20"
+            >
+              Cancel event
+            </button>
+          </div>
+
+          {editing && (
+            <WriteForm
+              title="Edit Event"
+              fields={updateFields}
+              onSubmit={async (values) => { onUpdate(values); setEditing(false); }}
+              submitLabel="Save changes"
+              onCancel={() => setEditing(false)}
+              compact
+            />
+          )}
+
           {/* Time */}
           {event.start && (
             <div className="flex items-start gap-3">
@@ -151,12 +200,10 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
             </div>
           )}
 
-          {/* Open in Google Calendar */}
           {event.htmlLink && (
-            <a href={event.htmlLink} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-              Open in Google Calendar →
-            </a>
+            <p className="text-[11px] text-slate-500">
+              External Google link remains available, but everyday scheduling is expected to happen from Zapheit.
+            </p>
           )}
         </div>
       </div>
@@ -262,7 +309,7 @@ function MonthGrid({ year, month, events, onEventClick }: {
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function CalendarView({ events, loading, onCreate, pendingApprovals = [], onApprovalResolved }: CalendarViewProps) {
+export function CalendarView({ events, loading, onCreate, onUpdate, onCancelEvent, pendingApprovals = [], onApprovalResolved }: CalendarViewProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -298,7 +345,7 @@ export function CalendarView({ events, loading, onCreate, pendingApprovals = [],
       {pendingApprovals.length > 0 && (
         <div className="px-4 py-3 border-b border-amber-500/15 bg-amber-500/[0.03] space-y-1.5 shrink-0">
           <p className="text-[10px] text-amber-400/80 font-semibold uppercase tracking-wider mb-2">
-            Awaiting your approval — {pendingApprovals.length} event{pendingApprovals.length !== 1 ? 's' : ''} to create
+            Awaiting your approval — {pendingApprovals.length} calendar action{pendingApprovals.length !== 1 ? 's' : ''}
           </p>
           {pendingApprovals.map((a) => (
             <PendingApprovalRow key={a.id} approval={a} onResolved={onApprovalResolved ?? (() => {})} />
@@ -361,7 +408,12 @@ export function CalendarView({ events, loading, onCreate, pendingApprovals = [],
 
       {/* Event modal */}
       {selectedEvent && (
-        <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+        <EventModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onUpdate={onUpdate}
+          onCancelEvent={onCancelEvent}
+        />
       )}
     </div>
   );

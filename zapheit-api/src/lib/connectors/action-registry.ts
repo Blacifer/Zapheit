@@ -648,6 +648,73 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
   // ─── Framework stubs — executor not yet built; tools visible in UI ────────
   // The action-executor.ts default case returns 501 for these connectors.
 
+  'google_workspace': {
+    connectorId: 'google_workspace',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'google_workspace__list_files',
+          description: 'List files in Google Drive matching a search query.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Drive search query (e.g. "name contains \'report\'")' },
+              limit: { type: 'number', description: 'Max results to return (default 10)' },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'google_workspace__create_document',
+          description: 'Create a new Google Doc with the given title and content.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Document title' },
+              content: { type: 'string', description: 'Initial body text' },
+            },
+            required: ['title'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'google_workspace__send_email',
+          description: 'Send an email via Gmail on behalf of the authenticated user.',
+          parameters: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', description: 'Recipient email address' },
+              subject: { type: 'string', description: 'Email subject' },
+              body: { type: 'string', description: 'Email body (plain text)' },
+            },
+            required: ['to', 'subject', 'body'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'google_workspace__list_calendar_events',
+          description: 'List upcoming Google Calendar events for the authenticated user.',
+          parameters: {
+            type: 'object',
+            properties: {
+              days_ahead: { type: 'number', description: 'How many days forward to look (default 7)' },
+              limit: { type: 'number', description: 'Max events to return (default 10)' },
+            },
+            required: [],
+          },
+        },
+      },
+    ],
+  },
+
   'google-workspace': {
     connectorId: 'google-workspace',
     tools: [
