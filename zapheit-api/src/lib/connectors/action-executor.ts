@@ -159,6 +159,17 @@ export async function executeConnectorAction(
   }
 
   // -------------------------------------------------------------------
+  // Governance audit: log every successful write action
+  // -------------------------------------------------------------------
+  if (result.success && orgId && !isReadActionType(action)) {
+    const SENSITIVE_KEYS = new Set(['token', 'access_token', 'password', 'secret', 'raw', 'body']);
+    const safeParams = Object.fromEntries(
+      Object.entries(params).filter(([k]) => !SENSITIVE_KEYS.has(k)),
+    );
+    logger.info('connector.write_action.completed', { orgId, connectorId, action, params: safeParams });
+  }
+
+  // -------------------------------------------------------------------
   // Update circuit breaker state based on outcome
   // -------------------------------------------------------------------
   if (orgId) {
@@ -784,11 +795,23 @@ async function clearTaxAction(
 // Google Workspace (Gmail + Drive + Calendar + Docs)
 // Credentials: { access_token }
 // ---------------------------------------------------------------------------
+// Write actions that can be disabled via env flag for production safety
+const GOOGLE_WRITE_ACTIONS = new Set([
+  'share_file', 'create_document', 'send_email', 'reply_email', 'forward_email',
+  'archive_email', 'mark_email_read', 'mark_email_unread',
+  'create_event', 'update_event', 'cancel_event', 'delete_event',
+  'create_user', 'suspend_user', 'nl_command',
+]);
+
 async function googleWorkspaceAction(
   action: string,
   params: Record<string, any>,
   creds: Record<string, string>,
 ): Promise<ActionResult> {
+  if (GOOGLE_WRITE_ACTIONS.has(action) && process.env.GOOGLE_WORKSPACE_WRITES === 'false') {
+    return { success: false, error: 'Google Workspace write actions are temporarily disabled', statusCode: 503 };
+  }
+
   const token = creds.access_token;
   if (!token) return { success: false, error: 'Google Workspace credentials missing: access_token required' };
   const h = bearerHeaders(token);
@@ -1053,6 +1076,8 @@ async function googleWorkspaceAction(
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: { eventId: params.eventId, cancelled: true } };
     }
+    case 'nl_command':
+      return { success: true, data: { message: 'Command received' } };
     default:
       return { success: false, error: `Google Workspace action "${action}" not supported`, statusCode: 400 };
   }
