@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, type LangCode } from '../../i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   User, Building2, Users, Bell, Shield,
@@ -62,6 +64,7 @@ function normalizeSettingsTab(value: string | null | undefined): SettingsTab | n
 
 // ==================== MAIN COMPONENT ====================
 export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMode = false, onToggleTheme, showTechTerms = false, onToggleTechTerms }: { onNavigate?: (page: string) => void; isDemoMode?: boolean; isLightMode?: boolean; onToggleTheme?: () => void; showTechTerms?: boolean; onToggleTechTerms?: () => void }) {
+  const { i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const pathSuffix = location.pathname.replace(/^.*\/dashboard\/settings\/?/, '');
@@ -404,7 +407,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
               {isLightMode ? 'Dark mode' : 'Light mode'}
             </button>
           </div>
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
             <div>
               <p className="text-sm font-medium text-slate-300">Show technical terms</p>
               <p className="text-xs text-slate-500 mt-0.5">Use original labels like "Audit Log", "Action Policies", "Fleet Management"</p>
@@ -417,6 +420,27 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showTechTerms ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium text-slate-300">Language / भाषा</p>
+              <p className="text-xs text-slate-500 mt-0.5">Choose your preferred interface language</p>
+            </div>
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-white/10 bg-white/[0.04]">
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => i18n.changeLanguage(lang.code)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    i18n.language === lang.code
+                      ? 'bg-cyan-500 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang.nativeLabel}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

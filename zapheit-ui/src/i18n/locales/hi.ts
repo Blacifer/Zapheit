@@ -1,0 +1,192 @@
+const hi = {
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  nav: {
+    overview:          'सारांश',
+    agents:            'मेरी AI टीम',
+    apps:              'जुड़े ऐप्स',
+    chat:              'चैट',
+    agentStudio:       'सहायक बनाएं',
+    rules:             'नियम',
+    approvals:         'मानव समीक्षा',
+    incidents:         'सुरक्षा अलर्ट',
+    auditLog:          'गतिविधि इतिहास',
+    costs:             'उपयोग और खर्च',
+    roi:               'आपका ROI',
+    usage:             'उपयोग और योजना',
+    settings:          'सेटिंग्स',
+    developerSettings: 'डेवलपर सेटिंग्स',
+    gettingStarted:    'शुरुआत करें',
+  },
+
+  // ── Common ───────────────────────────────────────────────────────────────────
+  common: {
+    save:       'सहेजें',
+    cancel:     'रद्द करें',
+    confirm:    'पुष्टि करें',
+    delete:     'हटाएं',
+    edit:       'संपादित करें',
+    add:        'जोड़ें',
+    remove:     'निकालें',
+    refresh:    'ताज़ा करें',
+    loading:    'लोड हो रहा है…',
+    error:      'कुछ गलत हो गया',
+    retry:      'पुनः प्रयास करें',
+    search:     'खोजें',
+    filter:     'फ़िल्टर',
+    export:     'निर्यात करें',
+    close:      'बंद करें',
+    back:       'वापस',
+    next:       'अगला',
+    done:       'हो गया',
+    learnMore:  'और जानें',
+    viewAll:    'सब देखें',
+    noData:     'अभी कोई डेटा नहीं',
+    noResults:  'कोई परिणाम नहीं मिला',
+    copyId:     'ID कॉपी करें',
+    copied:     'कॉपी हो गया!',
+    signOut:    'साइन आउट',
+    signIn:     'साइन इन',
+    signUp:     'साइन अप',
+  },
+
+  // ── Home / Overview ──────────────────────────────────────────────────────────
+  overview: {
+    title:               'सारांश',
+    subtitle:            'क्या चल रहा है, क्या ध्यान चाहिए, और आगे क्या करें।',
+    everythingGood:      'सब कुछ सुचारू रूप से चल रहा है',
+    problemsNeedAttention: '{{count}} समस्या पर ध्यान देना ज़रूरी है',
+    problemsNeedAttention_other: '{{count}} समस्याओं पर ध्यान देना ज़रूरी है',
+    needsAttention:      'आपके ध्यान की ज़रूरत है',
+    killSwitch:          'सभी रोकें',
+    resumeAll:           'सभी फिर शुरू करें',
+    allPaused:           'सभी AI सहायक रोके गए हैं',
+    assistantsRunning:   '{{count}} AI सहायक चल रहा है',
+    assistantsRunning_other: '{{count}} AI सहायक चल रहे हैं',
+    messagesThisWeek:    'इस सप्ताह {{count}} संदेश',
+    approvalsWaiting:    '{{count}} अनुमोदन प्रतीक्षारत',
+    approvalsWaiting_other: '{{count}} अनुमोदन प्रतीक्षारत',
+    estimatedCost:       'इस महीने {{amount}}',
+  },
+
+  // ── Agents ───────────────────────────────────────────────────────────────────
+  agents: {
+    title:       'मेरी AI टीम',
+    addAgent:    'सहायक जोड़ें',
+    noAgents:    'अभी कोई सहायक नहीं',
+    status: {
+      active:     'सक्रिय',
+      paused:     'रोका गया',
+      terminated: 'बंद',
+    },
+    goLive:      'लाइव करें',
+    pause:       'रोकें',
+    resume:      'फिर शुरू करें',
+    delete:      'सहायक हटाएं',
+    healthScore: 'स्वास्थ्य स्कोर',
+  },
+
+  // ── Approvals ─────────────────────────────────────────────────────────────────
+  approvals: {
+    title:          'कार्य इनबॉक्स',
+    subtitle:       'संवेदनशील अनुरोध जिन्हें आपकी समीक्षा चाहिए।',
+    queue:          'कतार',
+    history:        'इतिहास',
+    allow:          'अनुमति दें',
+    block:          'रोकें',
+    cancel:         'रद्द करें',
+    snooze:         'बाद में याद दिलाएं',
+    delegate:       'किसी और को सौंपें',
+    addNote:        'नोट जोड़ें',
+    autoBlocked:    '24 घंटे में कोई जवाब नहीं तो स्वतः रोक दिया जाएगा',
+    wantsTo:        'आपका AI करना चाहता है',
+    riskScore:      'जोखिम {{score}}/100',
+    emptyQueue:     'कतार खाली है',
+    noRequests:     'कोई अनुमोदन अनुरोध नहीं',
+    bulkApprove:    '{{count}} "{{action}}" अनुरोध एक साथ मंज़ूर करें',
+    similarRequests: 'समान अनुरोध — एक साथ मंज़ूरी दें',
+  },
+
+  // ── Incidents / Safety Alerts ─────────────────────────────────────────────────
+  incidents: {
+    title:       'सुरक्षा अलर्ट',
+    subtitle:    'नीति उल्लंघन, निजी डेटा रिसाव, और असामान्य गतिविधि की रियल-टाइम पहचान।',
+    open:        'खुला',
+    resolved:    'हल किया गया',
+    critical:    'अति गंभीर',
+    high:        'गंभीर',
+    medium:      'मध्यम',
+    low:         'कम',
+    resolve:     'हल करें',
+    investigate: 'जांच करें',
+    liveStream:  'लाइव स्ट्रीम जुड़ा है',
+    piiDetected: 'निजी डेटा साझा किया गया',
+    hallucination: 'संभवतः गलत जानकारी फ़्लैग की गई',
+  },
+
+  // ── Activity History (Audit Log) ─────────────────────────────────────────────
+  auditLog: {
+    title:    'गतिविधि इतिहास',
+    subtitle: 'आपकी AI टीम ने जो भी किया वह अपरिवर्तनीय रूप से दर्ज है।',
+    noEvents: 'अभी कोई गतिविधि दर्ज नहीं',
+  },
+
+  // ── Usage & Spending (Costs) ──────────────────────────────────────────────────
+  costs: {
+    title:          'उपयोग और खर्च',
+    subtitle:       'आपकी AI टीम का खर्च और उसका विवरण देखें।',
+    messages:       '{{count}} संदेश',
+    messages_other: '{{count}} संदेश',
+    thisMonth:      'इस महीने',
+    noData:         'अभी कोई उपयोग डेटा नहीं',
+    noDataDesc:     'Zapheit के ज़रिए पहला अनुरोध भेजें और ट्रैकिंग शुरू करें।',
+    connectApp:     'ऐप जोड़ें',
+    viewAgents:     'सहायक देखें',
+  },
+
+  // ── Settings ──────────────────────────────────────────────────────────────────
+  settings: {
+    title:        'सेटिंग्स',
+    appearance:   'रूप-रंग',
+    darkMode:     'डार्क मोड',
+    lightMode:    'लाइट मोड',
+    language:     'भाषा',
+    techTerms:    'तकनीकी शब्द दिखाएं',
+    techTermsDesc: '"Audit Log", "Action Policies", "Fleet Management" जैसे मूल लेबल उपयोग करें',
+    profile:      'आपकी प्रोफ़ाइल',
+    memberSince:  'सदस्य बने',
+    accountId:    'खाता ID',
+    workspace:    'कार्यक्षेत्र',
+    teamAccess:   'टीम और पहुंच',
+    alerts:       'अलर्ट',
+    security:     'सुरक्षा',
+    billing:      'बिलिंग और डेटा',
+    advanced:     'उन्नत',
+    enterprise:   'एंटरप्राइज़',
+  },
+
+  // ── Auth ──────────────────────────────────────────────────────────────────────
+  auth: {
+    welcomeBack:    'वापसी पर स्वागत है',
+    signInSubtitle: 'अपने खाते में साइन इन करें',
+    createAccount:  'अपना खाता बनाएं',
+    signUpSubtitle: 'आज अपनी AI टीम को नियंत्रित करना शुरू करें',
+    forgotPassword: 'पासवर्ड भूल गए?',
+    noAccount:      'खाता नहीं है?',
+    haveAccount:    'पहले से खाता है?',
+    email:          'ईमेल पता',
+    password:       'पासवर्ड',
+    orgName:        'संगठन का नाम',
+  },
+
+  // ── Landing page ──────────────────────────────────────────────────────────────
+  landing: {
+    heroTitle:    'आपके AI एजेंट अभी निर्णय ले रहे हैं। क्या आप जानते हैं वे क्या कर रहे हैं?',
+    heroSub:      'अपने AI की हर गतिविधि देखें। समस्याएं ग्राहकों तक पहुंचने से पहले रोकें।',
+    tryDemo:      'देखें — बिना साइन-अप के',
+    getStarted:   'मुफ़्त शुरू करें',
+    talkToUs:     'बात करें',
+    footerTagline: 'आपकी AI टीम की गवर्नेंस परत।',
+  },
+} as const;
+
+export default hi;

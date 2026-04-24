@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
@@ -220,6 +221,7 @@ export function Sidebar({
   role,
   showTechTerms = false,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
   const [openGroup, setOpenGroup] = useState<string | null>(() => {
     if (ALL_NON_CORE.has(currentPage)) {
@@ -228,11 +230,36 @@ export function Sidebar({
     return null;
   });
 
+  // Map item IDs to translation keys in the nav namespace
+  const NAV_T: Record<string, string> = {
+    'overview':          t('nav.overview'),
+    'agents':            t('nav.agents'),
+    'apps':              t('nav.apps'),
+    'chat':              t('nav.chat'),
+    'agent-studio':      t('nav.agentStudio'),
+    'action-policies':   t('nav.rules'),
+    'approvals':         t('nav.approvals'),
+    'incidents':         t('nav.incidents'),
+    'audit-log':         t('nav.auditLog'),
+    'costs':             t('nav.costs'),
+    'roi':               t('nav.roi'),
+    'usage':             t('nav.usage'),
+    'settings':          t('nav.settings'),
+    'api-webhooks':      t('nav.developerSettings'),
+    'getting-started':   t('nav.gettingStarted'),
+  };
+
+  function applyTranslation(item: NavItem): NavItem {
+    const translated = NAV_T[item.id];
+    return translated ? { ...item, label: translated } : item;
+  }
+
   const coreWithBadge: NavItem[] = CORE_ITEMS
     .filter((item) => isVisible(item.id, role))
     .map((item) => {
       const withBadge = item.id === 'incidents' ? { ...item, badge: incidentBadge } : item;
-      return applyTechLabel(withBadge, showTechTerms);
+      // Tech terms override translation (power-user mode uses original English labels)
+      return showTechTerms ? applyTechLabel(withBadge, true) : applyTranslation(withBadge);
     });
 
   return (
@@ -314,7 +341,7 @@ export function Sidebar({
         {needsOnboarding && (
           <div className={cn('mb-1', expanded ? 'px-2' : 'px-1.5')}>
             <NavBtn
-              item={{ id: 'getting-started', icon: Sparkles, label: 'Getting Started' }}
+              item={{ id: 'getting-started', icon: Sparkles, label: t('nav.gettingStarted') }}
               isActive={currentPage === 'getting-started'}
               expanded={expanded}
               onClick={() => onNavigate('getting-started')}
@@ -343,7 +370,7 @@ export function Sidebar({
           {GROUPS.map((group) => {
             const visibleItems = group.items
               .filter((i) => isVisible(i.id, role))
-              .map((i) => applyTechLabel(i, showTechTerms));
+              .map((i) => showTechTerms ? applyTechLabel(i, true) : applyTranslation(i));
             if (visibleItems.length === 0) return null;
             const isGroupOpen = openGroup === group.label;
             const hasActive = visibleItems.some((i) => i.id === currentPage);
