@@ -321,7 +321,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
             if (eventName === 'incident.new' && dataLine) {
               try {
                 const incoming = JSON.parse(dataLine) as Incident;
-                setIncidents(prev => [incoming, ...prev.filter(i => i.id !== incoming.id)]);
+                setIncidents([incoming, ...incidents.filter((i: Incident) => i.id !== incoming.id)]);
               } catch {
                 // malformed JSON — skip
               }
