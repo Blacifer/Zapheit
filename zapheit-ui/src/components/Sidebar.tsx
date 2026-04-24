@@ -106,7 +106,7 @@ const ALL_NON_CORE = new Set(GROUPS.flatMap((g) => g.items.map((i) => i.id)));
 
 // Role-based visibility. Items not in any set are visible to all roles.
 const VIEWER_ONLY_IDS = new Set([
-  'overview', 'agents', 'approvals', 'audit-log', 'chat',
+  'overview', 'agents', 'approvals', 'audit-log', 'chat', 'roi',
 ]);
 const MANAGER_EXTRA_IDS = new Set([
   'incidents', 'agent-studio', 'action-policies', 'costs',
@@ -452,8 +452,8 @@ export function Sidebar({
               {/* Role badge */}
               {role && (
                 <div className="mb-2 px-1">
-                  <span className={cn('px-2 py-0.5 rounded text-xs', role === 'super_admin' ? 'bg-purple-400/10 text-purple-400' : role === 'ops_manager' ? 'bg-blue-400/10 text-blue-400' : 'bg-slate-400/10 text-slate-400')}>
-                    {role === 'super_admin' ? 'Admin' : role === 'ops_manager' ? 'Manager' : 'Auditor'}
+                  <span className={cn('px-2 py-0.5 rounded text-xs', (role === 'super_admin' || role === 'admin') ? 'bg-purple-400/10 text-purple-400' : role === 'manager' ? 'bg-blue-400/10 text-blue-400' : 'bg-slate-400/10 text-slate-400')}>
+                    {(role === 'super_admin' || role === 'admin') ? 'Admin' : role === 'manager' ? 'Manager' : 'Viewer'}
                   </span>
                 </div>
               )}
