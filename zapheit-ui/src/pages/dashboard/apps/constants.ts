@@ -100,7 +100,7 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'hubspot':          'hubspot.com',
   'naukri':           'naukri.com',
   'stripe':           'stripe.com',
-  'razorpay':         'razorpay.com',
+  'cashfree':         'cashfree.com',
   'xero':             'xero.com',
   'tally':            'tallysolutions.com',
   'paytm':            'paytm.com',
@@ -179,7 +179,7 @@ export const LOGO_DOMAINS: Record<string, string> = {
   // Finance (new)
   'chargebee':          'chargebee.com',
   'paytm-business':     'paytm.com',
-  'razorpayx':          'razorpay.com',
+  'cashfreex':          'cashfree.com',
   'marg-erp':           'margcompusoft.com',
   'zoho-books-new':     'zoho.com',
   // HR & People (new)

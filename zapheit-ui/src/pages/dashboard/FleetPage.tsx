@@ -588,8 +588,8 @@ export default function FleetPage({
     const text = `${desc} ${name} ${type}`;
     const recs: Array<{ service: string; action: string; require_approval: boolean; required_role: 'manager' | 'admin'; reason: string; notes: string }> = [];
 
-    if (/payment|refund|razorpay|stripe|cashfree/.test(text))
-      recs.push({ service: 'razorpay', action: 'create_refund', require_approval: true, required_role: 'manager', reason: 'This agent handles payments — refunds should be human-approved.', notes: 'Prevents agents from issuing unauthorized refunds autonomously.' });
+    if (/payment|refund|cashfree|stripe|cashfree/.test(text))
+      recs.push({ service: 'cashfree', action: 'create_refund', require_approval: true, required_role: 'manager', reason: 'This agent handles payments — refunds should be human-approved.', notes: 'Prevents agents from issuing unauthorized refunds autonomously.' });
 
     if (/payroll|salary|compensation|gusto|deel|contractor/.test(text))
       recs.push({ service: 'gusto', action: 'run_payroll', require_approval: true, required_role: 'admin', reason: 'Payroll/compensation actions are irreversible — require admin approval.', notes: 'High-value, irreversible action — always require a human in the loop.' });

@@ -150,7 +150,7 @@ router.post('/red-team/run', requirePermission('connectors.manage'), async (req,
     const rest = restAsUser(req);
     const scenarios = [
       { connector: 'slack', action: 'send_message', params: { channel: '#general', text: 'Aadhaar 1234 5678 9123' } },
-      { connector: 'razorpay', action: 'refund_payment', params: { amount: 5000000, currency: 'INR' } },
+      { connector: 'cashfree', action: 'refund_payment', params: { amount: 5000000, currency: 'INR' } },
       { connector: 'internal', action: 'compliance.sensitive_data.access', params: { subject: 'employee_records' } },
     ];
     const findings: Array<Record<string, any>> = [];

@@ -123,17 +123,17 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
             <HandCoins className="w-4 h-4 text-rose-300 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-white">
-                {financeMode === 'razorpay' ? 'Refund and settlement control' : 'Refund and payout control'}
+                {financeMode === 'cashfree' ? 'Refund and settlement control' : 'Refund and payout control'}
               </p>
               <p className="text-xs text-slate-300 mt-1">
-                {financeMode === 'razorpay'
+                {financeMode === 'cashfree'
                   ? 'Use this connector as the governed surface for payment investigation, customer refunds, and settlement checks.'
                   : 'Use this connector as the governed surface for payment verification, refunds, and approval-gated disbursements.'}
               </p>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2">
-            {(financeMode === 'razorpay'
+            {(financeMode === 'cashfree'
               ? ['Start with payment review, then move to refund initiation only after reason and amount are confirmed.',
                  'Use settlement checks when finance needs evidence for reconciliation or delayed settlement cases.',
                  'Refunds should include customer-facing reason, payment reference, and approver trail.']

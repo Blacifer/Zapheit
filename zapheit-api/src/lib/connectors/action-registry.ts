@@ -326,19 +326,19 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
     ],
   },
 
-  // ─── Razorpay ─────────────────────────────────────────────────────────────
-  razorpay: {
-    connectorId: 'razorpay',
+  // ─── Cashfree ─────────────────────────────────────────────────────────────
+  cashfree: {
+    connectorId: 'cashfree',
     tools: [
       {
         type: 'function',
         function: {
-          name: 'razorpay__get_order',
-          description: 'Retrieve a Razorpay order by ID.',
+          name: 'cashfree__get_order',
+          description: 'Retrieve a Cashfree order by ID.',
           parameters: {
             type: 'object',
             properties: {
-              order_id: { type: 'string', description: 'Razorpay order ID (order_...)' },
+              order_id: { type: 'string', description: 'Cashfree order ID' },
             },
             required: ['order_id'],
           },
@@ -347,12 +347,12 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
       {
         type: 'function',
         function: {
-          name: 'razorpay__initiate_refund',
-          description: 'Initiate a refund for a Razorpay payment.',
+          name: 'cashfree__initiate_refund',
+          description: 'Initiate a refund for a Cashfree payment.',
           parameters: {
             type: 'object',
             properties: {
-              payment_id: { type: 'string', description: 'Razorpay payment ID (pay_...)' },
+              payment_id: { type: 'string', description: 'Cashfree payment ID' },
               amount: { type: 'string', description: 'Refund amount in paise (leave empty for full refund)' },
               notes: { type: 'string', description: 'Reason or notes for the refund' },
             },
@@ -363,8 +363,8 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
       {
         type: 'function',
         function: {
-          name: 'razorpay__list_payments',
-          description: 'List recent Razorpay payments for the account.',
+          name: 'cashfree__list_payments',
+          description: 'List recent Cashfree payments for the account.',
           parameters: {
             type: 'object',
             properties: {
@@ -378,12 +378,12 @@ export const ACTION_REGISTRY: Record<string, ConnectorActionSchema> = {
       {
         type: 'function',
         function: {
-          name: 'razorpay__get_settlement',
-          description: 'Get details of a specific Razorpay settlement.',
+          name: 'cashfree__get_settlement',
+          description: 'Get details of a specific Cashfree settlement.',
           parameters: {
             type: 'object',
             properties: {
-              settlement_id: { type: 'string', description: 'Razorpay settlement ID (setl_...)' },
+              settlement_id: { type: 'string', description: 'Cashfree settlement ID' },
             },
             required: ['settlement_id'],
           },

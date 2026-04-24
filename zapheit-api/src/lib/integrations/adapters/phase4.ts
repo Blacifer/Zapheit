@@ -381,17 +381,17 @@ export const StripeAdapter: IntegrationAdapter = {
   },
 };
 
-export const RazorpayAdapter: IntegrationAdapter = {
+export const CashfreeAdapter: IntegrationAdapter = {
   async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
     try {
       const keyId = decryptSecret(credentials.key_id || '');
       const keySecret = decryptSecret(credentials.key_secret || '');
-      const res = await fetchWithTimeout('https://api.razorpay.com/v1/payments?count=1', {
+      const res = await fetchWithTimeout('https://api.cashfree.com/v1/payments?count=1', {
         method: 'GET',
         headers: { Authorization: basicAuthHeader(keyId, keySecret), Accept: 'application/json' },
       });
       if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
-      return { success: true, message: 'Connected to Razorpay successfully' };
+      return { success: true, message: 'Connected to Cashfree successfully' };
     } catch (err: any) {
       return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
     }
@@ -426,17 +426,17 @@ export const KekaAdapter: IntegrationAdapter = {
   },
 };
 
-export const RazorpayXAdapter: IntegrationAdapter = {
+export const CashfreeXAdapter: IntegrationAdapter = {
   async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
     try {
       const keyId = decryptSecret(credentials.key_id || '');
       const keySecret = decryptSecret(credentials.key_secret || '');
-      const res = await fetchWithTimeout('https://api.razorpay.com/v1/fund_accounts?count=1', {
+      const res = await fetchWithTimeout('https://api.cashfree.com/v1/fund_accounts?count=1', {
         method: 'GET',
         headers: { Authorization: basicAuthHeader(keyId, keySecret) },
       });
       if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
-      return { success: true, message: 'Connected to RazorpayX successfully' };
+      return { success: true, message: 'Connected to CashfreeX successfully' };
     } catch (err: any) {
       return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
     }
@@ -494,7 +494,7 @@ export const Phase4Adapters: Record<string, IntegrationAdapter> = {
   jira: JiraAdapter,
   hubspot: HubSpotAdapter,
   stripe: StripeAdapter,
-  razorpay: RazorpayAdapter,
+  cashfree: CashfreeAdapter,
   'google-workspace': GoogleWorkspaceAdapter,
   'microsoft-365': Microsoft365Adapter,
   'microsoft-teams': TeamsAdapter,
@@ -504,7 +504,7 @@ export const Phase4Adapters: Record<string, IntegrationAdapter> = {
   flock: FlockAdapter,
   okta: OktaAdapter,
   keka: KekaAdapter,
-  razorpayx: RazorpayXAdapter,
+  cashfreex: CashfreeXAdapter,
   whatsapp: WhatsAppCloudAdapter,
   epfo: EpfoAdapter,
 };

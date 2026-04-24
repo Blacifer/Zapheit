@@ -58,7 +58,7 @@ export function FinanceWorkspaceTab({ app, agentNames }: FinanceWorkspaceTabProp
       const [invoiceRes, expenseRes, previewRes] = await Promise.all([
         api.hubs.finance.listInvoices({ limit: 40 }),
         api.hubs.finance.listExpenses({ limit: 40 }),
-        app.connected && app.primaryServiceId && ['stripe', 'razorpay', 'paytm'].includes(String(app.primaryServiceId).toLowerCase())
+        app.connected && app.primaryServiceId && ['stripe', 'cashfree', 'paytm'].includes(String(app.primaryServiceId).toLowerCase())
           ? api.integrations.getWorkspacePreview(app.primaryServiceId)
           : Promise.resolve(null),
       ]);

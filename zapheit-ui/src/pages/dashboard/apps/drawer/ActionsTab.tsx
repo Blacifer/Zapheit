@@ -46,7 +46,7 @@ export function ActionsTab({ app, catalog, catalogLoading, seedingPolicies, onTo
         <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Recommended finance workflow</p>
           <div className="mt-2 space-y-1.5 text-[11px] text-slate-300">
-            {financeMode === 'razorpay' ? (
+            {financeMode === 'cashfree' ? (
               <><p>1. Review payment activity or settlement status.</p><p>2. Confirm refund reason, amount, and threshold routing.</p><p>3. Use execution history as the evidence trail for finance review.</p></>
             ) : (
               <><p>1. Verify customer payment state before issuing a refund.</p><p>2. For payouts, validate beneficiary and amount before release.</p><p>3. Require explicit approval notes on high-value disbursements.</p></>

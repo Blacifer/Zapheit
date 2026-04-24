@@ -38,7 +38,6 @@ const REQUIRED_CONNECTOR_FIELDS: Record<string, string[]> = {
   jira: ['baseUrl', 'email', 'apiToken'],
   pagerduty: ['apiToken'],
   datadog: ['apiKey', 'appKey'],
-  razorpay: ['keyId', 'keySecret'],
   cashfree: ['clientId', 'clientSecret', 'apiVersion', 'environment'],
   payu: ['merchantKey', 'merchantSalt'],
   'phonepe-business': ['merchantId', 'saltKey', 'saltIndex', 'environment'],
@@ -59,7 +58,7 @@ const REQUIRED_CONNECTOR_FIELDS: Record<string, string[]> = {
   keka: ['clientId', 'clientSecret', 'hostUrl'],
   greythr: ['apiKey'],
   darwinbox: ['apiKey'],
-  'razorpayx-payroll': ['keyId', 'keySecret'],
+  'cashfreex-payroll': ['keyId', 'keySecret'],
   'zoho-crm': ['clientId', 'clientSecret', 'refreshToken'],
   freshsales: ['domain', 'apiKey'],
   salesforce: ['instanceUrl', 'clientId', 'clientSecret', 'refreshToken'],
@@ -209,7 +208,7 @@ function getActionSamplePayload(provider: string) {
         lastName: 'TestUser',
         email: `zapheit-test-${Date.now()}@example.com`,
       };
-    case 'razorpayx':
+    case 'cashfreex':
       return {
         name: 'Zapheit Test Contact',
         type: 'vendor',
@@ -404,18 +403,18 @@ async function runProviderActionTest(
         },
       };
     }
-    case 'razorpay': {
+    case 'cashfree': {
       const auth = Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64');
       const amount = Number.parseInt(String(setup.amountInPaise || '1000'), 10);
       const currency = String(setup.currency || 'INR').trim().toUpperCase();
       const receiptPrefix = String(setup.receiptPrefix || 'zapheit-test').trim() || 'zapheit-test';
 
       if (!Number.isFinite(amount) || amount <= 0) {
-        return { ok: false, actionType: 'webhook', error: 'Provide a valid Razorpay test amount in paise before creating a test order.' };
+        return { ok: false, actionType: 'webhook', error: 'Provide a valid Cashfree test amount in paise before creating a test order.' };
       }
 
       const receipt = `${receiptPrefix}-${Date.now()}`.slice(0, 40);
-      const response = await fetchWithTimeout('https://api.razorpay.com/v1/orders', {
+      const response = await fetchWithTimeout('https://api.cashfree.com/v1/orders', {
         method: 'POST',
         headers: {
           Authorization: `Basic ${auth}`,
@@ -438,7 +437,7 @@ async function runProviderActionTest(
           ok: false,
           actionType: 'webhook',
           targetLabel: `${currency} ${amount}`,
-          error: data?.error?.description || `Razorpay order creation failed (${response.status})`,
+          error: data?.error?.description || `Cashfree order creation failed (${response.status})`,
         };
       }
       return {
@@ -743,9 +742,9 @@ async function runProviderActionTest(
         details: { paymentIntentId: data?.id ?? null, status: data?.status ?? null, probe: 'payment_intents.create' },
       };
     }
-    case 'razorpayx': {
+    case 'cashfreex': {
       const auth = Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64');
-      const response = await fetchWithTimeout('https://api.razorpay.com/v1/contacts', {
+      const response = await fetchWithTimeout('https://api.cashfree.com/v1/contacts', {
         method: 'POST',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -760,7 +759,7 @@ async function runProviderActionTest(
       if (!response.ok || !data?.id) {
         return {
           ok: false, actionType: 'webhook',
-          error: data?.error?.description || `RazorpayX test contact creation failed (${response.status})`,
+          error: data?.error?.description || `CashfreeX test contact creation failed (${response.status})`,
         };
       }
       return {
@@ -2449,9 +2448,9 @@ export async function validateProviderConnection(
         details: { scope: body.scope || '' },
       };
     }
-    case 'razorpay': {
+    case 'cashfree': {
       const auth = Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64');
-      const response = await fetchWithTimeout('https://api.razorpay.com/v1/items?count=1', {
+      const response = await fetchWithTimeout('https://api.cashfree.com/v1/items?count=1', {
         headers: {
           Authorization: `Basic ${auth}`,
           Accept: 'application/json',
@@ -2459,11 +2458,11 @@ export async function validateProviderConnection(
       });
       const body = await response.json() as any;
       if (!response.ok) {
-        return { valid: false, error: body?.error?.description || 'Razorpay authentication failed' };
+        return { valid: false, error: body?.error?.description || 'Cashfree authentication failed' };
       }
       return {
         valid: true,
-        accountLabel: 'Razorpay account',
+        accountLabel: 'Cashfree account',
         details: { test_call: 'items.list' },
       };
     }

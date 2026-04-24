@@ -26,7 +26,7 @@ export function appColor(id: string, raw?: string): string {
   if (k.includes('freshdesk'))                         return '#0070C0';
   if (k.includes('naukri'))                            return '#FF7555';
   if (k.includes('stripe'))                            return '#635BFF';
-  if (k.includes('razorpay'))                          return '#2D81E0';
+  if (k.includes('cashfree'))                          return '#2D81E0';
   if (k.includes('paytm'))                             return '#002970';
   if (k.includes('salesforce'))                        return '#00A1E0';
   if (k.includes('quickbooks'))                        return '#2CA01C';
@@ -318,9 +318,9 @@ export function useOutsideClick(ref: React.RefObject<HTMLElement | null>, cb: ()
 
 // ─── Domain detector helpers ────────────────────────────────────────────────
 
-export function financeConnectorMode(connectorId?: string | null): 'razorpay' | 'paytm' | null {
+export function financeConnectorMode(connectorId?: string | null): 'cashfree' | 'paytm' | null {
   const value = String(connectorId || '').toLowerCase();
-  if (value.includes('razorpay')) return 'razorpay';
+  if (value.includes('cashfree')) return 'cashfree';
   if (value.includes('paytm')) return 'paytm';
   return null;
 }
@@ -382,7 +382,7 @@ export function isFinanceWorkspaceApp(connectorId?: string | null) {
   const value = String(connectorId || '').toLowerCase();
   return [
     'stripe',
-    'razorpay',
+    'cashfree',
     'paytm',
     'quickbooks',
     'xero',

@@ -228,7 +228,7 @@ export function guessPackForIntegration(integration: IntegrationSummary): Integr
   const itConnectors = ['slack', 'flock', 'microsoft-365', 'google-workspace', 'okta', 'jira', 'azure'];
   if (itConnectors.some((h) => id === h || id.startsWith(h))) return 'it';
 
-  const financeConnectors = ['deel', 'gusto', 'razorpay', 'stripe', 'quickbooks', 'xero', 'paytm'];
+  const financeConnectors = ['deel', 'gusto', 'cashfree', 'stripe', 'quickbooks', 'xero', 'paytm'];
   if (financeConnectors.some((h) => id === h || id.startsWith(h))) return 'finance';
 
   const salesHints = ['crm', 'sales', 'salesforce', 'hubspot', 'freshsales', 'zoho', 'pipedrive'];

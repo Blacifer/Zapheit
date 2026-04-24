@@ -138,7 +138,7 @@ function computeApprovalRiskScore(payload: Record<string, any>, service: string,
   if (PII_PATTERNS.some(p => p.test(payloadStr))) score += 0.2;
 
   // Unknown/untrusted service
-  const knownServices = ['zendesk', 'slack', 'razorpay', 'stripe', 'github', 'jira', 'hubspot'];
+  const knownServices = ['zendesk', 'slack', 'cashfree', 'stripe', 'github', 'jira', 'hubspot'];
   if (!knownServices.includes(service.toLowerCase())) score += 0.1;
 
   return Math.min(1, Math.round(score * 1000) / 1000);

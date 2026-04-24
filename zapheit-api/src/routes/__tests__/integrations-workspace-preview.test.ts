@@ -85,10 +85,10 @@ jest.mock('../../lib/integrations/spec-registry', () => ({
         category: 'FINANCE',
       };
     }
-    if (normalized === 'razorpay') {
+    if (normalized === 'cashfree') {
       return {
-        id: 'razorpay',
-        name: 'Razorpay',
+        id: 'cashfree',
+        name: 'Cashfree',
         authType: 'api_key',
         category: 'FINANCE',
       };
@@ -565,14 +565,14 @@ describe('Integrations Routes - workspace preview', () => {
     expect(res.body.data.metrics.pending_payouts).toBe(0);
   });
 
-  it('returns Razorpay workspace preview using API key credentials', async () => {
+  it('returns Cashfree workspace preview using API key credentials', async () => {
     mockUserRest.mockImplementation(async (_jwt, table, _query, options) => {
       if (table === 'integrations') {
         return [{
           id: 'integration-rzp',
-          service_type: 'razorpay',
+          service_type: 'cashfree',
           status: 'connected',
-          service_name: 'Razorpay',
+          service_name: 'Cashfree',
         }];
       }
       if (table === 'integration_credentials') {
@@ -612,7 +612,7 @@ describe('Integrations Routes - workspace preview', () => {
       throw new Error(`Unexpected fetch ${url}`);
     }) as any;
 
-    const res = await invokeRoute('/razorpay/workspace-preview');
+    const res = await invokeRoute('/cashfree/workspace-preview');
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.records).toHaveLength(1);

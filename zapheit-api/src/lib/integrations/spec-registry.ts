@@ -833,8 +833,8 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
   },
   {
-    id: 'razorpay',
-    name: 'Razorpay',
+    id: 'cashfree',
+    name: 'Cashfree',
     category: 'PAYMENTS',
     description: 'Payments platform in India (transactions and refunds).',
     authType: 'api_key',
@@ -846,14 +846,14 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     trustTier: 'high-trust-operational',
     apiKeyConfig: {
       requiredFields: [
-        { name: 'key_id', label: 'Key ID', type: 'text', placeholder: 'rzp_live_...', required: true, description: 'Razorpay key id' },
-        { name: 'key_secret', label: 'Key Secret', type: 'password', placeholder: '••••••••', required: true, description: 'Razorpay key secret' },
+        { name: 'key_id', label: 'Key ID', type: 'text', placeholder: 'rzp_live_...', required: true, description: 'Cashfree key id' },
+        { name: 'key_secret', label: 'Key Secret', type: 'password', placeholder: '••••••••', required: true, description: 'Cashfree key secret' },
       ],
-      testEndpoint: 'https://api.razorpay.com/v1/payments?count=1',
-      baseUrl: 'https://api.razorpay.com/v1',
+      testEndpoint: 'https://api.cashfree.com/v1/payments?count=1',
+      baseUrl: 'https://api.cashfree.com/v1',
     },
     endpoints: {
-      payments: { method: 'GET', path: 'https://api.razorpay.com/v1/payments' },
+      payments: { method: 'GET', path: 'https://api.cashfree.com/v1/payments' },
     },
     capabilities: {
       reads: ['finance.transactions', 'finance.refunds'],
@@ -1006,10 +1006,10 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
   },
   {
-    id: 'razorpayx',
-    name: 'RazorpayX Payroll',
+    id: 'cashfreex',
+    name: 'CashfreeX Payroll',
     category: 'PAYROLL',
-    description: 'Payroll disbursements and payout rails via RazorpayX.',
+    description: 'Payroll disbursements and payout rails via CashfreeX.',
     authType: 'api_key',
     tags: ['INDIA PRIORITY', 'PAYROLL'],
     status: 'READY',
@@ -1017,12 +1017,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     priority: 4,
     apiKeyConfig: {
       requiredFields: [
-        { name: 'key_id', label: 'Key ID', type: 'text', placeholder: 'rzp_test_...', required: true, description: 'Razorpay Key ID' },
-        { name: 'key_secret', label: 'Key Secret', type: 'password', placeholder: '••••••••', required: true, description: 'Razorpay Key Secret' },
-        { name: 'account_id', label: 'Account ID', type: 'text', placeholder: 'acc_...', required: true, description: 'RazorpayX account identifier' },
+        { name: 'key_id', label: 'Key ID', type: 'text', placeholder: 'rzp_test_...', required: true, description: 'Cashfree Key ID' },
+        { name: 'key_secret', label: 'Key Secret', type: 'password', placeholder: '••••••••', required: true, description: 'Cashfree Key Secret' },
+        { name: 'account_id', label: 'Account ID', type: 'text', placeholder: 'acc_...', required: true, description: 'CashfreeX account identifier' },
       ],
-      testEndpoint: 'https://api.razorpay.com/v1/fund_accounts',
-      baseUrl: 'https://api.razorpay.com/v1',
+      testEndpoint: 'https://api.cashfree.com/v1/fund_accounts',
+      baseUrl: 'https://api.cashfree.com/v1',
     },
     endpoints: {
       fundAccounts: { method: 'GET', path: '/fund_accounts' },

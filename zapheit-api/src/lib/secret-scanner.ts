@@ -27,7 +27,7 @@ const PATTERNS: Array<{ type: string; pattern: RegExp; redact: string }> = [
   { type: 'github_token', pattern: /ghp_[a-zA-Z0-9]{36}/g, redact: '[GITHUB_TOKEN]' },
   { type: 'github_oauth', pattern: /gho_[a-zA-Z0-9]{36}/g, redact: '[GITHUB_OAUTH]' },
   { type: 'stripe_key', pattern: /(?:sk|pk)_(?:live|test)_[a-zA-Z0-9]{24,}/g, redact: '[STRIPE_KEY]' },
-  { type: 'razorpay_key', pattern: /rzp_(?:live|test)_[a-zA-Z0-9]{14,}/g, redact: '[RAZORPAY_KEY]' },
+  { type: 'cashfree_key', pattern: /rzp_(?:live|test)_[a-zA-Z0-9]{14,}/g, redact: '[CASHFREE_KEY]' },
   { type: 'jwt_token', pattern: /eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, redact: '[JWT_TOKEN]' },
   { type: 'connection_string', pattern: /(?:postgresql|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s"'<>]+/gi, redact: '[DB_CONNECTION_STRING]' },
   { type: 'private_key_pem', pattern: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/g, redact: '[PRIVATE_KEY_PEM]' },

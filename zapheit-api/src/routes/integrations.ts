@@ -336,15 +336,15 @@ const WAVE1_POLICY_DEFAULTS: Wave1PolicySeed[] = [
     notes: 'Google Workspace Phase 1: cancelling calendar events requires approval by default.',
   },
   {
-    service: 'razorpay',
+    service: 'cashfree',
     action: 'finance.payment.list',
     enabled: true,
     require_approval: false,
     required_role: 'manager',
-    notes: 'Wave 1 default: allow finance operators to inspect Razorpay payments without extra approval.',
+    notes: 'Wave 1 default: allow finance operators to inspect Cashfree payments without extra approval.',
   },
   {
-    service: 'razorpay',
+    service: 'cashfree',
     action: 'finance.settlement.check',
     enabled: true,
     require_approval: false,
@@ -352,12 +352,12 @@ const WAVE1_POLICY_DEFAULTS: Wave1PolicySeed[] = [
     notes: 'Wave 1 default: settlement review is enabled for reconciliation workflows.',
   },
   {
-    service: 'razorpay',
+    service: 'cashfree',
     action: 'finance.refund.create',
     enabled: true,
     require_approval: true,
     required_role: 'manager',
-    notes: 'Wave 1 default: Razorpay refunds require approval and threshold-based escalation.',
+    notes: 'Wave 1 default: Cashfree refunds require approval and threshold-based escalation.',
     policy_constraints: {
       amount_field: 'amount',
       amount_threshold: 500000,
@@ -1183,7 +1183,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       maturity,
       categoryPack: packIdFromCategory(spec.category),
       wave:
-        ['razorpay', 'paytm', 'tally', 'slack', 'naukri', 'cleartax'].includes(spec.id) ? 1
+        ['cashfree', 'paytm', 'tally', 'slack', 'naukri', 'cleartax'].includes(spec.id) ? 1
         : ['payu', 'zoho_recruit', 'google_workspace', 'microsoft_365', 'freshdesk', 'hubspot', 'zoho_crm'].includes(spec.id) ? 2
         : null,
       governanceSummary: {
@@ -2083,18 +2083,18 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review recent charges and payout state before allowing agents to approve refunds or payment operations.'
       : 'Reconnect Stripe with a live secret key if you want payment activity inside Zapheit.';
-  } else if (aliases.includes('razorpay')) {
+  } else if (aliases.includes('cashfree')) {
     const keyId = String(credentials.key_id || credentials.keyId || '');
     const keySecret = String(credentials.key_secret || credentials.keySecret || '');
     if (!keyId || !keySecret) {
-      return res.status(400).json({ success: false, error: 'Razorpay credentials are incomplete for workspace preview' });
+      return res.status(400).json({ success: false, error: 'Cashfree credentials are incomplete for workspace preview' });
     }
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
     const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
     const [paymentsRes, settlementsRes] = await Promise.allSettled([
-      fetch('https://api.razorpay.com/v1/payments?count=8', { headers }),
-      fetch('https://api.razorpay.com/v1/settlements?count=5', { headers }),
+      fetch('https://api.cashfree.com/v1/payments?count=8', { headers }),
+      fetch('https://api.cashfree.com/v1/settlements?count=5', { headers }),
     ]);
 
     if (paymentsRes.status === 'fulfilled') {
@@ -2113,7 +2113,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
           total_loaded: body.items.length,
         };
       } else if (!paymentsRes.value.ok) {
-        preview.notes.push('Recent Razorpay payments could not be loaded with the current credentials.');
+        preview.notes.push('Recent Cashfree payments could not be loaded with the current credentials.');
       }
     }
 
@@ -2131,7 +2131,7 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
 
     preview.suggested_next_action = Array.isArray(preview.records) && preview.records.length > 0
       ? 'Review captured payments and settlements before letting agents trigger refunds or payout operations.'
-      : 'Reconnect Razorpay with valid API keys if you want payment activity inside Zapheit.';
+      : 'Reconnect Cashfree with valid API keys if you want payment activity inside Zapheit.';
   } else if (aliases.includes('paytm')) {
     const merchantId = String(credentials.merchant_id || '');
     const merchantKey = String(credentials.merchant_key || '');

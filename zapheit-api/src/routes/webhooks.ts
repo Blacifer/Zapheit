@@ -192,7 +192,7 @@ const sampleEventPayload = (event: EventId) => {
         data: {
           approval_id: 'apr_abc123',
           agent_id: 'agent_sales_support',
-          service: 'razorpay',
+          service: 'cashfree',
           action: 'initiate_refund',
           requested_by: 'user_xyz',
           required_role: 'admin',
@@ -210,7 +210,7 @@ const sampleEventPayload = (event: EventId) => {
           approval_id: 'apr_abc123',
           decision: 'approved',
           reviewer_id: 'user_admin',
-          service: 'razorpay',
+          service: 'cashfree',
           action: 'initiate_refund',
         },
       };

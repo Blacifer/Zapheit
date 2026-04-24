@@ -136,7 +136,7 @@ export async function executeConnectorAction(
       case 'slack': result = await slackAction(action, params, credentials); break;
       case 'salesforce': result = await salesforceAction(action, params, credentials); break;
       case 'hubspot': result = await hubspotAction(action, params, credentials); break;
-      case 'razorpay': result = await razorpayAction(action, params, credentials); break;
+      case 'cashfree': result = await cashfreeAction(action, params, credentials); break;
       case 'paytm': result = await paytmAction(action, params, credentials); break;
       case 'tally': result = await tallyAction(action, params, credentials); break;
       case 'naukri': result = await naukriAction(action, params, credentials); break;
@@ -457,54 +457,58 @@ async function hubspotAction(
 }
 
 // ---------------------------------------------------------------------------
-// Razorpay
+// Cashfree Payments
 // ---------------------------------------------------------------------------
-async function razorpayAction(
+async function cashfreeAction(
   action: string,
   params: Record<string, any>,
   creds: Record<string, string>,
 ): Promise<ActionResult> {
-  const keyId = creds.key_id;
-  const keySecret = creds.key_secret;
+  const clientId = creds.client_id;
+  const clientSecret = creds.client_secret;
 
-  if (!keyId || !keySecret) {
-    return { success: false, error: 'Razorpay credentials missing: key_id and key_secret required' };
+  if (!clientId || !clientSecret) {
+    return { success: false, error: 'Cashfree credentials missing: client_id and client_secret required' };
   }
 
-  const base = 'https://api.razorpay.com/v1';
-  const basicAuth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-  const headers = { Authorization: `Basic ${basicAuth}`, 'Content-Type': 'application/json' };
+  const base = 'https://api.cashfree.com/pg';
+  const headers = {
+    'x-client-id': clientId,
+    'x-client-secret': clientSecret,
+    'x-api-version': '2023-08-01',
+    'Content-Type': 'application/json',
+  };
 
   switch (action) {
     case 'get_order': {
       const r = await jsonFetch(`${base}/orders/${params.order_id}`, { headers });
-      if (!r.ok) return { success: false, error: r.data?.error?.description || `HTTP ${r.status}`, statusCode: r.status };
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
     }
     case 'initiate_refund': {
-      const body: Record<string, any> = {};
-      if (params.amount) body.amount = Number(params.amount);
-      if (params.notes) body.notes = { reason: params.notes };
-      const r = await jsonFetch(`${base}/payments/${params.payment_id}/refund`, {
+      const body: Record<string, any> = {
+        refund_id: params.refund_id || `refund_${Date.now()}`,
+      };
+      if (params.amount) body.refund_amount = Number(params.amount);
+      if (params.notes) body.refund_note = params.notes;
+      const r = await jsonFetch(`${base}/orders/${params.order_id}/refunds`, {
         method: 'POST', headers, body: JSON.stringify(body),
       });
-      if (!r.ok) return { success: false, error: r.data?.error?.description || `HTTP ${r.status}`, statusCode: r.status };
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
     }
     case 'list_payments': {
-      const qs = new URLSearchParams({ count: String(params.count || 10) });
-      if (params.from) qs.set('from', params.from);
-      const r = await jsonFetch(`${base}/payments?${qs}`, { headers });
-      if (!r.ok) return { success: false, error: r.data?.error?.description || `HTTP ${r.status}`, statusCode: r.status };
-      return { success: true, data: r.data.items };
+      const r = await jsonFetch(`${base}/orders/${params.order_id}/payments`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
     }
     case 'get_settlement': {
-      const r = await jsonFetch(`${base}/settlements/${params.settlement_id}`, { headers });
-      if (!r.ok) return { success: false, error: r.data?.error?.description || `HTTP ${r.status}`, statusCode: r.status };
+      const r = await jsonFetch(`${base}/settlements?order_id=${params.order_id}`, { headers });
+      if (!r.ok) return { success: false, error: r.data?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
     }
     default:
-      return { success: false, error: `Unknown Razorpay action: ${action}`, statusCode: 400 };
+      return { success: false, error: `Unknown Cashfree action: ${action}`, statusCode: 400 };
   }
 }
 

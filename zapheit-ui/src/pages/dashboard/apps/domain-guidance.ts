@@ -1,9 +1,9 @@
 import type { ConnectorExecution } from './types';
 
-// ─── Finance (Razorpay / Paytm) ────────────────────────────────────────────
+// ─── Finance (Cashfree / Paytm) ────────────────────────────────────────────
 
-export function financeActionGuidance(mode: 'razorpay' | 'paytm', action: string) {
-  if (mode === 'razorpay') {
+export function financeActionGuidance(mode: 'cashfree' | 'paytm', action: string) {
+  if (mode === 'cashfree') {
     if (action === 'finance.refund.create') return 'Use for customer refunds after checking payment state, refund reason, and approval threshold.';
     if (action === 'finance.settlement.check') return 'Use during reconciliation when finance needs to trace settlement lag, status, or mismatch.';
     if (action === 'finance.payment.list') return 'Use for payment investigation, refund eligibility review, and exception triage.';
@@ -16,13 +16,13 @@ export function financeActionGuidance(mode: 'razorpay' | 'paytm', action: string
   return null;
 }
 
-export function financeExecutionSummary(mode: 'razorpay' | 'paytm', execution: ConnectorExecution) {
+export function financeExecutionSummary(mode: 'cashfree' | 'paytm', execution: ConnectorExecution) {
   const result = execution.result && typeof execution.result === 'object' ? execution.result : {};
   const beforeState = execution.before_state && typeof execution.before_state === 'object' ? execution.before_state : {};
   const afterState = execution.after_state && typeof execution.after_state === 'object' ? execution.after_state : {};
   const params = execution.params && typeof execution.params === 'object' ? execution.params : {};
 
-  if (mode === 'razorpay') {
+  if (mode === 'cashfree') {
     if (execution.action === 'finance.refund.create') {
       const amount = (afterState as any).amount ?? (result as any).amount ?? (params as any).amount ?? null;
       const paymentId = (beforeState as any).payment_id ?? (result as any).payment_id ?? (params as any).payment_id ?? null;

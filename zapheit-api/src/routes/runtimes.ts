@@ -1292,15 +1292,15 @@ async function executeExternalAction(
     }
   }
 
-  // ── FINANCE: RazorpayX ──
-  if (service === 'razorpayx') {
+  // ── FINANCE: CashfreeX ──
+  if (service === 'cashfreex') {
     const auth = Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString('base64');
     const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
     if (action === 'finance.payout.initiate') {
       const required = ['fund_account_id', 'amount', 'currency', 'mode', 'purpose'];
       const missing = required.filter((k) => !payload[k]);
       if (missing.length) return { ok: false, output: {}, error: `Missing required payout fields: ${missing.join(', ')}` };
-      const res = await fetch('https://api.razorpay.com/v1/payouts', {
+      const res = await fetch('https://api.cashfree.com/v1/payouts', {
         method: 'POST', headers,
         body: JSON.stringify({
           account_number: creds.accountNumber,
@@ -1315,7 +1315,7 @@ async function executeExternalAction(
         }),
       });
       const data: any = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.id) return { ok: false, output: data, error: data?.error?.description || `RazorpayX payout failed (${res.status})` };
+      if (!res.ok || !data?.id) return { ok: false, output: data, error: data?.error?.description || `CashfreeX payout failed (${res.status})` };
       return { ok: true, output: { payout_id: data.id, status: data.status, utr: data.utr } };
     }
   }
