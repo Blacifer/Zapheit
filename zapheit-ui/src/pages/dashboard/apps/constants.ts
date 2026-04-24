@@ -164,7 +164,6 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'posthog':            'posthog.com',
   // Finance India
   'payu':               'payu.in',
-  'cashfree':           'cashfree.com',
   // Legal / Compliance
   'docusign':           'docusign.com',
   'leegality':          'leegality.com',
