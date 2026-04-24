@@ -65,6 +65,8 @@ const Microsoft365Workspace = lazy(() => import('./dashboard/apps/workspaces/mic
 const ZohoWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho/ZohoWorkspace'));
 const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/NotionWorkspace'));
 const WhatsAppWorkspace = lazy(() => import('./dashboard/apps/workspaces/whatsapp/WhatsAppWorkspace'));
+const LinkedInWorkspace = lazy(() => import('./dashboard/apps/workspaces/linkedin/LinkedInWorkspace'));
+const RecruitmentWorkspace = lazy(() => import('./dashboard/apps/workspaces/recruitment/RecruitmentWorkspace'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -80,7 +82,6 @@ function DashboardSectionLoading() {
     </div>
   );
 }
-
 
 function areAgentWritableFieldsEqual(left: AIAgent, right: AIAgent) {
   const leftPrompt = String((left as any).system_prompt || '');
@@ -611,12 +612,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     }
   }, []);
 
-  // Live Budget Monitoring and Cost Simulation
-  useEffect(() => {
-    // Disabled the simulation loop since agents are real and we don't want them consuming random fake cost
-    // Real budget tracking will be powered by backend usage logs
-  }, [agents, isDemoMode]);
-
   // Prevent hydration mismatch
   if (!mounted) {
     return (
@@ -625,8 +620,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       </div>
     );
   }
-
-  // Removed full-page loading block to render layout skeleton immediately
 
   return (
     <div className="min-h-screen app-bg flex text-slate-50">
@@ -1078,16 +1071,16 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 'persona', 'shadow', 'api-analytics',
                 'pricing', 'legal'
               ].includes(currentPage) && (
-	                  <div className="mb-6">
-	                    <button
-	                      onClick={() => navigateTo('settings')}
-	                      className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-	                    >
-	                      <ChevronLeft className="w-4 h-4" />
-	                      Back to Settings
-	                    </button>
-	                  </div>
-	                )}
+                <div className="mb-6">
+                  <button
+                    onClick={() => navigateTo('settings')}
+                    className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to Settings
+                  </button>
+                </div>
+              )}
               <ErrorBoundary key={currentPage} variant="local" fallbackMessage={`Failed to load the ${currentPage} page`}>
                 <Routes>
                   <Route index element={<Navigate to="overview" replace />} />
@@ -1171,6 +1164,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/zoho/workspace" element={<SectionErrorBoundary fallbackMessage="Zoho People workspace failed to load"><ZohoWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/linkedin/workspace" element={<SectionErrorBoundary fallbackMessage="LinkedIn workspace failed to load"><LinkedInWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/workspaces/recruitment" element={<SectionErrorBoundary fallbackMessage="Recruitment workspace failed to load"><RecruitmentWorkspace /></SectionErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={
                     <SectionErrorBoundary fallbackMessage="Hubs failed to load">
@@ -1325,12 +1320,12 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="*" element={<Navigate to="overview" replace />} />
                 </Routes>
               </ErrorBoundary>
-	            </Suspense>
+            </Suspense>
               </motion.div>
             </AnimatePresence>
-	          )}
+          )}
           </div>
-	        </main>
+        </main>
       </div>
     </div>
   );

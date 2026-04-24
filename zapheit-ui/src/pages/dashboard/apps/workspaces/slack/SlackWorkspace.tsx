@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bot, Hash, MessageSquare, Activity, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bot, Hash, MessageSquare, Activity, RefreshCw, Loader2, Link2, Link2Off, Info } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -116,6 +116,24 @@ export default function SlackWorkspace() {
     void loadChannels();
   }, [loadChannels]);
 
+  /* -- Connect / Disconnect ---------------------------------------- */
+  const handleConnect = useCallback(() => {
+    const url = api.integrations.getOAuthAuthorizeUrl('slack', window.location.href);
+    window.location.href = url;
+  }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    if (!confirm('Disconnect Slack? Active channel syncs will stop.')) return;
+    try {
+      await api.integrations.disconnect('slack');
+      setConnected(false);
+      setChannels([]);
+      toast.success('Slack disconnected');
+    } catch {
+      toast.error('Failed to disconnect Slack');
+    }
+  }, []);
+
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
@@ -155,18 +173,38 @@ export default function SlackWorkspace() {
           </div>
         </div>
 
-        <button
-          onClick={() => void loadChannels()}
-          disabled={loadingChannels}
-          className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-30"
-          title="Refresh"
-        >
-          {loadingChannels ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          {connected === true && (
+            <button
+              onClick={() => void handleDisconnect()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs font-medium transition-colors"
+            >
+              <Link2Off className="w-3.5 h-3.5" />
+              Disconnect
+            </button>
           )}
-        </button>
+          {connected === false && (
+            <button
+              onClick={handleConnect}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4A154B] hover:bg-[#621a63] text-white text-xs font-medium transition-colors"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              Connect Slack
+            </button>
+          )}
+          <button
+            onClick={() => void loadChannels()}
+            disabled={loadingChannels}
+            className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-30"
+            title="Refresh"
+          >
+            {loadingChannels ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -190,13 +228,40 @@ export default function SlackWorkspace() {
 
       {/* Body */}
       {connected === false ? (
-        <div className="flex-1 flex items-center justify-center">
-          <EmptyState
-            type="disconnected"
-            title="Slack not connected"
-            description="Connect Slack from the Apps page to use this workspace."
-            action={{ label: 'Go to Apps', onClick: () => navigate('/dashboard/apps') }}
-          />
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-sm space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl bg-[#4A154B] flex items-center justify-center mx-auto">
+                <span className="text-white text-xl font-bold">#</span>
+              </div>
+              <h2 className="text-base font-semibold text-white">Connect Slack</h2>
+              <p className="text-sm text-slate-400">Authorize Zapheit to read channels and send messages on your behalf.</p>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 space-y-2">
+              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Permissions requested</p>
+              <div className="flex flex-wrap gap-2">
+                {['channels:read', 'chat:write'].map((scope) => (
+                  <span key={scope} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-300 font-mono">{scope}</span>
+                ))}
+              </div>
+              <div className="flex items-start gap-2 pt-1">
+                <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-slate-500">
+                  Callback URL:{' '}
+                  <span className="font-mono text-slate-400">https://api.zapheit.com/integrations/oauth/callback/slack</span>
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleConnect}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#4A154B] hover:bg-[#621a63] text-white text-sm font-semibold transition-colors"
+            >
+              <Link2 className="w-4 h-4" />
+              Connect Slack with OAuth
+            </button>
+          </div>
         </div>
       ) : activeTab === 'channels' ? (
         <div className="flex-1 overflow-hidden">

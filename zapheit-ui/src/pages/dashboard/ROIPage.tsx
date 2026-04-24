@@ -48,6 +48,8 @@ export default function ROIPage() {
     });
   };
 
+  const handleExportPDF = () => window.print();
+
   const fmtINR = (v: number) =>
     v >= 100000
       ? `₹${(v / 100000).toFixed(1)}L`
@@ -65,13 +67,22 @@ export default function ROIPage() {
             Based on {metrics.activeAgents} active {metrics.activeAgents === 1 ? 'assistant' : 'assistants'} · all-time data
           </p>
         </div>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-        >
-          {copied ? <ShieldCheck className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-          {copied ? 'Copied!' : 'Share results'}
-        </button>
+        <div className="flex items-center gap-2 print:hidden">
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-700"
+          >
+            <Download className="h-4 w-4" />
+            Export PDF
+          </button>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+          >
+            {copied ? <ShieldCheck className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+            {copied ? 'Copied!' : 'Share results'}
+          </button>
+        </div>
       </div>
 
       {/* Hero ROI badge */}
