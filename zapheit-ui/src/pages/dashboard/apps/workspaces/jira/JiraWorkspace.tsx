@@ -5,6 +5,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { IssueList, type JiraIssue } from './IssueList';
 import { IssueBoard } from './IssueBoard';
 import { IssueDetail } from './IssueDetail';
@@ -27,6 +28,7 @@ export default function JiraWorkspace() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<Tab>('issues');
+  const [showBanner, setShowBanner] = useState(true);
   const [issues, setIssues] = useState<JiraIssue[]>([]);
   const [loadingIssues, setLoadingIssues] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -195,6 +197,13 @@ export default function JiraWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="jira" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Body */}
       {connected === false ? (

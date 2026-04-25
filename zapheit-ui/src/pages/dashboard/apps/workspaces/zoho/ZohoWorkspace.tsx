@@ -8,6 +8,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { EmployeeList, type ZohoEmployee } from './EmployeeList';
 import { LeaveRequests, type LeaveRequest } from './LeaveRequests';
 import { ZohoActivityTab } from './ZohoActivityTab';
@@ -34,6 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 export default function ZohoWorkspace() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('employees');
+  const [showBanner, setShowBanner] = useState(true);
 
   /* Data state */
   const [employees, setEmployees] = useState<ZohoEmployee[]>([]);
@@ -196,6 +198,13 @@ export default function ZohoWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="zoho" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'employees' ? (

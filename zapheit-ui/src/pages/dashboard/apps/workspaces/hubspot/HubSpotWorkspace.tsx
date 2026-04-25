@@ -8,6 +8,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ContactList, type HubSpotContact } from './ContactList';
 import { DealPipeline, type HubSpotDeal } from './DealPipeline';
 import { HubSpotActivityTab } from './HubSpotActivityTab';
@@ -34,6 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 export default function HubSpotWorkspace() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('contacts');
+  const [showBanner, setShowBanner] = useState(true);
 
   /* Data state */
   const [contacts, setContacts] = useState<HubSpotContact[]>([]);
@@ -208,6 +210,13 @@ export default function HubSpotWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="hubspot" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'contacts' ? (

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bot, Hash, MessageSquare, Activity, RefreshCw, Loader2, Link2, Link2Off, Info } from 'lucide-react';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -35,6 +36,7 @@ export default function SlackWorkspace() {
   const [messages, setMessages] = useState<SlackMessage[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
 
   /* -- Load channels ----------------------------------------------- */
@@ -264,13 +266,19 @@ export default function SlackWorkspace() {
           </div>
         </div>
       ) : activeTab === 'channels' ? (
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {showBanner && (
+            <div className="px-4 pt-3 shrink-0">
+              <AgentSuggestionBanner serviceId="slack" onDismiss={() => setShowBanner(false)} />
+            </div>
+          )}
           <ChannelList
             channels={channels}
             selectedId={selectedChannel?.id ?? null}
             onSelect={handleSelectChannel}
             loading={loadingChannels}
           />
+          </div>
         </div>
       ) : activeTab === 'messages' ? (
         <div className="flex-1 flex flex-col overflow-hidden">

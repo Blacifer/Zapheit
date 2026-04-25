@@ -5,6 +5,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import type { ApprovalRequest } from '../../../../../lib/api/approvals';
 import { OutlookEmail, type OutlookMessage } from './OutlookEmail';
 import { OutlookCalendar, type OutlookEvent } from './OutlookCalendar';
@@ -37,6 +38,7 @@ type TabId = (typeof TABS)[number]['id'];
 export default function Microsoft365() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('email');
+  const [showBanner, setShowBanner] = useState(true);
 
   /* Email */
   const [emails, setEmails] = useState<OutlookMessage[]>([]);
@@ -321,6 +323,13 @@ export default function Microsoft365() {
           );
         })}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="microsoft-365" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'email' ? (

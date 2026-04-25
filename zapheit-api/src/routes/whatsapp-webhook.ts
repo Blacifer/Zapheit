@@ -12,6 +12,7 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import { supabaseRestAsService, eq } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
+import { sendWhatsAppText } from '../lib/whatsapp-sender';
 
 const router = express.Router();
 
@@ -286,6 +287,64 @@ async function storeInboundMessage(
     });
   } catch (err: any) {
     logger.error('Failed to upsert WhatsApp contact', { error: err?.message, phone: from });
+  }
+
+  // Handle approval quick-reply buttons
+  if (msg.type === 'interactive' && msg.interactive?.type === 'button_reply') {
+    await handleApprovalButtonReply(org, from, msg.interactive.button_reply?.id || '');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Process approval quick-reply button taps from WhatsApp
+──────────────────────────────────────────────────────────────────────────── */
+
+async function handleApprovalButtonReply(org: MatchedOrg, from: string, buttonId: string): Promise<void> {
+  // buttonId format: "approve:<uuid>" or "reject:<uuid>"
+  const match = buttonId.match(/^(approve|reject):([0-9a-f-]{36})$/i);
+  if (!match) return;
+
+  const [, decision, approvalId] = match;
+  const now = new Date().toISOString();
+
+  try {
+    const q = new URLSearchParams();
+    q.set('id', eq(approvalId));
+    q.set('organization_id', eq(org.organizationId));
+    q.set('status', eq('pending'));
+    q.set('select', 'id,status,service,action');
+    q.set('limit', '1');
+    const rows = await supabaseRestAsService('approval_requests', q) as any[];
+    const row = rows?.[0];
+
+    if (!row) {
+      await sendWhatsAppText(org.organizationId, from, '❌ This approval request was not found or has already been resolved. Please check the Zapheit dashboard.');
+      return;
+    }
+
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(approvalId));
+    patchQ.set('organization_id', eq(org.organizationId));
+    await supabaseRestAsService('approval_requests', patchQ, {
+      method: 'PATCH',
+      body: {
+        status: decision === 'approve' ? 'approved' : 'rejected',
+        reviewer_note: `Decided via WhatsApp (${from})`,
+        reviewed_at: now,
+        updated_at: now,
+      },
+    });
+
+    logger.info('Approval decided via WhatsApp button reply', { approvalId, decision, from, orgId: org.organizationId });
+
+    const emoji = decision === 'approve' ? '✅' : '❌';
+    const verb = decision === 'approve' ? 'approved' : 'rejected';
+    await sendWhatsAppText(org.organizationId, from, `${emoji} Decision recorded — *${row.service} → ${row.action}* has been *${verb}*. Your team has been notified.`);
+  } catch (err: any) {
+    logger.warn('Failed to process WhatsApp approval button reply', { approvalId, decision, from, error: err?.message });
+    try {
+      await sendWhatsAppText(org.organizationId, from, '⚠️ Something went wrong processing your decision. Please use the Zapheit dashboard to review this request.');
+    } catch { /* best-effort */ }
   }
 }
 

@@ -66,6 +66,11 @@ const ZohoWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho/ZohoWo
 const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/NotionWorkspace'));
 const WhatsAppWorkspace = lazy(() => import('./dashboard/apps/workspaces/whatsapp/WhatsAppWorkspace'));
 const LinkedInWorkspace = lazy(() => import('./dashboard/apps/workspaces/linkedin/LinkedInWorkspace'));
+const GreythrWorkspace = lazy(() => import('./dashboard/apps/workspaces/greythr/GreythrWorkspace'));
+const TallyWorkspace = lazy(() => import('./dashboard/apps/workspaces/tally/TallyWorkspace'));
+const FreshdeskWorkspace = lazy(() => import('./dashboard/apps/workspaces/freshdesk/FreshdeskWorkspace'));
+const CashfreeWorkspace = lazy(() => import('./dashboard/apps/workspaces/cashfree/CashfreeWorkspace'));
+const NaukriWorkspace = lazy(() => import('./dashboard/apps/workspaces/naukri/NaukriWorkspace'));
 const RecruitmentWorkspace = lazy(() => import('./dashboard/apps/workspaces/recruitment/RecruitmentWorkspace'));
 const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
 const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
@@ -1167,6 +1172,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/linkedin/workspace" element={<SectionErrorBoundary fallbackMessage="LinkedIn workspace failed to load"><LinkedInWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/greythr/workspace" element={<SectionErrorBoundary fallbackMessage="greytHR workspace failed to load"><GreythrWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/tally/workspace" element={<SectionErrorBoundary fallbackMessage="TallyPrime workspace failed to load"><TallyWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/freshdesk/workspace" element={<SectionErrorBoundary fallbackMessage="Freshdesk workspace failed to load"><FreshdeskWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/cashfree/workspace" element={<SectionErrorBoundary fallbackMessage="Cashfree workspace failed to load"><CashfreeWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/naukri/workspace" element={<SectionErrorBoundary fallbackMessage="Naukri workspace failed to load"><NaukriWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/workspaces/recruitment" element={<SectionErrorBoundary fallbackMessage="Recruitment workspace failed to load"><RecruitmentWorkspace /></SectionErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={

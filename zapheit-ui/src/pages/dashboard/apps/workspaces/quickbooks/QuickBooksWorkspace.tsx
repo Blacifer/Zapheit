@@ -8,6 +8,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { InvoiceList, type QBInvoice } from './InvoiceList';
 import { CustomerList, type QBCustomer } from './CustomerList';
 import { QuickBooksActivityTab } from './QuickBooksActivityTab';
@@ -34,6 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 export default function QuickBooksWorkspace() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('invoices');
+  const [showBanner, setShowBanner] = useState(true);
 
   /* Data state */
   const [invoices, setInvoices] = useState<QBInvoice[]>([]);
@@ -208,6 +210,13 @@ export default function QuickBooksWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="quickbooks" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'invoices' ? (

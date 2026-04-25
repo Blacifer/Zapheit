@@ -13,6 +13,9 @@ import './google-workspace';
 import './zoho-people';
 import './notion';
 import './whatsapp';
+import './cashfree';
+import './freshdesk';
+import './naukri';
 
 export { getRegisteredAdapter, listRegisteredAdapters } from '../adapter';
 export type { ConnectorAdapter, HealthResult } from '../adapter';

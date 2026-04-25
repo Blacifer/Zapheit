@@ -19,6 +19,7 @@ import {
   mapJobStatusToGovernedStatus,
   normalizeApprovalStatus,
 } from '../lib/governed-workflow';
+import { sendWhatsAppApproval } from '../lib/whatsapp-sender';
 
 const router = Router();
 
@@ -530,6 +531,22 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
     if (!row) return res.status(500).json({ success: false, error: 'Failed to create approval request' });
 
     logger.info('Approval request created', { approval_id: row.id, service, action, org_id: orgId, assigned_to: assignedTo });
+
+    // Fire-and-forget WhatsApp approval notification if approver_phone is in the payload
+    const waApproverPhone = (action_payload as any)?.approver_phone as string | undefined;
+    if (waApproverPhone) {
+      void sendWhatsAppApproval({
+        orgId,
+        approvalId: row.id,
+        approverPhone: waApproverPhone,
+        agentName: agent_id || undefined,
+        service,
+        action,
+        actionSummary: `${service} → ${action}${requested_by ? ` (requested by ${requested_by})` : ''}`,
+        riskScore,
+        amount: (action_payload as any)?.amount as number | undefined,
+      }).catch((err: any) => logger.warn('WhatsApp approval notification failed', { approval_id: row.id, err: err?.message }));
+    }
 
     auditLog.log({
       user_id: userId || 'system',

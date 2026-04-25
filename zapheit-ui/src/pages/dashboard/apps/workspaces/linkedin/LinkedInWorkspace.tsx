@@ -4,6 +4,7 @@ import { ArrowLeft, Link2, Link2Off, Info, Loader2, Users } from 'lucide-react';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 
 const CONNECTOR_ID = 'linkedin';
 const SCOPES = ['r_liteprofile', 'r_emailaddress', 'w_member_social'];
@@ -13,6 +14,7 @@ export default function LinkedInWorkspace() {
   const navigate = useNavigate();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
+  const [showBanner, setShowBanner] = useState(true);
 
   const checkConnection = useCallback(async () => {
     setChecking(true);
@@ -97,6 +99,9 @@ export default function LinkedInWorkspace() {
               <h2 className="text-base font-semibold text-white mb-1">LinkedIn connected</h2>
               <p className="text-sm text-slate-400">Your agents can now search candidates, send InMails, and post jobs via LinkedIn Recruiter.</p>
             </div>
+            {showBanner && (
+              <AgentSuggestionBanner serviceId="linkedin" onDismiss={() => setShowBanner(false)} />
+            )}
             <button
               onClick={() => navigate('/dashboard/apps/workspaces/recruitment')}
               className="w-full px-4 py-2.5 rounded-lg bg-[#0A66C2] hover:bg-[#0958a8] text-white text-sm font-semibold transition-colors"

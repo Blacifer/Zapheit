@@ -8,6 +8,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { DatabaseList, type NotionDatabase } from './DatabaseList';
 import { PageList, type NotionPage } from './PageList';
 import { NotionActivityTab } from './NotionActivityTab';
@@ -34,6 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 export default function NotionWorkspace() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('databases');
+  const [showBanner, setShowBanner] = useState(true);
 
   /* Data state */
   const [databases, setDatabases] = useState<NotionDatabase[]>([]);
@@ -184,6 +186,13 @@ export default function NotionWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="notion" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'databases' ? (

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNo
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity,
+  AlertCircle,
   ArrowRight,
   Bot,
   CheckCircle2,
@@ -245,6 +246,215 @@ function SectionEyebrow({ label }: { label: string }) {
 
 const OperationalMetrics = lazy(() => import('../../components/OperationalMetrics'));
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Today's Priorities — unified cross-app inbox
+──────────────────────────────────────────────────────────────────────────── */
+
+type CrossAppInsight = {
+  naukriApplicants: number;
+  greythrHires: number;
+};
+
+function TodaysPriorities({
+  pendingApprovals,
+  teamActivity,
+  incidents,
+  crossAppInsight,
+  onNavigate,
+}: {
+  pendingApprovals: ApprovalRequest[];
+  teamActivity: AuditLogEntry[];
+  incidents: Incident[];
+  crossAppInsight?: CrossAppInsight | null;
+  onNavigate?: (route: string) => void;
+}) {
+  const agentActions = teamActivity.filter((e) =>
+    e.action.startsWith('agent.') || e.details?.via === 'agent',
+  ).slice(0, 5);
+
+  const totalItems = pendingApprovals.length + agentActions.length;
+  const allClear = pendingApprovals.length === 0 && incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length === 0;
+
+  function serviceName(appr: ApprovalRequest): string {
+    const s = appr.service || '';
+    if (s.includes('greythr') || s.includes('greyt')) return 'greytHR 🇮🇳';
+    if (s.includes('tally')) return 'TallyPrime 🇮🇳';
+    if (s.includes('naukri')) return 'Naukri 🇮🇳';
+    if (s.includes('cashfree')) return 'Cashfree 🇮🇳';
+    if (s.includes('slack')) return 'Slack';
+    if (s.includes('github')) return 'GitHub';
+    if (s.includes('jira')) return 'Jira';
+    if (s.includes('hubspot')) return 'HubSpot';
+    if (s.includes('google')) return 'Google Workspace';
+    if (s.includes('whatsapp')) return 'WhatsApp 🇮🇳';
+    return s.replace(/_/g, ' ');
+  }
+
+  function riskColor(score?: number | null): string {
+    if (!score) return 'border-amber-400/15 bg-amber-500/[0.03]';
+    if (score >= 0.7) return 'border-rose-400/15 bg-rose-500/[0.03]';
+    if (score >= 0.4) return 'border-amber-400/15 bg-amber-500/[0.03]';
+    return 'border-white/8 bg-white/[0.02]';
+  }
+
+  function actionLabel(entry: AuditLogEntry): string {
+    const a = entry.action;
+    if (a === 'agent.created') return 'New agent deployed';
+    if (a === 'agent.updated') return 'Agent configuration updated';
+    if (a === 'incident.resolved') return 'Incident resolved automatically';
+    if (a === 'approval.approved') return 'Approval decision recorded';
+    if (a.startsWith('agent.')) return a.replace('agent.', 'Agent: ').replace(/_/g, ' ');
+    return a.replace(/_/g, ' ');
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.02] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-white">Today's Priorities</p>
+          {totalItems > 0 && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/[0.07] text-slate-400 border border-white/10 font-medium">
+              {totalItems} item{totalItems !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => onNavigate?.('approvals')}
+          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          All approvals →
+        </button>
+      </div>
+
+      <div className="divide-y divide-white/[0.05]">
+        {/* ── Needs your decision ──────────────────────────────────────── */}
+        <div className="px-5 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-rose-400" />
+            <p className="text-xs font-semibold text-rose-300">
+              Needs your decision {pendingApprovals.length > 0 && `(${pendingApprovals.length})`}
+            </p>
+          </div>
+          {pendingApprovals.length === 0 ? (
+            <p className="text-xs text-slate-500 pl-4">No pending decisions — you're all caught up.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingApprovals.slice(0, 4).map((appr) => (
+                <div key={appr.id} className={`rounded-xl border px-4 py-3 flex items-start justify-between gap-3 ${riskColor(appr.risk_score)}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-semibold text-slate-400 bg-white/[0.06] border border-white/10 rounded px-1.5 py-0.5">{serviceName(appr)}</span>
+                      {appr.risk_score && appr.risk_score >= 0.7 && (
+                        <span className="text-[10px] text-rose-400 font-medium">High risk</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-white mt-1 line-clamp-1">
+                      {appr.reason_message || appr.action?.replace(/_/g, ' ') || 'Approval required'}
+                    </p>
+                    {appr.sla_deadline && (
+                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Due {new Date(appr.sla_deadline).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onNavigate?.('approvals')}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.13] text-white text-xs font-semibold transition-colors"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+              {pendingApprovals.length > 4 && (
+                <button onClick={() => onNavigate?.('approvals')} className="text-xs text-blue-400 hover:text-blue-300 pl-1 transition-colors">
+                  +{pendingApprovals.length - 4} more →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Your agents handled ──────────────────────────────────────── */}
+        <div className="px-5 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-amber-400" />
+            <p className="text-xs font-semibold text-amber-300">
+              Your agents handled {agentActions.length > 0 && `(${agentActions.length})`}
+            </p>
+          </div>
+          {agentActions.length === 0 ? (
+            <p className="text-xs text-slate-500 pl-4">No recent agent activity to show.</p>
+          ) : (
+            <div className="space-y-2">
+              {agentActions.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white capitalize">{actionLabel(entry)}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {entry.users?.full_name || entry.users?.email || 'Zapheit Agent'} · {new Date(entry.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded px-1.5 py-0.5 font-medium shrink-0">Agent</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Cross-app insight ────────────────────────────────────────── */}
+        {crossAppInsight && crossAppInsight.naukriApplicants > 10 && crossAppInsight.greythrHires < crossAppInsight.naukriApplicants * 0.1 && (
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-yellow-400" />
+              <p className="text-xs font-semibold text-yellow-300">Cross-app insight</p>
+            </div>
+            <div className="rounded-xl border border-yellow-400/20 bg-yellow-500/[0.04] px-4 py-3 flex items-start gap-3">
+              <span className="text-base leading-none mt-0.5">🔍</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white">
+                  <span className="font-semibold text-yellow-300">{crossAppInsight.naukriApplicants} candidates</span> in Naukri pipeline but only <span className="font-semibold text-yellow-300">{crossAppInsight.greythrHires} new hire{crossAppInsight.greythrHires !== 1 ? 's' : ''}</span> in greytHR this month.
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">Review your offer-to-join conversion — candidates may be dropping off after the offer stage.</p>
+              </div>
+              <button
+                onClick={() => onNavigate?.('apps/naukri/workspace')}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 text-xs font-semibold transition-colors border border-yellow-400/20"
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── All clear ────────────────────────────────────────────────── */}
+        <div className="px-5 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <p className="text-xs font-semibold text-emerald-300">System status</p>
+          </div>
+          {allClear ? (
+            <div className="flex items-center gap-2 pl-1">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <p className="text-xs text-emerald-300">All agents healthy · No active incidents · No critical alerts</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 pl-1">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
+              <p className="text-xs text-amber-300">
+                {incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length} high-severity incident{incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length !== 1 ? 's' : ''} active
+              </p>
+              <button onClick={() => onNavigate?.('incidents')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors ml-1">View →</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardOverview({
   agents,
   incidents,
@@ -344,6 +554,7 @@ export default function DashboardOverview({
   const [csatData, setCsatData] = useState<{ total_rated: number; thumbs_up: number; thumbs_down: number; satisfaction_pct: number | null } | null>(null);
   const [trendingTopics, setTrendingTopics] = useState<Array<{ word: string; count: number }>>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
+  const [crossAppInsight, setCrossAppInsight] = useState<CrossAppInsight | null>(null);
   const [quickDeployState, setQuickDeployState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [quickDeployError, setQuickDeployError] = useState<string | null>(null);
 
@@ -376,6 +587,31 @@ export default function DashboardOverview({
 
     api.approvals.list({ status: 'pending', limit: 20 }).then((res) => {
       if (res.success && Array.isArray(res.data)) setPendingApprovals(res.data);
+    }).catch(() => {});
+
+    // Cross-app insight: compare Naukri pipeline vs greytHR new hires
+    api.unifiedConnectors.getCatalog().then(async (catalogRes) => {
+      if (!catalogRes.success || !Array.isArray(catalogRes.data)) return;
+      const naukriEntry = catalogRes.data.find((c) => c.id === 'naukri' || c.app_key === 'naukri');
+      const greythrEntry = catalogRes.data.find((c) => c.id === 'greythr' || c.app_key === 'greythr');
+      const naukriConnected = naukriEntry?.installed && (naukriEntry?.connectionStatus === 'connected' || naukriEntry?.connection_status === 'connected');
+      const greythrConnected = greythrEntry?.installed && (greythrEntry?.connectionStatus === 'connected' || greythrEntry?.connection_status === 'connected');
+      if (!naukriConnected || !greythrConnected) return;
+      try {
+        const [naukriRes, greythrRes] = await Promise.all([
+          api.unifiedConnectors.executeAction('naukri', 'list_applications', { limit: 1, status: 'new' }),
+          api.unifiedConnectors.executeAction('greythr', 'list_employees', { status: 'active', joined_this_month: true, limit: 1 }),
+        ]);
+        const naukriApplicants: number =
+          (naukriRes.data?.data?.total as number) ??
+          (Array.isArray(naukriRes.data?.data) ? (naukriRes.data.data as any[]).length : 0);
+        const greythrHires: number =
+          (greythrRes.data?.data?.total as number) ??
+          (Array.isArray(greythrRes.data?.data) ? (greythrRes.data.data as any[]).length : 0);
+        if (naukriApplicants > 0 || greythrHires > 0) {
+          setCrossAppInsight({ naukriApplicants, greythrHires });
+        }
+      } catch { /* silently ignore */ }
     }).catch(() => {});
   }, []);
 
@@ -811,6 +1047,15 @@ const hasData = agents.length > 0;
           </button>
         </div>
       )}
+
+      {/* ── Today's Priorities ─────────────────────────────────────────── */}
+      <TodaysPriorities
+        pendingApprovals={pendingApprovals}
+        teamActivity={teamActivity}
+        incidents={incidents}
+        crossAppInsight={crossAppInsight}
+        onNavigate={onNavigate}
+      />
 
       {primaryAction && (
         <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>

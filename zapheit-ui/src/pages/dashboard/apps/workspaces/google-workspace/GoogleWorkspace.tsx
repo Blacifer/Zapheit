@@ -4,6 +4,7 @@ import {
   ArrowLeft, Mail, Calendar, HardDrive,
   Activity, Bot, RefreshCw, Loader2,
 } from 'lucide-react';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -59,6 +60,7 @@ export default function GoogleWorkspace() {
   const [loadingEmails, setLoadingEmails] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
 
   /* --------------------------------------------------------------- */
   /*  Data loaders                                                     */
@@ -345,6 +347,13 @@ export default function GoogleWorkspace() {
           );
         })}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 shrink-0">
+          <AgentSuggestionBanner serviceId="google-workspace" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'email' ? (

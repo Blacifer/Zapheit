@@ -8,6 +8,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState } from '../shared';
+import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { RepoList, type GitHubRepo } from './RepoList';
 import { PullRequestList, type GitHubPR } from './PullRequestList';
 import { GitHubIssuesList, type GitHubIssue } from './GitHubIssuesList';
@@ -30,6 +31,7 @@ export default function GitHubWorkspace() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<Tab>('repos');
+  const [showBanner, setShowBanner] = useState(true);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [pulls, setPulls] = useState<GitHubPR[]>([]);
   const [issues, setIssues] = useState<GitHubIssue[]>([]);
@@ -238,6 +240,13 @@ export default function GitHubWorkspace() {
           </button>
         ))}
       </div>
+
+      {/* Agent suggestion banner */}
+      {showBanner && (
+        <div className="px-5 pt-3 pb-1 shrink-0">
+          <AgentSuggestionBanner serviceId="github" onDismiss={() => setShowBanner(false)} />
+        </div>
+      )}
 
       {/* Body */}
       {connected === false ? (
