@@ -1272,7 +1272,7 @@ function StackCard({ stack, onSelect }: { stack: AppStack; onSelect: () => void 
       className="shrink-0 w-56 rounded-2xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.07] p-4 text-left transition-all hover:border-white/15 group"
     >
       <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: `${stack.colorHex}22`, border: `1px solid ${stack.colorHex}33` }}>
-        <stack.Icon className="w-4 h-4" color={stack.colorHex} />
+        <span style={{ color: stack.colorHex }} className="flex items-center justify-center"><stack.Icon className="w-4 h-4" /></span>
       </div>
       <p className="text-sm font-semibold text-white mb-1">{stack.name}</p>
       <p className="text-[11px] text-slate-400 leading-relaxed mb-3">{stack.description}</p>
