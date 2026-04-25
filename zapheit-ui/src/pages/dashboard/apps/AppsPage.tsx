@@ -1289,6 +1289,47 @@ function StackCard({ stack, onSelect }: { stack: AppStack; onSelect: () => void 
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Governance Tier — static mapping by appId
+──────────────────────────────────────────────────────────────────────────── */
+
+type GovTier = 'observe' | 'controlled' | 'full';
+
+const GOVERNANCE_TIERS: Record<string, GovTier> = {
+  // Observe only — read-only adapters or sensitive financial/legal data
+  'google-analytics': 'observe', 'mixpanel': 'observe', 'tableau': 'observe',
+  'metabase': 'observe', 'looker': 'observe', 'powerbi': 'observe',
+  'epfo': 'observe', 'mca21': 'observe', 'gstn': 'observe',
+  'aadhaar': 'observe', 'digilocker': 'observe',
+  // Full access — low-risk collaboration tools
+  'slack': 'full', 'notion': 'full', 'google-workspace': 'full',
+  'microsoft-365': 'full', 'zoom': 'full', 'meet': 'full',
+  'figma': 'full', 'miro': 'full', 'loom': 'full',
+  // Controlled write — everything else with write actions
+  'greythr': 'controlled', 'tally': 'controlled', 'naukri': 'controlled',
+  'cashfree': 'controlled', 'freshdesk': 'controlled', 'hubspot': 'controlled',
+  'jira': 'controlled', 'github': 'controlled', 'linkedin': 'controlled',
+  'quickbooks': 'controlled', 'zoho-crm': 'controlled', 'zoho-people': 'controlled',
+  'whatsapp-business': 'controlled', 'exotel': 'controlled',
+  'razorpay': 'controlled', 'cleartax': 'controlled', 'keka': 'controlled',
+  'darwinbox': 'controlled', 'workday': 'controlled', 'bamboohr': 'controlled',
+};
+
+const GOV_LABEL: Record<GovTier, string> = {
+  observe: 'Observe only',
+  controlled: 'Controlled write',
+  full: 'Full access',
+};
+const GOV_COLOR: Record<GovTier, string> = {
+  observe: 'border-blue-400/20 bg-blue-500/[0.07] text-blue-300',
+  controlled: 'border-amber-400/20 bg-amber-500/[0.07] text-amber-300',
+  full: 'border-emerald-400/20 bg-emerald-500/[0.07] text-emerald-300',
+};
+
+function getGovTier(appId: string): GovTier {
+  return GOVERNANCE_TIERS[appId] ?? 'controlled';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Live Metric Chip — per-app definitions
 ──────────────────────────────────────────────────────────────────────────── */
 
@@ -1383,6 +1424,197 @@ const LIVE_METRICS: Record<string, LiveMetricConfig> = {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Setup Quality Score
+──────────────────────────────────────────────────────────────────────────── */
+
+function setupScore(isConnected: boolean, health: { good: boolean } | null, hasAgent: boolean): number {
+  return (isConnected ? 34 : 0) + (health?.good ? 33 : 0) + (hasAgent ? 33 : 0);
+}
+
+function SetupScoreBar({ score, onAttachAgent }: { score: number; onAttachAgent: () => void }) {
+  const label = score >= 100 ? 'Fully set up' : score >= 67 ? 'Almost there' : score >= 34 ? 'Getting started' : 'Not set up';
+  const color = score >= 100 ? 'bg-emerald-400' : score >= 67 ? 'bg-blue-400' : 'bg-amber-400';
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] text-slate-500">Setup: {label}</span>
+        <span className="text-[10px] text-slate-500">{score}%</span>
+      </div>
+      <div className="h-1 w-full rounded-full bg-white/[0.06]">
+        <div className={`h-1 rounded-full transition-all ${color}`} style={{ width: `${score}%` }} />
+      </div>
+      {score < 100 && (
+        <button
+          onClick={onAttachAgent}
+          className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          {score < 67 ? 'Connect to unlock automation →' : 'Attach an agent to reach 100% →'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Stack Setup Wizard
+──────────────────────────────────────────────────────────────────────────── */
+
+function StackWizard({
+  stack,
+  apps,
+  onConnect,
+  onClose,
+}: {
+  stack: AppStack;
+  apps: AppDef[];
+  onConnect: (app: AppDef, creds?: Record<string, string>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+
+  const current = apps[step];
+  const isLast = step === apps.length - 1;
+  const allDone = done.size === apps.length;
+
+  const handleConnect = async (creds?: Record<string, string>) => {
+    if (!current) return;
+    setBusy(true);
+    try {
+      if (current.auth === 'oauth') {
+        window.location.href = `/api/oauth/authorize?service=${current.serviceId}&redirect=/dashboard/apps`;
+        return;
+      }
+      await onConnect(current, creds);
+      setDone((d) => new Set([...d, current.appId]));
+      if (!isLast) { setStep((s) => s + 1); setFormValues({}); }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const skip = () => {
+    if (!isLast) { setStep((s) => s + 1); setFormValues({}); }
+    else onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f1825] shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/8">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${stack.colorHex}22`, border: `1px solid ${stack.colorHex}33` }}>
+              <span style={{ color: stack.colorHex }}><stack.Icon className="w-4 h-4" /></span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">{stack.name} Setup</p>
+              <p className="text-[11px] text-slate-400">{apps.length} apps · step {Math.min(step + 1, apps.length)} of {apps.length}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Progress steps */}
+        <div className="flex items-center gap-0 px-6 pt-4">
+          {apps.map((app, i) => (
+            <div key={app.appId} className="flex items-center flex-1 min-w-0">
+              <div className={cn(
+                'flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold shrink-0 transition-colors',
+                done.has(app.appId) ? 'bg-emerald-500 text-white' :
+                i === step ? 'bg-blue-600 text-white' :
+                'bg-white/[0.08] text-slate-500',
+              )}>
+                {done.has(app.appId) ? '✓' : i + 1}
+              </div>
+              <p className={cn('text-[10px] ml-1.5 truncate', i === step ? 'text-white font-medium' : 'text-slate-500')}>
+                {app.name}
+              </p>
+              {i < apps.length - 1 && <div className="mx-2 flex-1 h-px bg-white/[0.08]" />}
+            </div>
+          ))}
+        </div>
+
+        {/* Step content */}
+        {allDone ? (
+          <div className="px-6 py-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            </div>
+            <p className="text-base font-semibold text-white mb-1">{stack.name} connected!</p>
+            <p className="text-xs text-slate-400 mb-6">All {apps.length} apps are set up and ready. Your agents can now act across this stack.</p>
+            <button onClick={onClose} className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors">
+              Done
+            </button>
+          </div>
+        ) : current && (
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3 mb-4">
+              <AppLogo appId={current.appId} logoLetter={current.logoLetter} colorHex={current.colorHex} size="sm" />
+              <div>
+                <p className="text-sm font-semibold text-white">{current.name}</p>
+                <p className="text-[11px] text-slate-400">{current.description}</p>
+              </div>
+            </div>
+
+            {current.auth === 'oauth' ? (
+              <button
+                onClick={() => void handleConnect()}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                Connect with OAuth
+              </button>
+            ) : current.fields ? (
+              <div className="space-y-3">
+                {current.fields.map((f) => (
+                  <div key={f.key}>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">{f.label}</label>
+                    {f.helpText && <p className="text-[10px] text-slate-500 mb-1">{f.helpText}</p>}
+                    <input
+                      type={f.type}
+                      value={formValues[f.key] ?? ''}
+                      onChange={(e) => setFormValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/[0.05] border border-white/10 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
+                      placeholder={f.helpText || f.label}
+                    />
+                  </div>
+                ))}
+                <button
+                  onClick={() => void handleConnect(formValues)}
+                  disabled={busy || (current.fields ?? []).some((f) => !formValues[f.key]?.trim())}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-40"
+                >
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Connect & Continue'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => void handleConnect()}
+                disabled={busy}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-40"
+              >
+                Connect
+              </button>
+            )}
+
+            <button onClick={skip} className="w-full mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors py-1">
+              Skip for now →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    App Card
 ──────────────────────────────────────────────────────────────────────────── */
 
@@ -1439,6 +1671,9 @@ function AppCard({
   const health = resolveHealth(backendApp);
   const lastSync = formatLastSync(backendApp);
   const isConnected = status === 'connected';
+  const isError = status === 'error';
+  const govTier = getGovTier(app.appId);
+  const score = setupScore(isConnected, health, false);
 
   return (
     <div className={cn(
@@ -1485,6 +1720,11 @@ function AppCard({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.07] text-slate-500 font-mono">
               {app.auth === 'oauth' ? 'OAuth 2.0' : 'API Key'}
             </span>
+
+            {/* Governance tier */}
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded border font-medium', GOV_COLOR[govTier])}>
+              {GOV_LABEL[govTier]}
+            </span>
           </div>
 
           <p className="mt-1 text-xs text-slate-400 leading-relaxed max-w-lg">{app.description}</p>
@@ -1525,6 +1765,18 @@ function AppCard({
               {health.label}
             </div>
           )}
+
+          {/* Setup quality score */}
+          {isConnected && (
+            <SetupScoreBar
+              score={score}
+              onAttachAgent={() => {
+                if (app.suggestedAgent && onNavigate) {
+                  onNavigate(`agents/new?template=${encodeURIComponent(app.suggestedAgent.toLowerCase().replace(/\s+/g, '-'))}`);
+                }
+              }}
+            />
+          )}
         </div>
 
         {/* Action button */}
@@ -1545,6 +1797,17 @@ function AppCard({
                 className="px-3 py-1.5 rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-300 text-xs font-semibold hover:bg-rose-500/20 transition-colors disabled:opacity-40"
               >
                 {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Disconnect'}
+              </button>
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={() => app.auth === 'oauth' ? void connect() : setFormOpen((v) => !v)}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold transition-colors disabled:opacity-40"
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+                Fix Connection
               </button>
             </div>
           ) : app.productionStatus === 'coming_soon' ? (
@@ -1611,6 +1874,7 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
   const [search, setSearch] = useState('');
   const [requestApp, setRequestApp] = useState<AppDef | null>(null);
   const [stackFilter, setStackFilter] = useState<string[] | null>(null);
+  const [activeWizard, setActiveWizard] = useState<AppStack | null>(null);
 
   const { allApps, loading, reload } = useAppsData();
 
@@ -1709,9 +1973,7 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
   }, [onNavigate]);
 
   const handleStackSelect = (stack: AppStack) => {
-    setStackFilter(stack.appIds);
-    setActiveCategory('all');
-    setSearch('');
+    setActiveWizard(stack);
   };
 
   const clearStackFilter = () => setStackFilter(null);
@@ -1928,6 +2190,17 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
         <RequestAccessModal
           appName={requestApp.name || 'Custom app'}
           onClose={() => setRequestApp(null)}
+        />
+      )}
+
+      {activeWizard && (
+        <StackWizard
+          stack={activeWizard}
+          apps={activeWizard.appIds
+            .map((id) => APP_CATALOG.find((a) => a.appId === id))
+            .filter((a): a is AppDef => !!a && a.productionStatus === 'production_ready')}
+          onConnect={handleConnect}
+          onClose={() => setActiveWizard(null)}
         />
       )}
     </div>
