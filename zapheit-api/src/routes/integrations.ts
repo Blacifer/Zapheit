@@ -3586,7 +3586,66 @@ router.post('/slack/actions', async (req, res) => {
   const action = payload?.actions?.[0];
   if (!action) return res.status(200).send(''); // Ack unknown event immediately
 
-  const { action_id, value: approvalId } = action;
+  const { action_id, value: resourceId } = action;
+  const slackUserId = payload?.user?.id;
+  const slackUserName = payload?.user?.name || slackUserId || 'unknown';
+  const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+
+  // ── Incident: Resolve ────────────────────────────────────────────────────
+  if (action_id === 'rasi_resolve_incident' && resourceId) {
+    res.status(200).json({ text: 'Resolving incident…' });
+    (async () => {
+      try {
+        await restAsService('incidents', new URLSearchParams({ id: eq(resourceId) }), {
+          method: 'PATCH',
+          body: {
+            status: 'resolved',
+            resolution_notes: `Resolved via Slack by @${slackUserName}`,
+            resolved_at: new Date().toISOString(),
+          },
+        });
+        if (payload.response_url) {
+          await fetch(payload.response_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ replace_original: true, text: `:white_check_mark: *Resolved* by @${slackUserName}` }),
+          }).catch(() => null);
+        }
+      } catch (err: any) {
+        logger.warn('Slack resolve_incident error', { error: err?.message });
+      }
+    })();
+    return;
+  }
+
+  // ── Incident: Escalate ────────────────────────────────────────────────────
+  if (action_id === 'rasi_escalate_incident' && resourceId) {
+    res.status(200).json({ text: 'Escalating incident…' });
+    (async () => {
+      try {
+        await restAsService('incidents', new URLSearchParams({ id: eq(resourceId) }), {
+          method: 'PATCH',
+          body: {
+            status: 'escalated',
+            notes: `Escalated via Slack by @${slackUserName}`,
+          },
+        });
+        if (payload.response_url) {
+          await fetch(payload.response_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ replace_original: true, text: `:rotating_light: *Escalated* by @${slackUserName}` }),
+          }).catch(() => null);
+        }
+      } catch (err: any) {
+        logger.warn('Slack escalate_incident error', { error: err?.message });
+      }
+    })();
+    return;
+  }
+
+  // ── Approvals: Approve / Deny ────────────────────────────────────────────
+  const approvalId = resourceId;
   if (!approvalId || (action_id !== 'rasi_approve' && action_id !== 'rasi_deny')) {
     return res.status(200).send('');
   }
@@ -3604,12 +3663,9 @@ router.post('/slack/actions', async (req, res) => {
     if (!approvalRows.length) return;
 
     const orgId = approvalRows[0].organization_id;
-    const slackUserId = payload?.user?.id;
-    const slackUserName = payload?.user?.name || slackUserId;
 
     // Perform approve/deny using service role
     const endpoint = action_id === 'rasi_approve' ? 'approve' : 'deny';
-    const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
     await fetch(`${apiUrl}/api/approvals/${approvalId}/${endpoint}`, {
       method: 'POST',
       headers: {

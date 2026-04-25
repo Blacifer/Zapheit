@@ -1086,9 +1086,9 @@ const enforceApiKeyRateLimit = async (req: Request, res: Response): Promise<bool
 
 // Monthly request quotas per plan. -1 = unlimited.
 const PLAN_MONTHLY_QUOTAS: Record<string, number> = {
-  free: 10_000,
-  audit: 50_000,
-  retainer: 200_000,
+  free: 1_000,
+  pro: 50_000,
+  business: 250_000,
   enterprise: -1,
 };
 

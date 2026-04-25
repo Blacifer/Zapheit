@@ -138,9 +138,22 @@ export async function notifySlackIncident(orgId: string, params: {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: 'View in Zapheit', emoji: true },
-              url,
+              text: { type: 'plain_text', text: ':white_check_mark: Resolve', emoji: true },
               style: 'primary',
+              action_id: 'rasi_resolve_incident',
+              value: params.incidentId,
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: ':rotating_light: Escalate', emoji: true },
+              style: 'danger',
+              action_id: 'rasi_escalate_incident',
+              value: params.incidentId,
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'View Details', emoji: true },
+              url,
             },
           ],
         },
