@@ -1289,6 +1289,100 @@ function StackCard({ stack, onSelect }: { stack: AppStack; onSelect: () => void 
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Live Metric Chip — per-app definitions
+──────────────────────────────────────────────────────────────────────────── */
+
+type LiveMetricConfig = {
+  action: string;
+  params: Record<string, any>;
+  extract: (data: any) => string | null;
+};
+
+const LIVE_METRICS: Record<string, LiveMetricConfig> = {
+  greythr: {
+    action: 'list_leave_requests',
+    params: { status: 'pending', limit: 50 },
+    extract: (d) => {
+      const n = d?.total ?? d?.requests?.length ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} pending leave request${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  tally: {
+    action: 'list_invoices',
+    params: { status: 'overdue', limit: 50 },
+    extract: (d) => {
+      const n = d?.total ?? d?.invoices?.length ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} overdue invoice${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  freshdesk: {
+    action: 'list_tickets',
+    params: { filter: 'open', per_page: 30 },
+    extract: (d) => {
+      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} open ticket${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  naukri: {
+    action: 'list_applications',
+    params: { status: 'new', limit: 50 },
+    extract: (d) => {
+      const n = d?.total ?? d?.applications?.length ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} new applicant${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  github: {
+    action: 'list_pull_requests',
+    params: { state: 'open', limit: 25 },
+    extract: (d) => {
+      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} open PR${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  jira: {
+    action: 'list_issues',
+    params: { status: 'open', limit: 25 },
+    extract: (d) => {
+      const n = d?.total ?? d?.total_count ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} open issue${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  slack: {
+    action: 'list_channels',
+    params: { limit: 50 },
+    extract: (d) => {
+      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} channel${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  hubspot: {
+    action: 'list_contacts',
+    params: { limit: 1 },
+    extract: (d) => {
+      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} contact${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  cashfree: {
+    action: 'list_transactions',
+    params: { limit: 30 },
+    extract: (d) => {
+      const list = Array.isArray(d) ? d : d?.orders ?? [];
+      const n = list.length;
+      return n > 0 ? `${n} recent transaction${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+  'google-workspace': {
+    action: 'list_users',
+    params: { limit: 1 },
+    extract: (d) => {
+      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
+      return n != null ? `${n} user${n !== 1 ? 's' : ''}` : null;
+    },
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
    App Card
 ──────────────────────────────────────────────────────────────────────────── */
 
@@ -1311,6 +1405,24 @@ function AppCard({
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [liveMetric, setLiveMetric] = useState<string | null>(null);
+
+  // Fetch live metric once when connected
+  useEffect(() => {
+    if (status !== 'connected') return;
+    const config = LIVE_METRICS[app.appId];
+    if (!config) return;
+    let cancelled = false;
+    api.unifiedConnectors.executeAction(app.appId, config.action, config.params)
+      .then((res) => {
+        if (cancelled) return;
+        const payload = res.data?.data ?? res.data;
+        const label = config.extract(payload);
+        if (label) setLiveMetric(label);
+      })
+      .catch(() => {/* silently ignore — metric is best-effort */});
+    return () => { cancelled = true; };
+  }, [app.appId, status]);
 
   const connect = async (creds?: Record<string, string>) => {
     setBusy(true);
@@ -1376,6 +1488,14 @@ function AppCard({
           </div>
 
           <p className="mt-1 text-xs text-slate-400 leading-relaxed max-w-lg">{app.description}</p>
+
+          {/* Live metric chip */}
+          {isConnected && liveMetric && (
+            <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] px-2 py-0.5 rounded-full border border-amber-400/25 bg-amber-500/[0.08] text-amber-300 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              {liveMetric}
+            </span>
+          )}
 
           {/* Connected details */}
           {isConnected && (
