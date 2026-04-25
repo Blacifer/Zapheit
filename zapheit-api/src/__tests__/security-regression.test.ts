@@ -51,6 +51,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'white-label.ts'),
   // Embed proxy: API-key-only endpoint (no user JWT); uses supabaseRest to validate the embed API key.
   path.join(ROUTES_DIR, 'embed.ts'),
+  // Public contact-lead capture: unauthenticated landing-page endpoint — no user JWT; service-role required to insert into contact_leads (no RLS user context).
+  path.join(ROUTES_DIR, 'contact.ts'),
 ]);
 
 function walk(dir: string): string[] {
