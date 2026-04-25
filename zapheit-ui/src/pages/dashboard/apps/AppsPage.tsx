@@ -1634,6 +1634,7 @@ function AppCard({
   onDisconnect: (app: AppDef) => Promise<void>;
   onOpenWorkspace: (app: AppDef) => void;
   onRequestAccess: (app: AppDef) => void;
+  onNavigate?: (route: string) => void;
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -2164,6 +2165,7 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
                 onDisconnect={handleDisconnect}
                 onOpenWorkspace={handleOpenWorkspace}
                 onRequestAccess={setRequestApp}
+                onNavigate={onNavigate}
               />
             ))}
           </div>
