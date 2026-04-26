@@ -19,6 +19,7 @@ const SharePage = lazy(() => import('./pages/Share'));
 const PublicChatPage = lazy(() => import('./pages/PublicChatPage'));
 const InterviewRoomPage = lazy(() => import('./pages/InterviewRoomPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
+const FeaturesPage = lazy(() => import('./pages/FeaturesPage'));
 const CashfreeReturnPage = lazy(() => import('./pages/CashfreeReturnPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
@@ -313,6 +314,7 @@ function App() {
           <Route path="/chat/:token" element={<PublicChatPage />} />
           <Route path="/interview/:templateId" element={<InterviewRoomPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/features" element={<FeaturesPage />} />
           <Route path="/billing/cashfree/return" element={<CashfreeReturnPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

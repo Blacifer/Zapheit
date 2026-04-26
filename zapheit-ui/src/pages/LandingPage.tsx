@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
@@ -378,7 +379,51 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
   );
 }
 
+function useScrollReveal() {
+  useEffect(() => {
+    const prefersReduced = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in-view'));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in-view'); }),
+      { threshold: 0.08, rootMargin: '0px 0px -40px 0px' },
+    );
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+}
+
+const PLATFORM_LOGOS = [
+  'OpenAI', 'Anthropic', 'Google Gemini', 'LangChain', 'CrewAI',
+  'Azure OpenAI', 'Llama 3', 'Mistral', 'OpenRouter', 'WhatsApp',
+  'Slack', 'Jira', 'HubSpot', 'Notion', 'GitHub',
+];
+
+function PlatformMarquee() {
+  const items = [...PLATFORM_LOGOS, ...PLATFORM_LOGOS];
+  return (
+    <div className="w-full overflow-hidden py-4 select-none" aria-hidden="true">
+      <div className="flex gap-8 animate-marquee whitespace-nowrap">
+        {items.map((name, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors cursor-default"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
+            {name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPageProps) {
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
@@ -387,6 +432,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   const [calcEmail, setCalcEmail] = useState('');
   const [calcEmailSent, setCalcEmailSent] = useState(false);
   const year = new Date().getFullYear();
+
+  useScrollReveal();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -536,10 +583,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   };
 
   const NAV_LINKS = [
-    { href: '#how-it-works', label: 'How it works' },
-    { href: '#stats', label: 'Results' },
-    { href: '#pillars', label: 'Features' },
-    { href: '#pricing', label: 'Pricing' },
+    { href: '#how-it-works', label: 'How it works', page: false },
+    { href: '#stats', label: 'Results', page: false },
+    { href: '/features', label: 'Features', page: true },
+    { href: '/pricing', label: 'Pricing', page: true },
   ];
 
   return (
@@ -558,11 +605,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
             {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-8">
-              {NAV_LINKS.map((link) => (
-                <a key={link.href} href={link.href} className="text-slate-300 hover:text-white transition-colors text-sm">
-                  {link.label}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) =>
+                link.page ? (
+                  <button key={link.href} onClick={() => navigate(link.href)} className="text-slate-300 hover:text-white transition-colors text-sm">
+                    {link.label}
+                  </button>
+                ) : (
+                  <a key={link.href} href={link.href} className="text-slate-300 hover:text-white transition-colors text-sm">
+                    {link.label}
+                  </a>
+                )
+              )}
               <button
                 onClick={onLogin}
                 className="px-4 py-2 text-slate-300 hover:text-white transition-colors text-sm"
@@ -590,16 +643,26 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           {/* Mobile dropdown menu */}
           {mobileMenuOpen && (
             <div className="md:hidden mt-3 pb-4 border-t border-white/10 pt-4 flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.07] transition-all text-sm font-medium"
-                >
-                  {link.label}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) =>
+                link.page ? (
+                  <button
+                    key={link.href}
+                    onClick={() => { navigate(link.href); setMobileMenuOpen(false); }}
+                    className="px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.07] transition-all text-sm font-medium text-left"
+                  >
+                    {link.label}
+                  </button>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.07] transition-all text-sm font-medium"
+                  >
+                    {link.label}
+                  </a>
+                )
+              )}
               <div className="mt-3 flex flex-col gap-2 pt-3 border-t border-white/10">
                 <button
                   onClick={() => { setMobileMenuOpen(false); onLogin(); }}
@@ -620,73 +683,91 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       </nav>
 
       {/* Hero Section */}
-      <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
-        {/* Ambient background orbs */}
+      <section className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden pt-20">
+        {/* Animated mesh gradient background */}
+        <div
+          className="absolute inset-0 opacity-50"
+          style={{
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(34,211,238,0.12) 35%, rgba(99,102,241,0.14) 65%, rgba(6,182,212,0.10) 100%)',
+            backgroundSize: '200% 200%',
+            animation: 'mesh-move 14s ease-in-out infinite',
+          }}
+        />
+        {/* Ambient orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 w-96 h-96 bg-blue-500/14 rounded-full blur-3xl animate-float" />
           <div className="absolute bottom-32 right-16 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl animate-float delay-200" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/05 rounded-full blur-[80px]" />
+          <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-violet-500/08 rounded-full blur-[80px]" />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/50 to-slate-950" />
+
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-6">
+          <div className="mx-auto max-w-5xl text-center">
+            {/* Chip */}
+            <div className="reveal inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/25 bg-cyan-500/[0.07] backdrop-blur-md shadow-[0_0_30px_rgba(34,211,238,0.10)]">
+              <Sparkles className="w-4 h-4 text-cyan-300" />
+              <span className="text-sm text-slate-200 font-medium">The AI governance platform built for India</span>
+            </div>
+
+            {/* Headline — dramatically larger */}
+            <h1 className="reveal reveal-delay-1 text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-[5.5rem] font-black text-white mb-6 leading-[0.95] tracking-tight">
+              See everything<br />
+              <span className="gradient-text">your AI does.</span>
+            </h1>
+
+            <p className="reveal reveal-delay-2 text-lg sm:text-xl md:text-2xl font-semibold text-slate-300 mb-3 max-w-3xl mx-auto leading-snug">
+              Stop problems before they reach your customers.
+            </p>
+
+            <p className="reveal reveal-delay-2 text-sm sm:text-base md:text-lg text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+              Zapheit is <span className="text-slate-200 font-semibold">HR for your AI workforce</span> — monitor performance, enforce rules, and review decisions in real time.
+            </p>
+
+            {/* CTAs */}
+            <div className="reveal reveal-delay-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8">
+              <button
+                onClick={onSignUp}
+                className="btn-primary group w-full sm:w-auto text-base px-8 py-4 shadow-xl shadow-cyan-500/20"
+              >
+                Start Free — no credit card
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button
+                onClick={onDemo}
+                className="btn-secondary group w-full sm:w-auto text-base px-8 py-4"
+              >
+                <Play className="w-5 h-5" />
+                See it live — no sign-up
+              </button>
+            </div>
+
+            {/* Trust badges */}
+            <div className="reveal reveal-delay-4 flex flex-wrap items-center justify-center gap-2 mb-0">
+              {['SOC 2 in progress', 'DPDPA-ready', 'Data stored in India', 'Free tier always available'].map((badge) => (
+                <span key={badge} className="flex items-center gap-1.5 text-xs text-slate-400 px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.03]">
+                  <CheckCircle className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                  {badge}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950" />
-
-        <div className="relative z-10 max-w-6xl mx-auto px-6">
-          <div className="mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.08)]">
-            <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">The AI governance platform built for India</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
-            See everything your AI does.
-            <br />
-            <span className="gradient-text">Stop problems before they reach your customers.</span>
-          </h1>
-
-          <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Zapheit is <span className="text-slate-100 font-semibold">HR for your AI workforce</span> — monitor performance, enforce rules, and review decisions before they cause damage.
-            <br className="hidden md:block" />
-            One dashboard for every AI assistant across your support, ops, HR, and sales teams.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6">
-            <button
-              onClick={onSignUp}
-              className="btn-primary group w-full sm:w-auto"
-            >
-              Start Free
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button
-              onClick={onDemo}
-              className="btn-secondary group w-full sm:w-auto"
-            >
-              <Play className="w-5 h-5" />
-              See it in action — no sign-up
-            </button>
-          </div>
-
-          {/* Trust badges */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-10 md:mb-14">
-            {['SOC 2 in progress', 'DPDPA-ready', 'Data stored in India', 'Free tier — no credit card'].map((badge) => (
-              <span key={badge} className="flex items-center gap-1.5 text-xs text-slate-400 px-3 py-1.5 rounded-full border border-white/8 bg-white/[0.03]">
-                <CheckCircle className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                {badge}
-              </span>
-            ))}
-          </div>
-          </div>
+        {/* Platform marquee — connects to real-world ecosystem */}
+        <div className="relative z-10 w-full mt-16 border-t border-b border-white/[0.05] bg-white/[0.01] py-1">
+          <p className="text-center text-[10px] font-semibold tracking-[0.3em] uppercase text-slate-600 mb-1 mt-2">Works with every AI platform</p>
+          <PlatformMarquee />
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <ChevronDown className="w-6 h-6 text-cyan-400" />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-10">
+          <ChevronDown className="w-6 h-6 text-cyan-400/60" />
         </div>
       </section>
 
       {/* Stats Section */}
       <section id="stats" className="py-24 px-6 relative">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto reveal">
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
             {stats.map((stat, i) => (
               <AnimatedCounter
@@ -705,7 +786,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent" />
 
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="mb-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end md:mb-16 lg:mb-20">
+          <div className="reveal mb-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end md:mb-16 lg:mb-20">
             <div>
               <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
               <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what it looks like when nothing goes wrong</h2>
@@ -758,7 +839,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-cyan-500/5" />
 
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-12 md:mb-16 lg:mb-20">
+          <div className="reveal text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">How it works</span>
             <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Connect once. Get visibility, protection, and control.</h2>
             <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
@@ -818,7 +899,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* The 4 Pillars Section */}
       <section id="pillars" className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12 md:mb-16 lg:mb-20">
+          <div className="reveal text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Core outcomes</span>
             <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Built to give you visibility, protection, and control</h2>
             <p className="text-lg text-slate-400 mt-4 max-w-2xl mx-auto">The product stays simple first, then reveals deeper governance and operator tooling when you need it.</p>
@@ -863,6 +944,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 </div>
               );
             })}
+          </div>
+
+          {/* Deep-dive link */}
+          <div className="text-center mt-12">
+            <button
+              onClick={() => navigate('/features')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 transition-all text-sm font-semibold"
+            >
+              See full feature breakdown
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </section>
@@ -934,7 +1026,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section id="pricing" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-12">
+          <div className="reveal text-center mb-12">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing</span>
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Simple, honest pricing</h2>
             <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
@@ -969,7 +1061,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                   className={[
                     'relative rounded-2xl border p-6 flex flex-col gap-5 transition-all',
                     plan.highlight
-                      ? 'border-cyan-400/50 bg-[linear-gradient(160deg,rgba(34,211,238,0.10),rgba(8,47,73,0.25))]'
+                      ? 'border-cyan-400/50 bg-[linear-gradient(160deg,rgba(34,211,238,0.10),rgba(8,47,73,0.25))] glow-pulse'
                       : 'border-white/10 bg-white/[0.03]',
                     isRecommended ? 'ring-2 ring-cyan-400/60 ring-offset-2 ring-offset-transparent' : '',
                   ].join(' ')}
@@ -1125,13 +1217,24 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               </div>
             )}
           </div>
+
+          {/* Full pricing page link */}
+          <div className="text-center mt-10">
+            <button
+              onClick={() => navigate('/pricing')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-white/15 text-slate-300 hover:bg-white/[0.06] hover:text-white transition-all text-sm font-semibold"
+            >
+              View full plan comparison
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Security Section */}
       <section id="security" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12 md:mb-16">
+          <div className="reveal text-center mb-12 md:mb-16">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Security</span>
             <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Enterprise-ready by default</h2>
             <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
@@ -1177,7 +1280,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-blue-500/10" />
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl -z-10" />
 
-        <div className="max-w-4xl mx-auto relative z-10 text-center">
+        <div className="reveal max-w-4xl mx-auto relative z-10 text-center">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
             Start governing your AI in under 5 minutes.
           </h2>
@@ -1219,8 +1322,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               <ul className="space-y-2 text-sm text-slate-400">
                 <li><a href="#how-it-works" className="hover:text-cyan-400 transition-colors">How it works</a></li>
                 <li><a href="#stats" className="hover:text-cyan-400 transition-colors">Results</a></li>
-                <li><a href="#pillars" className="hover:text-cyan-400 transition-colors">Features</a></li>
-                <li><a href="#pricing" className="hover:text-cyan-400 transition-colors">Pricing</a></li>
+                <li><a href="/features" className="hover:text-cyan-400 transition-colors">Features</a></li>
+                <li><a href="/pricing" className="hover:text-cyan-400 transition-colors">Pricing</a></li>
                 <li><a href="#security" className="hover:text-cyan-400 transition-colors">Security</a></li>
               </ul>
             </div>
@@ -1249,7 +1352,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             <div>
               <h4 className="font-semibold text-white mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><a href="#pricing" className="hover:text-cyan-400 transition-colors">ROI Calculator</a></li>
+                <li><a href="/pricing" className="hover:text-cyan-400 transition-colors">ROI Calculator</a></li>
                 <li><a href="#security" className="hover:text-cyan-400 transition-colors">Deployment Notes</a></li>
               </ul>
             </div>
@@ -1258,7 +1361,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             <p className="text-sm text-slate-500">© {year} Zapheit. All rights reserved.</p>
             <div className="flex items-center gap-6 text-sm">
               <a href="#how-it-works" className="text-slate-400 hover:text-cyan-400 transition-colors">Overview</a>
-              <a href="#pillars" className="text-slate-400 hover:text-cyan-400 transition-colors">Features</a>
+              <a href="/features" className="text-slate-400 hover:text-cyan-400 transition-colors">Features</a>
               <a href="#security" className="text-slate-400 hover:text-cyan-400 transition-colors">Security</a>
               <a href="/terms" className="text-slate-400 hover:text-cyan-400 transition-colors">Terms</a>
               <a href="/privacy" className="text-slate-400 hover:text-cyan-400 transition-colors">Privacy</a>
