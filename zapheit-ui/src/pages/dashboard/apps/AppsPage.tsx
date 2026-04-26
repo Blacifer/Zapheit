@@ -5,6 +5,7 @@ import {
   Search, CheckCircle2, AlertCircle, Clock, Zap, ArrowRight,
   Building2, Users, Receipt, MessageSquare, Shield, TrendingUp,
   Headphones, BarChart3, Scale, LayoutGrid, Landmark, RefreshCw,
+  Bell, BellOff, ChevronRight, Activity,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -1424,6 +1425,118 @@ const LIVE_METRICS: Record<string, LiveMetricConfig> = {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Notify-when-available — localStorage key
+──────────────────────────────────────────────────────────────────────────── */
+
+const NOTIFY_KEY = 'zapheit_notify_apps';
+
+function getNotifiedApps(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(NOTIFY_KEY) ?? '[]')); }
+  catch { return new Set(); }
+}
+
+function toggleNotifyApp(appId: string): boolean {
+  const set = getNotifiedApps();
+  if (set.has(appId)) { set.delete(appId); } else { set.add(appId); }
+  localStorage.setItem(NOTIFY_KEY, JSON.stringify([...set]));
+  return set.has(appId);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Connector Actions — what each connected app can do
+──────────────────────────────────────────────────────────────────────────── */
+
+type ConnectorAction = { label: string; type: 'read' | 'write'; risk?: 'low' | 'medium' | 'high' };
+
+const CONNECTOR_ACTIONS: Record<string, ConnectorAction[]> = {
+  greythr: [
+    { label: 'List employees', type: 'read' },
+    { label: 'Get leave requests', type: 'read' },
+    { label: 'Approve leave request', type: 'write', risk: 'medium' },
+    { label: 'Get payroll summary', type: 'read' },
+    { label: 'Update employee record', type: 'write', risk: 'medium' },
+  ],
+  tally: [
+    { label: 'List transactions', type: 'read' },
+    { label: 'List invoices', type: 'read' },
+    { label: 'Get GST summary', type: 'read' },
+    { label: 'Create invoice', type: 'write', risk: 'high' },
+    { label: 'Approve payment', type: 'write', risk: 'high' },
+  ],
+  naukri: [
+    { label: 'List job postings', type: 'read' },
+    { label: 'Get applications', type: 'read' },
+    { label: 'Shortlist candidate', type: 'write', risk: 'low' },
+    { label: 'Reject application', type: 'write', risk: 'medium' },
+    { label: 'Post new job', type: 'write', risk: 'medium' },
+  ],
+  freshdesk: [
+    { label: 'List tickets', type: 'read' },
+    { label: 'Get ticket details', type: 'read' },
+    { label: 'Add ticket reply', type: 'write', risk: 'low' },
+    { label: 'Assign ticket', type: 'write', risk: 'low' },
+    { label: 'Close ticket', type: 'write', risk: 'medium' },
+  ],
+  cashfree: [
+    { label: 'List transactions', type: 'read' },
+    { label: 'Get order details', type: 'read' },
+    { label: 'Initiate payout', type: 'write', risk: 'high' },
+    { label: 'Create payment link', type: 'write', risk: 'medium' },
+  ],
+  'google-workspace': [
+    { label: 'List users', type: 'read' },
+    { label: 'Read emails', type: 'read' },
+    { label: 'Send email', type: 'write', risk: 'low' },
+    { label: 'Create calendar event', type: 'write', risk: 'low' },
+    { label: 'Create Google Doc', type: 'write', risk: 'low' },
+  ],
+  slack: [
+    { label: 'List channels', type: 'read' },
+    { label: 'Read messages', type: 'read' },
+    { label: 'Send message', type: 'write', risk: 'low' },
+    { label: 'Create channel', type: 'write', risk: 'medium' },
+  ],
+  linkedin: [
+    { label: 'Get company profile', type: 'read' },
+    { label: 'List job postings', type: 'read' },
+    { label: 'Post job listing', type: 'write', risk: 'medium' },
+  ],
+  hubspot: [
+    { label: 'List contacts', type: 'read' },
+    { label: 'Get deals', type: 'read' },
+    { label: 'Create contact', type: 'write', risk: 'low' },
+    { label: 'Update deal stage', type: 'write', risk: 'medium' },
+    { label: 'Create task', type: 'write', risk: 'low' },
+  ],
+  jira: [
+    { label: 'List issues', type: 'read' },
+    { label: 'Get sprint board', type: 'read' },
+    { label: 'Create issue', type: 'write', risk: 'low' },
+    { label: 'Update issue status', type: 'write', risk: 'low' },
+    { label: 'Assign issue', type: 'write', risk: 'low' },
+  ],
+  github: [
+    { label: 'List pull requests', type: 'read' },
+    { label: 'Get repo info', type: 'read' },
+    { label: 'Create issue', type: 'write', risk: 'low' },
+    { label: 'Review PR', type: 'write', risk: 'medium' },
+    { label: 'Merge PR', type: 'write', risk: 'high' },
+  ],
+  notion: [
+    { label: 'Read pages', type: 'read' },
+    { label: 'Search database', type: 'read' },
+    { label: 'Create page', type: 'write', risk: 'low' },
+    { label: 'Update page', type: 'write', risk: 'low' },
+  ],
+};
+
+const RISK_COLOR: Record<string, string> = {
+  low: 'text-emerald-400/70',
+  medium: 'text-amber-400/70',
+  high: 'text-rose-400/70',
+};
+
+/* ─────────────────────────────────────────────────────────────────────────
    Setup Quality Score
 ──────────────────────────────────────────────────────────────────────────── */
 
@@ -1640,6 +1753,9 @@ function AppCard({
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [liveMetric, setLiveMetric] = useState<string | null>(null);
+  const [notified, setNotified] = useState(() => getNotifiedApps().has(app.appId));
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [usageCount, setUsageCount] = useState<number | null>(null);
 
   // Fetch live metric once when connected
   useEffect(() => {
@@ -1658,6 +1774,22 @@ function AppCard({
     return () => { cancelled = true; };
   }, [app.appId, status]);
 
+  // Fetch usage count for this month when connected
+  useEffect(() => {
+    if (status !== 'connected') return;
+    let cancelled = false;
+    const from = new Date();
+    from.setDate(1); from.setHours(0, 0, 0, 0);
+    api.auditLogs.list({ search: app.appId, from: from.toISOString(), limit: 100 })
+      .then((res) => {
+        if (cancelled) return;
+        const count = (res as any).total ?? res.data?.length ?? 0;
+        if (count > 0) setUsageCount(count);
+      })
+      .catch(() => {/* best-effort */});
+    return () => { cancelled = true; };
+  }, [app.appId, status]);
+
   const connect = async (creds?: Record<string, string>) => {
     setBusy(true);
     try { await onConnect(app, creds); }
@@ -1670,12 +1802,20 @@ function AppCard({
     finally { setBusy(false); }
   };
 
+  const handleNotifyToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = toggleNotifyApp(app.appId);
+    setNotified(next);
+    toast.success(next ? `We'll notify you when ${app.name} is ready.` : `Notification removed for ${app.name}.`);
+  };
+
   const health = resolveHealth(backendApp);
   const lastSync = formatLastSync(backendApp);
   const isConnected = status === 'connected';
   const isError = status === 'error';
   const govTier = getGovTier(app.appId);
   const score = setupScore(isConnected, health, false);
+  const connectorActions = CONNECTOR_ACTIONS[app.appId] ?? [];
 
   return (
     <div className={cn(
@@ -1731,12 +1871,22 @@ function AppCard({
 
           <p className="mt-1 text-xs text-slate-400 leading-relaxed max-w-lg">{app.description}</p>
 
-          {/* Live metric chip */}
-          {isConnected && liveMetric && (
-            <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] px-2 py-0.5 rounded-full border border-amber-400/25 bg-amber-500/[0.08] text-amber-300 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              {liveMetric}
-            </span>
+          {/* Live metric + usage counter chips */}
+          {isConnected && (liveMetric || usageCount != null) && (
+            <div className="flex items-center gap-2 flex-wrap mt-1.5">
+              {liveMetric && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-amber-400/25 bg-amber-500/[0.08] text-amber-300 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  {liveMetric}
+                </span>
+              )}
+              {usageCount != null && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-violet-400/20 bg-violet-500/[0.07] text-violet-300 font-medium">
+                  <Activity className="w-3 h-3" />
+                  Used {usageCount}× this month
+                </span>
+              )}
+            </div>
           )}
 
           {/* Connected details */}
@@ -1778,6 +1928,51 @@ function AppCard({
                 }
               }}
             />
+          )}
+
+          {/* Actions preview — expandable "What can my agent do?" */}
+          {isConnected && connectorActions.length > 0 && (
+            <div className="mt-2">
+              <button
+                onClick={() => setActionsOpen((v) => !v)}
+                className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                {actionsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                What can my agent do?
+                <span className="ml-1 text-[10px] px-1 rounded bg-white/[0.06] text-slate-500">{connectorActions.length}</span>
+              </button>
+              {actionsOpen && (
+                <div className="mt-2 grid grid-cols-1 gap-1">
+                  {connectorActions.map((action, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[11px]">
+                      <span className={cn(
+                        'w-1.5 h-1.5 rounded-full shrink-0',
+                        action.type === 'read' ? 'bg-blue-400/60' : (action.risk === 'high' ? 'bg-rose-400' : action.risk === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'),
+                      )} />
+                      <span className="text-slate-300">{action.label}</span>
+                      <span className={cn('ml-auto text-[10px]', action.type === 'read' ? 'text-blue-400/60' : RISK_COLOR[action.risk ?? 'low'])}>
+                        {action.type === 'read' ? 'Read' : `Write · ${action.risk ?? 'low'} risk`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notify-me toggle for coming soon apps */}
+          {app.productionStatus === 'coming_soon' && !isConnected && (
+            <button
+              onClick={handleNotifyToggle}
+              className={cn(
+                'mt-2 flex items-center gap-1.5 text-[11px] transition-colors',
+                notified ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300',
+              )}
+              title={notified ? 'Click to stop notifications' : 'Notify me when available'}
+            >
+              {notified ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+              {notified ? 'Notifying me when ready' : 'Notify me when available'}
+            </button>
           )}
         </div>
 
