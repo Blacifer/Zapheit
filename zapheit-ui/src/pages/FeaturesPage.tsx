@@ -67,7 +67,7 @@ const FEATURES = [
       { icon: CheckCircle, text: 'Risk score auto-routing: <30 auto-approve, >70 auto-escalate, middle requires review' },
       { icon: CheckCircle, text: 'Bulk approval for similar low-risk actions — approve 12 at once' },
     ],
-    without: 'Agents act autonomously. One bad policy decision or misconfiguration and there's no circuit breaker.',
+    without: "Agents act autonomously. One bad policy decision or misconfiguration and there's no circuit breaker.",
     with: 'Every risky action gated. One button to pause everything. You stay in control.',
     stat: { value: '22 sec', label: 'average time to approve or block an action' },
   },
