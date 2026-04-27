@@ -301,18 +301,22 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_schedules' AND policyname='Org members can view schedules') THEN
+DROP POLICY IF EXISTS "Org members can view schedules" ON playbook_schedules;
     CREATE POLICY "Org members can view schedules" ON playbook_schedules
       FOR SELECT USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_schedules' AND policyname='Org members can insert schedules') THEN
+DROP POLICY IF EXISTS "Org members can insert schedules" ON playbook_schedules;
     CREATE POLICY "Org members can insert schedules" ON playbook_schedules
       FOR INSERT WITH CHECK (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_schedules' AND policyname='Org members can update schedules') THEN
+DROP POLICY IF EXISTS "Org members can update schedules" ON playbook_schedules;
     CREATE POLICY "Org members can update schedules" ON playbook_schedules
       FOR UPDATE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_schedules' AND policyname='Org members can delete schedules') THEN
+DROP POLICY IF EXISTS "Org members can delete schedules" ON playbook_schedules;
     CREATE POLICY "Org members can delete schedules" ON playbook_schedules
       FOR DELETE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
@@ -323,18 +327,22 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_triggers' AND policyname='Org members can view triggers') THEN
+DROP POLICY IF EXISTS "Org members can view triggers" ON playbook_triggers;
     CREATE POLICY "Org members can view triggers" ON playbook_triggers
       FOR SELECT USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_triggers' AND policyname='Org members can insert triggers') THEN
+DROP POLICY IF EXISTS "Org members can insert triggers" ON playbook_triggers;
     CREATE POLICY "Org members can insert triggers" ON playbook_triggers
       FOR INSERT WITH CHECK (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_triggers' AND policyname='Org members can update triggers') THEN
+DROP POLICY IF EXISTS "Org members can update triggers" ON playbook_triggers;
     CREATE POLICY "Org members can update triggers" ON playbook_triggers
       FOR UPDATE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_triggers' AND policyname='Org members can delete triggers') THEN
+DROP POLICY IF EXISTS "Org members can delete triggers" ON playbook_triggers;
     CREATE POLICY "Org members can delete triggers" ON playbook_triggers
       FOR DELETE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
@@ -345,18 +353,22 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='custom_playbooks' AND policyname='Org members can view custom playbooks') THEN
+DROP POLICY IF EXISTS "Org members can view custom playbooks" ON custom_playbooks;
     CREATE POLICY "Org members can view custom playbooks" ON custom_playbooks
       FOR SELECT USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='custom_playbooks' AND policyname='Org members can insert custom playbooks') THEN
+DROP POLICY IF EXISTS "Org members can insert custom playbooks" ON custom_playbooks;
     CREATE POLICY "Org members can insert custom playbooks" ON custom_playbooks
       FOR INSERT WITH CHECK (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='custom_playbooks' AND policyname='Org members can update custom playbooks') THEN
+DROP POLICY IF EXISTS "Org members can update custom playbooks" ON custom_playbooks;
     CREATE POLICY "Org members can update custom playbooks" ON custom_playbooks
       FOR UPDATE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='custom_playbooks' AND policyname='Org members can delete custom playbooks') THEN
+DROP POLICY IF EXISTS "Org members can delete custom playbooks" ON custom_playbooks;
     CREATE POLICY "Org members can delete custom playbooks" ON custom_playbooks
       FOR DELETE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
@@ -368,14 +380,17 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_share_links' AND policyname='Org members can view share links') THEN
+DROP POLICY IF EXISTS "Org members can view share links" ON playbook_share_links;
     CREATE POLICY "Org members can view share links" ON playbook_share_links
       FOR SELECT USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_share_links' AND policyname='Org members can insert share links') THEN
+DROP POLICY IF EXISTS "Org members can insert share links" ON playbook_share_links;
     CREATE POLICY "Org members can insert share links" ON playbook_share_links
       FOR INSERT WITH CHECK (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_share_links' AND policyname='Org members can delete share links') THEN
+DROP POLICY IF EXISTS "Org members can delete share links" ON playbook_share_links;
     CREATE POLICY "Org members can delete share links" ON playbook_share_links
       FOR DELETE USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
@@ -387,10 +402,12 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_result_comments' AND policyname='Org members can view comments') THEN
+DROP POLICY IF EXISTS "Org members can view comments" ON playbook_result_comments;
     CREATE POLICY "Org members can view comments" ON playbook_result_comments
       FOR SELECT USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='playbook_result_comments' AND policyname='Org members can insert comments') THEN
+DROP POLICY IF EXISTS "Org members can insert comments" ON playbook_result_comments;
     CREATE POLICY "Org members can insert comments" ON playbook_result_comments
       FOR INSERT WITH CHECK (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
@@ -419,6 +436,7 @@ CREATE INDEX IF NOT EXISTS gateway_usage_org_month_idx ON gateway_usage (org_id,
 -- RLS: orgs can only see their own usage rows
 ALTER TABLE gateway_usage ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS gateway_usage_org_isolation ON gateway_usage;
 CREATE POLICY gateway_usage_org_isolation ON gateway_usage
   USING (org_id = (
     SELECT organization_id FROM users WHERE id = auth.uid()
@@ -589,12 +607,15 @@ ALTER TABLE hub_marketing_performance ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_marketing_campaigns' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_marketing_campaigns;
     CREATE POLICY org_isolation ON hub_marketing_campaigns USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_marketing_contacts' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_marketing_contacts;
     CREATE POLICY org_isolation ON hub_marketing_contacts USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_marketing_performance' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_marketing_performance;
     CREATE POLICY org_isolation ON hub_marketing_performance USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
 END $$;
@@ -667,15 +688,19 @@ ALTER TABLE hub_hr_headcount    ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_hr_attendance' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_hr_attendance;
     CREATE POLICY org_isolation ON hub_hr_attendance USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_hr_leave' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_hr_leave;
     CREATE POLICY org_isolation ON hub_hr_leave USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_hr_payroll' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_hr_payroll;
     CREATE POLICY org_isolation ON hub_hr_payroll USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'hub_hr_headcount' AND policyname = 'org_isolation') THEN
+DROP POLICY IF EXISTS org_isolation ON hub_hr_headcount;
     CREATE POLICY org_isolation ON hub_hr_headcount USING (organization_id = (SELECT organization_id FROM users WHERE id = auth.uid()));
   END IF;
 END $$;
@@ -732,6 +757,7 @@ CREATE INDEX IF NOT EXISTS idx_gateway_traces_risk ON gateway_reasoning_traces(r
 -- Row-Level Security
 ALTER TABLE gateway_reasoning_traces ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "org_members_can_view_traces" ON gateway_reasoning_traces;
 CREATE POLICY "org_members_can_view_traces"
   ON gateway_reasoning_traces FOR SELECT
   USING (
@@ -740,11 +766,13 @@ CREATE POLICY "org_members_can_view_traces"
     )
   );
 
+DROP POLICY IF EXISTS "service_role_can_insert_traces" ON gateway_reasoning_traces;
 CREATE POLICY "service_role_can_insert_traces"
   ON gateway_reasoning_traces FOR INSERT
   WITH CHECK (true);
 
 -- Allow org members to delete their own org's traces (for data privacy)
+DROP POLICY IF EXISTS "org_admins_can_delete_traces" ON gateway_reasoning_traces;
 CREATE POLICY "org_admins_can_delete_traces"
   ON gateway_reasoning_traces FOR DELETE
   USING (
@@ -812,6 +840,7 @@ CREATE INDEX IF NOT EXISTS idx_approval_comments_org ON approval_comments(organi
 -- Row-Level Security
 ALTER TABLE approval_comments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "org_members_can_view_comments" ON approval_comments;
 CREATE POLICY "org_members_can_view_comments"
   ON approval_comments FOR SELECT
   USING (
@@ -820,6 +849,7 @@ CREATE POLICY "org_members_can_view_comments"
     )
   );
 
+DROP POLICY IF EXISTS "org_members_can_insert_comments" ON approval_comments;
 CREATE POLICY "org_members_can_insert_comments"
   ON approval_comments FOR INSERT
   WITH CHECK (
@@ -829,10 +859,12 @@ CREATE POLICY "org_members_can_insert_comments"
     AND author_id = auth.uid()
   );
 
+DROP POLICY IF EXISTS "authors_can_update_comments" ON approval_comments;
 CREATE POLICY "authors_can_update_comments"
   ON approval_comments FOR UPDATE
   USING (author_id = auth.uid());
 
+DROP POLICY IF EXISTS "authors_and_admins_can_delete_comments" ON approval_comments;
 CREATE POLICY "authors_and_admins_can_delete_comments"
   ON approval_comments FOR DELETE
   USING (
@@ -880,6 +912,7 @@ CREATE INDEX IF NOT EXISTS idx_policy_versions_org ON policy_pack_versions(organ
 -- Row-Level Security
 ALTER TABLE policy_pack_versions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "org_members_can_view_versions" ON policy_pack_versions;
 CREATE POLICY "org_members_can_view_versions"
   ON policy_pack_versions FOR SELECT
   USING (
@@ -888,6 +921,7 @@ CREATE POLICY "org_members_can_view_versions"
     )
   );
 
+DROP POLICY IF EXISTS "service_role_can_insert_versions" ON policy_pack_versions;
 CREATE POLICY "service_role_can_insert_versions"
   ON policy_pack_versions FOR INSERT
   WITH CHECK (true);
@@ -953,9 +987,11 @@ CREATE INDEX IF NOT EXISTS idx_crq_org
 ALTER TABLE connector_circuit_breakers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE connector_retry_queue      ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "ccb_select" ON connector_circuit_breakers;
 CREATE POLICY "ccb_select" ON connector_circuit_breakers FOR SELECT
   USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
 
+DROP POLICY IF EXISTS "crq_select" ON connector_retry_queue;
 CREATE POLICY "crq_select" ON connector_retry_queue FOR SELECT
   USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
 
@@ -1011,6 +1047,7 @@ CREATE INDEX IF NOT EXISTS idx_ac_org_agent
 
 ALTER TABLE agent_corrections ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "ac_select" ON agent_corrections;
 CREATE POLICY "ac_select" ON agent_corrections FOR SELECT
   USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
 
@@ -1036,6 +1073,7 @@ CREATE INDEX IF NOT EXISTS idx_sr_org_status
 
 ALTER TABLE synthesized_rules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "sr_select" ON synthesized_rules;
 CREATE POLICY "sr_select" ON synthesized_rules FOR SELECT
   USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
 
@@ -1060,6 +1098,7 @@ CREATE INDEX IF NOT EXISTS idx_str_org_agent
 
 ALTER TABLE shadow_test_runs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "str_select" ON shadow_test_runs;
 CREATE POLICY "str_select" ON shadow_test_runs FOR SELECT
   USING (organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid()));
 
@@ -1195,6 +1234,7 @@ ALTER TABLE integration_openapi_specs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_event_chain ENABLE ROW LEVEL SECURITY;
 ALTER TABLE redteam_runs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "integration_openapi_specs_select" ON integration_openapi_specs;
 CREATE POLICY "integration_openapi_specs_select"
   ON integration_openapi_specs
   FOR SELECT
@@ -1204,6 +1244,7 @@ CREATE POLICY "integration_openapi_specs_select"
     )
   );
 
+DROP POLICY IF EXISTS "integration_openapi_specs_insert" ON integration_openapi_specs;
 CREATE POLICY "integration_openapi_specs_insert"
   ON integration_openapi_specs
   FOR INSERT
@@ -1213,6 +1254,7 @@ CREATE POLICY "integration_openapi_specs_insert"
     )
   );
 
+DROP POLICY IF EXISTS "audit_event_chain_select" ON audit_event_chain;
 CREATE POLICY "audit_event_chain_select"
   ON audit_event_chain
   FOR SELECT
@@ -1222,6 +1264,7 @@ CREATE POLICY "audit_event_chain_select"
     )
   );
 
+DROP POLICY IF EXISTS "redteam_runs_select" ON redteam_runs;
 CREATE POLICY "redteam_runs_select"
   ON redteam_runs
   FOR SELECT
@@ -1231,6 +1274,7 @@ CREATE POLICY "redteam_runs_select"
     )
   );
 
+DROP POLICY IF EXISTS "redteam_runs_insert" ON redteam_runs;
 CREATE POLICY "redteam_runs_insert"
   ON redteam_runs
   FOR INSERT
@@ -1271,6 +1315,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_versions_created  ON agent_versions(agent_i
 -- RLS: org members can read their own agent versions; only backend service role can write
 ALTER TABLE agent_versions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "agent_versions_select" ON agent_versions;
 CREATE POLICY "agent_versions_select" ON agent_versions
   FOR SELECT USING (
     organization_id IN (
@@ -1316,6 +1361,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_channels_enabled ON alert_channels(organiza
 
 ALTER TABLE alert_channels ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "alert_channels_select" ON alert_channels;
 CREATE POLICY "alert_channels_select" ON alert_channels
   FOR SELECT USING (
     organization_id IN (
@@ -1337,6 +1383,7 @@ BEGIN;
 
 -- ── agent_versions ──────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "agent_versions_insert" ON agent_versions;
 CREATE POLICY "agent_versions_insert" ON agent_versions
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -1344,6 +1391,7 @@ CREATE POLICY "agent_versions_insert" ON agent_versions
     )
   );
 
+DROP POLICY IF EXISTS "agent_versions_update" ON agent_versions;
 CREATE POLICY "agent_versions_update" ON agent_versions
   FOR UPDATE USING (
     organization_id IN (
@@ -1351,6 +1399,7 @@ CREATE POLICY "agent_versions_update" ON agent_versions
     )
   );
 
+DROP POLICY IF EXISTS "agent_versions_delete" ON agent_versions;
 CREATE POLICY "agent_versions_delete" ON agent_versions
   FOR DELETE USING (
     organization_id IN (
@@ -1360,6 +1409,7 @@ CREATE POLICY "agent_versions_delete" ON agent_versions
 
 -- ── alert_channels ───────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "alert_channels_insert" ON alert_channels;
 CREATE POLICY "alert_channels_insert" ON alert_channels
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -1367,6 +1417,7 @@ CREATE POLICY "alert_channels_insert" ON alert_channels
     )
   );
 
+DROP POLICY IF EXISTS "alert_channels_update" ON alert_channels;
 CREATE POLICY "alert_channels_update" ON alert_channels
   FOR UPDATE USING (
     organization_id IN (
@@ -1374,6 +1425,7 @@ CREATE POLICY "alert_channels_update" ON alert_channels
     )
   );
 
+DROP POLICY IF EXISTS "alert_channels_delete" ON alert_channels;
 CREATE POLICY "alert_channels_delete" ON alert_channels
   FOR DELETE USING (
     organization_id IN (
@@ -1542,46 +1594,56 @@ ALTER TABLE whatsapp_contacts  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp_templates ENABLE ROW LEVEL SECURITY;
 
 -- Messages: org members can SELECT + UPDATE status; INSERT via service role only
+DROP POLICY IF EXISTS wa_messages_select ON whatsapp_messages;
 CREATE POLICY wa_messages_select ON whatsapp_messages
   FOR SELECT USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_messages_update ON whatsapp_messages;
 CREATE POLICY wa_messages_update ON whatsapp_messages
   FOR UPDATE USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
 
 -- Contacts: full CRUD for org members
+DROP POLICY IF EXISTS wa_contacts_select ON whatsapp_contacts;
 CREATE POLICY wa_contacts_select ON whatsapp_contacts
   FOR SELECT USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_contacts_insert ON whatsapp_contacts;
 CREATE POLICY wa_contacts_insert ON whatsapp_contacts
   FOR INSERT WITH CHECK (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_contacts_update ON whatsapp_contacts;
 CREATE POLICY wa_contacts_update ON whatsapp_contacts
   FOR UPDATE USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_contacts_delete ON whatsapp_contacts;
 CREATE POLICY wa_contacts_delete ON whatsapp_contacts
   FOR DELETE USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
 
 -- Templates: full CRUD for org members
+DROP POLICY IF EXISTS wa_templates_select ON whatsapp_templates;
 CREATE POLICY wa_templates_select ON whatsapp_templates
   FOR SELECT USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_templates_insert ON whatsapp_templates;
 CREATE POLICY wa_templates_insert ON whatsapp_templates
   FOR INSERT WITH CHECK (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_templates_update ON whatsapp_templates;
 CREATE POLICY wa_templates_update ON whatsapp_templates
   FOR UPDATE USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
   );
+DROP POLICY IF EXISTS wa_templates_delete ON whatsapp_templates;
 CREATE POLICY wa_templates_delete ON whatsapp_templates
   FOR DELETE USING (
     organization_id IN (SELECT organization_id FROM users WHERE id = auth.uid())
@@ -1657,6 +1719,7 @@ CREATE INDEX IF NOT EXISTS idx_consent_records_expires
 
 ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS consent_records_select ON consent_records;
 CREATE POLICY consent_records_select ON consent_records
   FOR SELECT USING (
     organization_id IN (
@@ -1665,6 +1728,7 @@ CREATE POLICY consent_records_select ON consent_records
     )
   );
 
+DROP POLICY IF EXISTS consent_records_insert ON consent_records;
 CREATE POLICY consent_records_insert ON consent_records
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -1673,6 +1737,7 @@ CREATE POLICY consent_records_insert ON consent_records
     )
   );
 
+DROP POLICY IF EXISTS consent_records_update ON consent_records;
 CREATE POLICY consent_records_update ON consent_records
   FOR UPDATE USING (
     organization_id IN (
@@ -1713,6 +1778,7 @@ CREATE INDEX IF NOT EXISTS idx_retention_policies_org
 
 ALTER TABLE data_retention_policies ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS retention_policies_select ON data_retention_policies;
 CREATE POLICY retention_policies_select ON data_retention_policies
   FOR SELECT USING (
     organization_id IN (
@@ -1721,6 +1787,7 @@ CREATE POLICY retention_policies_select ON data_retention_policies
     )
   );
 
+DROP POLICY IF EXISTS retention_policies_all ON data_retention_policies;
 CREATE POLICY retention_policies_all ON data_retention_policies
   FOR ALL USING (
     organization_id IN (
@@ -1781,6 +1848,7 @@ CREATE INDEX IF NOT EXISTS idx_dpr_principal
 
 ALTER TABLE data_principal_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS dpr_select ON data_principal_requests;
 CREATE POLICY dpr_select ON data_principal_requests
   FOR SELECT USING (
     organization_id IN (
@@ -1789,6 +1857,7 @@ CREATE POLICY dpr_select ON data_principal_requests
     )
   );
 
+DROP POLICY IF EXISTS dpr_insert ON data_principal_requests;
 CREATE POLICY dpr_insert ON data_principal_requests
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -1797,6 +1866,7 @@ CREATE POLICY dpr_insert ON data_principal_requests
     )
   );
 
+DROP POLICY IF EXISTS dpr_update ON data_principal_requests;
 CREATE POLICY dpr_update ON data_principal_requests
   FOR UPDATE USING (
     organization_id IN (
@@ -1909,38 +1979,46 @@ ALTER TABLE salary_components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ctc_simulations ENABLE ROW LEVEL SECURITY;
 
 -- salary_structures RLS
+DROP POLICY IF EXISTS salary_structures_select ON salary_structures;
 CREATE POLICY salary_structures_select ON salary_structures FOR SELECT
     USING (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
+DROP POLICY IF EXISTS salary_structures_insert ON salary_structures;
 CREATE POLICY salary_structures_insert ON salary_structures FOR INSERT
     WITH CHECK (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
+DROP POLICY IF EXISTS salary_structures_update ON salary_structures;
 CREATE POLICY salary_structures_update ON salary_structures FOR UPDATE
     USING (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 
 -- salary_components RLS
+DROP POLICY IF EXISTS salary_components_select ON salary_components;
 CREATE POLICY salary_components_select ON salary_components FOR SELECT
     USING (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
+DROP POLICY IF EXISTS salary_components_insert ON salary_components;
 CREATE POLICY salary_components_insert ON salary_components FOR INSERT
     WITH CHECK (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
+DROP POLICY IF EXISTS salary_components_update ON salary_components;
 CREATE POLICY salary_components_update ON salary_components FOR UPDATE
     USING (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 
 -- ctc_simulations RLS
+DROP POLICY IF EXISTS ctc_simulations_select ON ctc_simulations;
 CREATE POLICY ctc_simulations_select ON ctc_simulations FOR SELECT
     USING (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
     ));
+DROP POLICY IF EXISTS ctc_simulations_insert ON ctc_simulations;
 CREATE POLICY ctc_simulations_insert ON ctc_simulations FOR INSERT
     WITH CHECK (organization_id IN (
         SELECT organization_id FROM users WHERE id = auth.uid()
@@ -2024,6 +2102,7 @@ CREATE INDEX IF NOT EXISTS idx_filing_alerts_unread ON filing_alerts(organizatio
 -- RLS
 ALTER TABLE filing_deadlines ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS filing_deadlines_select ON filing_deadlines;
 CREATE POLICY filing_deadlines_select ON filing_deadlines
   FOR SELECT USING (
     organization_id IN (
@@ -2031,6 +2110,7 @@ CREATE POLICY filing_deadlines_select ON filing_deadlines
     )
   );
 
+DROP POLICY IF EXISTS filing_deadlines_insert ON filing_deadlines;
 CREATE POLICY filing_deadlines_insert ON filing_deadlines
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -2038,6 +2118,7 @@ CREATE POLICY filing_deadlines_insert ON filing_deadlines
     )
   );
 
+DROP POLICY IF EXISTS filing_deadlines_update ON filing_deadlines;
 CREATE POLICY filing_deadlines_update ON filing_deadlines
   FOR UPDATE USING (
     organization_id IN (
@@ -2047,6 +2128,7 @@ CREATE POLICY filing_deadlines_update ON filing_deadlines
 
 ALTER TABLE filing_submissions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS filing_submissions_select ON filing_submissions;
 CREATE POLICY filing_submissions_select ON filing_submissions
   FOR SELECT USING (
     organization_id IN (
@@ -2054,6 +2136,7 @@ CREATE POLICY filing_submissions_select ON filing_submissions
     )
   );
 
+DROP POLICY IF EXISTS filing_submissions_insert ON filing_submissions;
 CREATE POLICY filing_submissions_insert ON filing_submissions
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -2061,6 +2144,7 @@ CREATE POLICY filing_submissions_insert ON filing_submissions
     )
   );
 
+DROP POLICY IF EXISTS filing_submissions_update ON filing_submissions;
 CREATE POLICY filing_submissions_update ON filing_submissions
   FOR UPDATE USING (
     organization_id IN (
@@ -2070,6 +2154,7 @@ CREATE POLICY filing_submissions_update ON filing_submissions
 
 ALTER TABLE filing_alerts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS filing_alerts_select ON filing_alerts;
 CREATE POLICY filing_alerts_select ON filing_alerts
   FOR SELECT USING (
     organization_id IN (
@@ -2077,6 +2162,7 @@ CREATE POLICY filing_alerts_select ON filing_alerts
     )
   );
 
+DROP POLICY IF EXISTS filing_alerts_insert ON filing_alerts;
 CREATE POLICY filing_alerts_insert ON filing_alerts
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -2084,6 +2170,7 @@ CREATE POLICY filing_alerts_insert ON filing_alerts
     )
   );
 
+DROP POLICY IF EXISTS filing_alerts_update ON filing_alerts;
 CREATE POLICY filing_alerts_update ON filing_alerts
   FOR UPDATE USING (
     organization_id IN (
@@ -2155,6 +2242,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_events_org_created
 ALTER TABLE payment_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS payment_orders_select ON payment_orders;
 CREATE POLICY payment_orders_select ON payment_orders
   FOR SELECT USING (
     organization_id IN (
@@ -2162,6 +2250,7 @@ CREATE POLICY payment_orders_select ON payment_orders
     )
   );
 
+DROP POLICY IF EXISTS payment_orders_insert ON payment_orders;
 CREATE POLICY payment_orders_insert ON payment_orders
   FOR INSERT WITH CHECK (
     organization_id IN (
@@ -2169,6 +2258,7 @@ CREATE POLICY payment_orders_insert ON payment_orders
     )
   );
 
+DROP POLICY IF EXISTS payment_orders_update ON payment_orders;
 CREATE POLICY payment_orders_update ON payment_orders
   FOR UPDATE USING (
     organization_id IN (
@@ -2176,6 +2266,7 @@ CREATE POLICY payment_orders_update ON payment_orders
     )
   );
 
+DROP POLICY IF EXISTS payment_events_select ON payment_events;
 CREATE POLICY payment_events_select ON payment_events
   FOR SELECT USING (
     organization_id IN (
@@ -2199,6 +2290,7 @@ BEGIN
       AND tablename = 'payment_events'
       AND policyname = 'payment_events_insert'
   ) THEN
+DROP POLICY IF EXISTS payment_events_insert ON payment_events;
     CREATE POLICY payment_events_insert ON payment_events
       FOR INSERT WITH CHECK (
         organization_id IN (
@@ -2360,6 +2452,7 @@ DO $$ BEGIN
     SELECT 1 FROM pg_policies
     WHERE tablename = 'agent_lifecycle_transitions' AND policyname = 'org_isolation'
   ) THEN
+DROP POLICY IF EXISTS org_isolation ON agent_lifecycle_transitions;
     CREATE POLICY org_isolation ON agent_lifecycle_transitions
       USING (organization_id = (auth.jwt() -> 'user_metadata' ->> 'organization_id')::uuid);
   END IF;
@@ -2404,6 +2497,7 @@ DO $$ BEGIN
     SELECT 1 FROM pg_policies
     WHERE tablename = 'marketplace_install_events' AND policyname = 'org_isolation'
   ) THEN
+DROP POLICY IF EXISTS org_isolation ON marketplace_install_events;
     CREATE POLICY org_isolation ON marketplace_install_events
       USING (organization_id = (auth.jwt() -> 'user_metadata' ->> 'organization_id')::uuid);
   END IF;
@@ -2453,6 +2547,7 @@ DO $$ BEGIN
       AND tablename = 'chat_runtime_profiles'
       AND policyname = 'chat_runtime_profiles_select'
   ) THEN
+DROP POLICY IF EXISTS chat_runtime_profiles_select ON chat_runtime_profiles;
     CREATE POLICY chat_runtime_profiles_select ON chat_runtime_profiles
       FOR SELECT USING (
         organization_id IN (
@@ -2469,6 +2564,7 @@ DO $$ BEGIN
       AND tablename = 'chat_runtime_profiles'
       AND policyname = 'chat_runtime_profiles_insert'
   ) THEN
+DROP POLICY IF EXISTS chat_runtime_profiles_insert ON chat_runtime_profiles;
     CREATE POLICY chat_runtime_profiles_insert ON chat_runtime_profiles
       FOR INSERT WITH CHECK (
         organization_id IN (
@@ -2485,6 +2581,7 @@ DO $$ BEGIN
       AND tablename = 'chat_runtime_profiles'
       AND policyname = 'chat_runtime_profiles_update'
   ) THEN
+DROP POLICY IF EXISTS chat_runtime_profiles_update ON chat_runtime_profiles;
     CREATE POLICY chat_runtime_profiles_update ON chat_runtime_profiles
       FOR UPDATE USING (
         organization_id IN (
@@ -2501,6 +2598,7 @@ DO $$ BEGIN
       AND tablename = 'chat_runtime_profiles'
       AND policyname = 'chat_runtime_profiles_delete'
   ) THEN
+DROP POLICY IF EXISTS chat_runtime_profiles_delete ON chat_runtime_profiles;
     CREATE POLICY chat_runtime_profiles_delete ON chat_runtime_profiles
       FOR DELETE USING (
         organization_id IN (
@@ -2532,6 +2630,7 @@ CREATE TABLE IF NOT EXISTS marketplace_integration_requests (
 
 ALTER TABLE marketplace_integration_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS org_isolation ON marketplace_integration_requests;
 CREATE POLICY org_isolation ON marketplace_integration_requests
   USING (organization_id = (current_setting('app.current_org_id', true))::uuid);
 
@@ -2591,6 +2690,7 @@ CREATE INDEX IF NOT EXISTS mcp_tools_agent_idx ON mcp_tools (agent_id) WHERE age
 
 ALTER TABLE mcp_tools ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS mcp_tools_org_isolation ON mcp_tools;
 CREATE POLICY mcp_tools_org_isolation ON mcp_tools
   USING (
     organization_id = (
@@ -2618,6 +2718,7 @@ CREATE INDEX IF NOT EXISTS mcp_tool_calls_tool_idx ON mcp_tool_calls (organizati
 
 ALTER TABLE mcp_tool_calls ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS mcp_tool_calls_org_isolation ON mcp_tool_calls;
 CREATE POLICY mcp_tool_calls_org_isolation ON mcp_tool_calls
   USING (
     organization_id = (
@@ -2659,6 +2760,7 @@ CREATE TABLE IF NOT EXISTS gateway_usage (
 ALTER TABLE gateway_usage ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
+DROP POLICY IF EXISTS "gateway_usage_select" ON gateway_usage;
   CREATE POLICY "gateway_usage_select" ON gateway_usage
     FOR SELECT USING (
       org_id IN (
