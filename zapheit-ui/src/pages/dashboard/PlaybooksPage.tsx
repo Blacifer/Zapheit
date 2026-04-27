@@ -805,7 +805,9 @@ function CustomPlaybookCard({
                                     {llmIds.map((lid) => <option key={lid} value={lid}>{lid}</option>)}
                                   </select>
                                   {!nextValid && (
-                                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" title="Target step ID not found" />
+                                    <span title="Target step ID not found">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                    </span>
                                   )}
                                 </div>
                                 <button

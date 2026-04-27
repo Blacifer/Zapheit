@@ -377,6 +377,14 @@ app.get('/health', async (req, res) => {
   res.status(allHealthy ? 200 : 503).json(response);
 });
 
+// Legacy OAuth callback aliases. Some provider configs still point to root-level paths on the
+// API origin instead of the canonical /api/integrations/oauth/callback/:service route.
+app.get(['/slack', '/google_workspace', '/google-workspace'], (req, res) => {
+  const service = req.path === '/slack' ? 'slack' : 'google_workspace';
+  const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(302, `/api/integrations/oauth/callback/${service}${query}`);
+});
+
 app.use('/api', apiLimiter);
 app.use('/api', writeLimiter);
 app.use('/api', protectMutationsFromCsrf);

@@ -36,8 +36,14 @@ type ConnStatus = 'connected' | 'disconnected' | 'error';
 function resolveStatus(app: AppDef, backendApp: any): ConnStatus {
   if (!backendApp) return 'disconnected';
   const s = backendApp.status || backendApp.connectionStatus || backendApp.connection_status || '';
+  const connected = Boolean(
+    backendApp.connected
+    || backendApp.installed
+    || backendApp.is_connected
+    || s === 'connected',
+  );
   if (s === 'connected') return 'connected';
-  if (s === 'error' || s === 'expired') return 'error';
+  if ((s === 'error' || s === 'expired') && connected) return 'error';
   return 'disconnected';
 }
 

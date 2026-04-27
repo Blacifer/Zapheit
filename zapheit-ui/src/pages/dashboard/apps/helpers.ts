@@ -153,14 +153,14 @@ function deriveMaturity(connected: boolean, capabilityPolicies: Array<{ enabled:
 
 export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): UnifiedApp {
   const statusRaw = entry.connection_status || entry.connectionStatus || (entry.is_connected || entry.installed ? 'connected' : 'disconnected');
+  const connected = Boolean(entry.is_connected ?? entry.installed);
   const status =
     statusRaw === 'connected' ? 'connected'
     : statusRaw === 'syncing' ? 'syncing'
-    : statusRaw === 'error' ? 'error'
-    : statusRaw === 'expired' ? 'expired'
+    : statusRaw === 'error' ? (connected ? 'error' : 'disconnected')
+    : statusRaw === 'expired' ? (connected ? 'expired' : 'disconnected')
     : 'disconnected';
   const capabilityPolicies = entry.capability_policies || [];
-  const connected = Boolean(entry.is_connected ?? entry.installed);
   const appId = entry.app_key || entry.id;
   const authType = entry.auth_type || entry.authType || 'api_key';
   const primarySetupMode: AppSetupMode =

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Mail, Calendar, HardDrive,
-  Activity, Bot, RefreshCw, Loader2,
+  Activity, Bot, RefreshCw, Loader2, Link2, Link2Off, Info,
 } from 'lucide-react';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { cn } from '../../../../../lib/utils';
@@ -74,8 +74,10 @@ export default function GoogleWorkspace() {
       if (res.success && payload?.data) {
         setEmails(payload.data);
         setEmailsNextPageToken(payload.nextPageToken ?? null);
+        setConnectionStatus('connected');
+      } else {
+        setConnectionStatus('disconnected');
       }
-      setConnectionStatus('connected');
     } catch {
       setConnectionStatus('disconnected');
     } finally {
@@ -252,6 +254,30 @@ export default function GoogleWorkspace() {
     if (activeTab === 'drive' && files.length === 0) void loadFiles();
   }, [activeTab, events.length, files.length, loadEvents, loadFiles]);
 
+  const handleConnect = useCallback(() => {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const url = api.integrations.getOAuthAuthorizeUrl(CONNECTOR_ID, returnTo);
+    window.location.href = url;
+  }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    if (!confirm('Disconnect Google Workspace? Gmail, Calendar, and Drive sync will stop.')) return;
+    try {
+      await api.integrations.disconnect(CONNECTOR_ID);
+      setConnectionStatus('disconnected');
+      setEmails([]);
+      setEmailsNextPageToken(null);
+      setEvents([]);
+      setFiles([]);
+      setFilesNextPageToken(null);
+      setPendingApprovals([]);
+      setAgentActivity({});
+      toast.success('Google Workspace disconnected');
+    } catch {
+      toast.error('Failed to disconnect Google Workspace');
+    }
+  }, []);
+
   /* --------------------------------------------------------------- */
   /*  Refresh                                                          */
   /* --------------------------------------------------------------- */
@@ -310,99 +336,159 @@ export default function GoogleWorkspace() {
           <p className="text-[10px] text-slate-500">Phase 1 — Gmail and Calendar operate directly inside Zapheit. Drive remains available but secondary.</p>
         </div>
 
-        <button
-          onClick={refreshCurrent}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors disabled:opacity-40"
-        >
-          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          Refresh
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-0.5 px-5 py-1.5 border-b border-white/5 shrink-0 overflow-x-auto">
-        {TABS.map(({ id, label, Icon }) => {
-          const count = pendingCountFor(id);
-          return (
+        <div className="flex items-center gap-2">
+          {connectionStatus === 'connected' && (
             <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
-                activeTab === id
-                  ? 'bg-white/[0.08] text-white'
-                  : id === 'drive'
-                    ? 'text-slate-600 hover:text-slate-300 hover:bg-white/[0.03]'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
-              )}
+              onClick={() => void handleDisconnect()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs font-medium transition-colors"
             >
-              <Icon className="w-3.5 h-3.5" /> {label}
-              {count > 0 && (
-                <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-400 font-bold leading-none">
-                  {count}
-                </span>
-              )}
+              <Link2Off className="w-3.5 h-3.5" />
+              Disconnect
             </button>
-          );
-        })}
+          )}
+          {connectionStatus === 'disconnected' && (
+            <button
+              onClick={handleConnect}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4285F4] hover:bg-[#5a95f5] text-white text-xs font-medium transition-colors"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              Connect Google Workspace
+            </button>
+          )}
+          <button
+            onClick={refreshCurrent}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors disabled:opacity-40"
+          >
+            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Agent suggestion banner */}
-      {showBanner && (
-        <div className="px-5 pt-3 shrink-0">
-          <AgentSuggestionBanner serviceId="google-workspace" onDismiss={() => setShowBanner(false)} />
-        </div>
-      )}
+      {connectionStatus === 'disconnected' ? (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-sm space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-red-500 flex items-center justify-center mx-auto text-white text-xl font-bold">
+                G
+              </div>
+              <h2 className="text-base font-semibold text-white">Connect Google Workspace</h2>
+              <p className="text-sm text-slate-400">Authorize Zapheit to access Gmail, Calendar, and Drive for this workspace.</p>
+            </div>
 
-      {/* Tab content */}
-      {activeTab === 'email' ? (
-        <div className="flex-1 overflow-hidden">
-          <EmailList
-            emails={emails}
-            loading={loadingEmails}
-            pendingApprovals={pendingApprovals.filter((a) => ['send_email', 'reply_email', 'forward_email'].includes(a.action))}
-            onApprovalResolved={handleApprovalResolved}
-            hasMore={!!emailsNextPageToken}
-            loadingMore={loadingMoreEmails}
-            onLoadMore={loadMoreEmails}
-            onEmailActionComplete={refreshCurrent}
-          />
-        </div>
-      ) : activeTab === 'calendar' ? (
-        <div className="flex-1 overflow-hidden">
-          <CalendarView
-            events={events}
-            loading={loadingEvents}
-            onCreate={createEvent}
-            onUpdate={updateEvent}
-            onCancelEvent={cancelEvent}
-            pendingApprovals={pendingApprovals.filter((a) => ['create_event', 'cancel_event'].includes(a.action))}
-            onApprovalResolved={handleApprovalResolved}
-          />
-        </div>
-      ) : activeTab === 'drive' ? (
-        <div className="flex-1 overflow-hidden">
-          <DriveFiles
-            files={files}
-            loading={loadingFiles}
-            onShare={shareFile}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
-            onApprovalResolved={handleApprovalResolved}
-            agentActivity={agentActivity}
-            hasMore={!!filesNextPageToken}
-            loadingMore={loadingMoreFiles}
-            onLoadMore={loadMoreFiles}
-          />
-        </div>
-      ) : activeTab === 'activity' ? (
-        <div className="flex-1 overflow-y-auto">
-          <GoogleActivityTab onApprovalResolved={loadApprovals} />
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 space-y-2">
+              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Permissions requested</p>
+              <div className="flex flex-wrap gap-2">
+                {['openid', 'email', 'gmail.modify', 'gmail.send', 'calendar'].map((scope) => (
+                  <span key={scope} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-300 font-mono">{scope}</span>
+                ))}
+              </div>
+              <div className="flex items-start gap-2 pt-1">
+                <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-slate-500">
+                  Callback URL:{' '}
+                  <span className="font-mono text-slate-400">https://api.zapheit.com/api/integrations/oauth/callback/google_workspace</span>
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleConnect}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#4285F4] hover:bg-[#5a95f5] text-white text-sm font-semibold transition-colors"
+            >
+              <Link2 className="w-4 h-4" />
+              Connect Google Workspace with OAuth
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          <GoogleAutomationTab />
-        </div>
+        <>
+          {/* Tabs */}
+          <div className="flex items-center gap-0.5 px-5 py-1.5 border-b border-white/5 shrink-0 overflow-x-auto">
+            {TABS.map(({ id, label, Icon }) => {
+              const count = pendingCountFor(id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
+                    activeTab === id
+                      ? 'bg-white/[0.08] text-white'
+                      : id === 'drive'
+                        ? 'text-slate-600 hover:text-slate-300 hover:bg-white/[0.03]'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                  {count > 0 && (
+                    <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-400 font-bold leading-none">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Agent suggestion banner */}
+          {showBanner && (
+            <div className="px-5 pt-3 shrink-0">
+              <AgentSuggestionBanner serviceId="google-workspace" onDismiss={() => setShowBanner(false)} />
+            </div>
+          )}
+
+          {/* Tab content */}
+          {activeTab === 'email' ? (
+            <div className="flex-1 overflow-hidden">
+              <EmailList
+                emails={emails}
+                loading={loadingEmails}
+                pendingApprovals={pendingApprovals.filter((a) => ['send_email', 'reply_email', 'forward_email'].includes(a.action))}
+                onApprovalResolved={handleApprovalResolved}
+                hasMore={!!emailsNextPageToken}
+                loadingMore={loadingMoreEmails}
+                onLoadMore={loadMoreEmails}
+                onEmailActionComplete={refreshCurrent}
+              />
+            </div>
+          ) : activeTab === 'calendar' ? (
+            <div className="flex-1 overflow-hidden">
+              <CalendarView
+                events={events}
+                loading={loadingEvents}
+                onCreate={createEvent}
+                onUpdate={updateEvent}
+                onCancelEvent={cancelEvent}
+                pendingApprovals={pendingApprovals.filter((a) => ['create_event', 'cancel_event'].includes(a.action))}
+                onApprovalResolved={handleApprovalResolved}
+              />
+            </div>
+          ) : activeTab === 'drive' ? (
+            <div className="flex-1 overflow-hidden">
+              <DriveFiles
+                files={files}
+                loading={loadingFiles}
+                onShare={shareFile}
+                pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
+                onApprovalResolved={handleApprovalResolved}
+                agentActivity={agentActivity}
+                hasMore={!!filesNextPageToken}
+                loadingMore={loadingMoreFiles}
+                onLoadMore={loadMoreFiles}
+              />
+            </div>
+          ) : activeTab === 'activity' ? (
+            <div className="flex-1 overflow-y-auto">
+              <GoogleActivityTab onApprovalResolved={loadApprovals} />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              <GoogleAutomationTab />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

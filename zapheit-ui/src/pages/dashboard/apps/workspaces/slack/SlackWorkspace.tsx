@@ -120,7 +120,8 @@ export default function SlackWorkspace() {
 
   /* -- Connect / Disconnect ---------------------------------------- */
   const handleConnect = useCallback(() => {
-    const url = api.integrations.getOAuthAuthorizeUrl('slack', window.location.href);
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const url = api.integrations.getOAuthAuthorizeUrl('slack', returnTo);
     window.location.href = url;
   }, []);
 
@@ -251,7 +252,7 @@ export default function SlackWorkspace() {
                 <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
                 <p className="text-[11px] text-slate-500">
                   Callback URL:{' '}
-                  <span className="font-mono text-slate-400">https://api.zapheit.com/integrations/oauth/callback/slack</span>
+                  <span className="font-mono text-slate-400">https://api.zapheit.com/api/integrations/oauth/callback/slack</span>
                 </p>
               </div>
             </div>

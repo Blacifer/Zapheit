@@ -790,8 +790,19 @@ function getApiBaseUrl(req: any): string {
   return `${proto}://${host}`.replace(/\/+$/, '');
 }
 
+const CANONICAL_FRONTEND_URL = 'https://zapheit.com';
+
 function getFrontendUrl(): string {
-  return (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  const raw = process.env.FRONTEND_URL || '';
+  // FRONTEND_URL may be comma-separated (e.g. "https://zapheit.com,https://www.zapheit.com").
+  // For redirects we only need the first (canonical) origin.
+  const first = raw.split(',')[0].trim().replace(/\/+$/, '');
+  // Never redirect back to the API server itself — that produces a blank screen
+  // because the API has no frontend assets.
+  if (!first || first.includes('api.zapheit.com') || first.includes('localhost')) {
+    return process.env.NODE_ENV === 'production' ? CANONICAL_FRONTEND_URL : 'http://localhost:5173';
+  }
+  return first;
 }
 
 function safeReturnPath(value: unknown): string | null {
@@ -815,6 +826,61 @@ function resolveUrlTemplate(template: string, connection: Record<string, string>
     out = out.split(`{${k}}`).join(encodeURIComponent(v));
   });
   return out;
+}
+
+function oauthRedirectHtml(target: string, status: 'connected' | 'error'): string {
+  const safeTarget = JSON.stringify(target);
+  const title = status === 'connected' ? 'Connection complete' : 'Connection failed';
+  const message = status === 'connected'
+    ? 'Returning to Zapheit...'
+    : 'Returning to Zapheit with the error details...';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content="0;url=${target}" />
+    <title>${title}</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #080b12;
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .wrap {
+        text-align: center;
+        padding: 24px;
+      }
+      .spinner {
+        width: 28px;
+        height: 28px;
+        margin: 0 auto 16px;
+        border-radius: 9999px;
+        border: 3px solid rgba(255,255,255,0.15);
+        border-top-color: #38bdf8;
+        animation: spin 0.9s linear infinite;
+      }
+      a { color: #7dd3fc; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="spinner"></div>
+      <p>${message}</p>
+      <p><a href="${target}">Continue</a></p>
+    </div>
+    <script>
+      window.location.replace(${safeTarget});
+    </script>
+  </body>
+</html>`;
 }
 
 async function signOAuthState(payload: Record<string, any>): Promise<string> {
@@ -3107,7 +3173,8 @@ router.get('/oauth/callback/:service', async (req, res) => {
 
     const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/apps';
     const params = new URLSearchParams({ status: 'connected', service, provider: service });
-    return res.redirect(302, `${frontendUrl}${returnTo}?${params.toString()}`);
+    const target = `${frontendUrl}${returnTo}?${params.toString()}`;
+    return res.send(oauthRedirectHtml(target, 'connected'));
   } catch (err: any) {
     logger.warn('OAuth callback failed', { service, error: err?.message || String(err) });
     if (parsedState?.orgId) {
@@ -3131,7 +3198,8 @@ router.get('/oauth/callback/:service', async (req, res) => {
     }
     const params = new URLSearchParams({ status: 'error', service, message: err?.message || 'OAuth failed' });
     const errReturnTo = safeReturnPath((parsedState as any)?.returnTo) || '/dashboard/apps';
-    return res.redirect(302, `${frontendUrl}${errReturnTo}?${params.toString()}`);
+    const errTarget = `${frontendUrl}${errReturnTo}?${params.toString()}`;
+    return res.send(oauthRedirectHtml(errTarget, 'error'));
   }
 });
 
