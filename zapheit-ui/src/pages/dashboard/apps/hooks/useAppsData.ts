@@ -67,10 +67,11 @@ export function useAppsData(agents: AIAgent[] = []) {
   }, []);
 
   const markDisconnected = useCallback((connectorId: string) => {
+    const aliases = new Set([connectorId, connectorId.replace(/_/g, '-'), connectorId.replace(/-/g, '_')]);
     setRawCatalog((prev) =>
       prev.map((entry) => {
         const entryId = entry.app_key || entry.id;
-        if (entryId !== connectorId) return entry;
+        if (!aliases.has(entryId)) return entry;
         return {
           ...entry,
           installed: false,

@@ -873,7 +873,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [activeWizard, setActiveWizard] = useState<AppStack | null>(null);
   const [wizardApp, setWizardApp] = useState<{ def: AppDef; unified: UnifiedApp } | null>(null);
 
-  const { allApps, loading, reload } = useAppsData(agents);
+  const { allApps, loading, reload, markDisconnected } = useAppsData(agents);
 
   // Handle OAuth callback — supports both integrations flow (?status=&service=)
   // and marketplace flow (?marketplace_connected=&marketplace_app= / ?marketplace_error=)
@@ -978,7 +978,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   /* Connect handler */
   const handleConnect = useCallback(async (app: AppDef, creds?: Record<string, string>) => {
     if (app.auth === 'oauth') {
-      window.location.href = api.integrations.getOAuthAuthorizeUrl(app.serviceId, '/dashboard/apps');
+      // Must use initOAuth (authenticated fetch) — direct browser navigation never sends
+      // the Authorization header so the authorize route returns 401.
+      const res = await api.integrations.initOAuth(app.serviceId, '/dashboard/apps');
+      if (res.success && (res.data as any)?.url) {
+        window.location.href = (res.data as any).url;
+      } else {
+        toast.error((res as any).error || 'Failed to start OAuth flow');
+      }
       return;
     }
     if (!creds) return;
@@ -992,14 +999,17 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   }, [reload]);
 
   const handleDisconnect = useCallback(async (app: AppDef) => {
+    // Optimistically remove from UI immediately — reload() may fail if auth session is
+    // degraded, which would leave the card showing Connected despite a successful API call.
+    markDisconnected(app.serviceId);
     const res = await api.integrations.disconnect(app.serviceId);
     if (res.success) {
       toast.success(`${app.name} disconnected`);
-      void reload();
     } else {
       toast.error((res as any).error || 'Disconnect failed');
     }
-  }, [reload]);
+    void reload();
+  }, [reload, markDisconnected]);
 
   const handleOpenWizard = useCallback((def: AppDef, backendUnified: UnifiedApp | null) => {
     setWizardApp({ def, unified: appDefToUnifiedApp(def, backendUnified) });
