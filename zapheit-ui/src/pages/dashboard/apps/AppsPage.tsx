@@ -147,7 +147,8 @@ function CredForm({
       }
       setTestState('ok');
       onSubmit(values);
-    } catch {
+    } catch (err) {
+      console.warn('[CredForm] connection test failed:', err);
       setTestState('fail');
       setTestError("Couldn't reach the server. Check your internet connection and try again.");
     }
@@ -244,7 +245,8 @@ function RequestAccessModal({ appName, onClose }: { appName: string; onClose: ()
         body: JSON.stringify({ app_id: appName.toLowerCase().replace(/\s+/g, '-'), app_name: form.app_name, use_case: `${form.name} (${form.company}, ${form.email}): ${form.use_case}` }),
       });
       setDone(true);
-    } catch {
+    } catch (err) {
+      console.warn('[RequestAccessModal] submit failed:', err);
       toast.error('Failed to submit request. Please try again.');
     } finally {
       setSubmitting(false);
@@ -563,7 +565,7 @@ function AppCard({
           const label = config.extract(payload);
           if (label) { setLiveMetric(label); METRIC_CACHE.set(app.appId, { value: label, expiresAt: Date.now() + 5 * 60 * 1000 }); }
         })
-        .catch(() => {/* best-effort */});
+        .catch((err) => console.warn('[AppCard] live metric fetch failed:', err));
     }, { threshold: 0.1 });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };
@@ -587,7 +589,7 @@ function AppCard({
           const count = (res as any).total ?? res.data?.length ?? 0;
           if (count > 0) setUsageCount(count);
         })
-        .catch(() => {/* best-effort */});
+        .catch((err) => console.warn('[AppCard] usage count fetch failed:', err));
     }, { threshold: 0.1 });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };
@@ -928,6 +930,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   }, [apps, activeCategory, search, stackFilter]);
 
   const connected = useMemo(() => apps.filter((a) => a.status === 'connected'), [apps]);
+
+  const needsAttention = useMemo(() => connected.filter(({ status, backendApp }) => {
+    if (status === 'error') return true;
+    const raw = backendApp as any;
+    const lastErr = raw?.last_error_at || raw?.lastErrorAt;
+    const lastSync = raw?.last_sync_at || raw?.lastSyncAt;
+    return lastErr && (!lastSync || new Date(lastErr) > new Date(lastSync));
+  }), [connected]);
   const indiaNativeCount = useMemo(() => APP_CATALOG.filter((a) => a.isIndiaNative).length, []);
   const comingSoonCount = useMemo(() => APP_CATALOG.filter((a) => a.productionStatus === 'coming_soon').length, []);
 
@@ -1139,6 +1149,39 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                 {cat.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Attention strip — apps with errors or stale sync */}
+        {needsAttention.length > 0 && !search && !stackFilter && (
+          <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3">
+            <div className="flex items-center gap-2 mb-2.5">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-amber-300">Attention needed</span>
+              <span className="text-[10px] text-amber-400/60">{needsAttention.length} app{needsAttention.length !== 1 ? 's' : ''} need attention</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {needsAttention.map(({ def, backendUnified }) => (
+                <div
+                  key={def.appId}
+                  className="flex items-center gap-2 pl-2.5 pr-1 py-1 rounded-lg border border-amber-400/20 bg-white/[0.04]"
+                >
+                  <span
+                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                    style={{ background: def.colorHex }}
+                  >
+                    {def.logoLetter[0]}
+                  </span>
+                  <span className="text-xs text-slate-300 font-medium">{def.name}</span>
+                  <button
+                    onClick={() => handleOpenWizard(def, backendUnified)}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 font-medium px-1.5 py-0.5 rounded hover:bg-amber-400/10 transition-colors"
+                  >
+                    Reconnect
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

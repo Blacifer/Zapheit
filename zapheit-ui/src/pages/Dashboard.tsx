@@ -12,6 +12,7 @@ import { api } from '../lib/api-client';
 import { useAgents, useIncidents, useIncidentStream, useCostData, queryKeys } from '../hooks/useData';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
+import { WorkspaceErrorBoundary } from './dashboard/apps/components/WorkspaceErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
@@ -1174,23 +1175,23 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       <AppsPage onNavigate={navigateTo} agents={enrichedAgents} />
                     </SectionErrorBoundary>
                   } />
-                  <Route path="apps/slack/workspace" element={<SectionErrorBoundary fallbackMessage="Slack workspace failed to load"><SlackWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/jira/workspace" element={<SectionErrorBoundary fallbackMessage="Jira workspace failed to load"><JiraWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/github/workspace" element={<SectionErrorBoundary fallbackMessage="GitHub workspace failed to load"><GitHubWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/hubspot/workspace" element={<SectionErrorBoundary fallbackMessage="HubSpot workspace failed to load"><HubSpotWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/quickbooks/workspace" element={<SectionErrorBoundary fallbackMessage="QuickBooks workspace failed to load"><QuickBooksWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/google-workspace/workspace" element={<SectionErrorBoundary fallbackMessage="Google Workspace failed to load"><GoogleWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/microsoft-365/workspace" element={<SectionErrorBoundary fallbackMessage="Microsoft 365 failed to load"><Microsoft365Workspace /></SectionErrorBoundary>} />
-                  <Route path="apps/zoho/workspace" element={<SectionErrorBoundary fallbackMessage="Zoho People workspace failed to load"><ZohoWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/linkedin/workspace" element={<SectionErrorBoundary fallbackMessage="LinkedIn workspace failed to load"><LinkedInWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/greythr/workspace" element={<SectionErrorBoundary fallbackMessage="greytHR workspace failed to load"><GreythrWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/tally/workspace" element={<SectionErrorBoundary fallbackMessage="TallyPrime workspace failed to load"><TallyWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/freshdesk/workspace" element={<SectionErrorBoundary fallbackMessage="Freshdesk workspace failed to load"><FreshdeskWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/cashfree/workspace" element={<SectionErrorBoundary fallbackMessage="Cashfree workspace failed to load"><CashfreeWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/naukri/workspace" element={<SectionErrorBoundary fallbackMessage="Naukri workspace failed to load"><NaukriWorkspace /></SectionErrorBoundary>} />
-                  <Route path="apps/workspaces/recruitment" element={<SectionErrorBoundary fallbackMessage="Recruitment workspace failed to load"><RecruitmentWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/slack/workspace" element={<WorkspaceErrorBoundary><SlackWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/jira/workspace" element={<WorkspaceErrorBoundary><JiraWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/github/workspace" element={<WorkspaceErrorBoundary><GitHubWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/hubspot/workspace" element={<WorkspaceErrorBoundary><HubSpotWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/quickbooks/workspace" element={<WorkspaceErrorBoundary><QuickBooksWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/google-workspace/workspace" element={<WorkspaceErrorBoundary><GoogleWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/microsoft-365/workspace" element={<WorkspaceErrorBoundary><Microsoft365Workspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/zoho/workspace" element={<WorkspaceErrorBoundary><ZohoWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/notion/workspace" element={<WorkspaceErrorBoundary><NotionWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/whatsapp/workspace" element={<WorkspaceErrorBoundary><WhatsAppWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/linkedin/workspace" element={<WorkspaceErrorBoundary><LinkedInWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/greythr/workspace" element={<WorkspaceErrorBoundary><GreythrWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/tally/workspace" element={<WorkspaceErrorBoundary><TallyWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/freshdesk/workspace" element={<WorkspaceErrorBoundary><FreshdeskWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/cashfree/workspace" element={<WorkspaceErrorBoundary><CashfreeWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/naukri/workspace" element={<WorkspaceErrorBoundary><NaukriWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/workspaces/recruitment" element={<WorkspaceErrorBoundary><RecruitmentWorkspace /></WorkspaceErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={
                     <SectionErrorBoundary fallbackMessage="Hubs failed to load">
