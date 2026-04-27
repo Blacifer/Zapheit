@@ -3330,16 +3330,24 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
   const spec = getIntegrationSpec(service);
   if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
 
+  // Match BOTH hyphen and underscore variants of service_type. Apps like Google Workspace
+  // can be installed via the marketplace flow (stores 'google-workspace') OR the integrations
+  // flow (stores 'google_workspace'). Disconnect must wipe all matching rows regardless of
+  // which path created them, otherwise the card stays "Connected" after a successful API call.
+  const aliases = new Set<string>([service]);
+  if (service.includes('_')) aliases.add(service.replace(/_/g, '-'));
+  if (service.includes('-')) aliases.add(service.replace(/-/g, '_'));
+
   const query = new URLSearchParams();
   query.set('organization_id', eq(orgId));
-  query.set('service_type', eq(service));
+  query.set('service_type', in_(Array.from(aliases)));
   query.set('select', '*');
   const rows = await safeQuery<StoredIntegrationRow>(rest, 'integrations', query);
-  const row = rows?.[0];
-  if (!row?.id) return res.json({ success: true, message: 'Already disconnected' });
+  if (!rows?.length) return res.json({ success: true, message: 'Already disconnected' });
 
+  const ids = rows.map((r) => r.id);
   const patchQuery = new URLSearchParams();
-  patchQuery.set('id', eq(row.id));
+  patchQuery.set('id', in_(ids));
   await rest('integrations', patchQuery, {
     method: 'PATCH',
     body: {
@@ -3352,20 +3360,22 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
     },
   });
 
-  // Best-effort remove credentials.
+  // Best-effort remove credentials for all matched rows.
   try {
     const credQuery = new URLSearchParams();
-    credQuery.set('integration_id', eq(row.id));
+    credQuery.set('integration_id', in_(ids));
     await rest('integration_credentials', credQuery, { method: 'DELETE' });
   } catch (err) {
     logger.warn('Failed to delete integration credentials', { service, error: (err as any)?.message });
   }
 
-  await writeConnectionLog(rest, row.id, 'disconnect', 'success', 'Integration disconnected', {
-    service,
-    actor_user_id: req.user?.id || null,
-    actor_email: req.user?.email || null,
-  });
+  await Promise.all(ids.map((id) =>
+    writeConnectionLog(rest, id, 'disconnect', 'success', 'Integration disconnected', {
+      service,
+      actor_user_id: req.user?.id || null,
+      actor_email: req.user?.email || null,
+    }),
+  ));
 
   try {
     await pruneDisconnectedIntegrationFromAgents(rest, orgId, service);
