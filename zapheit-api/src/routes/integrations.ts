@@ -3321,7 +3321,10 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
   const orgId = getOrgId(req);
   if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
 
-  const rest = restAsUser(req);
+  // Use service role for all DB operations — auth is already enforced by authenticateToken +
+  // requirePermission above. restAsUser relies on RLS which can silently return [] and cause
+  // the handler to report "Already disconnected" without actually touching the DB.
+  const rest = restAsService;
   const service = req.params.service;
   const spec = getIntegrationSpec(service);
   if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
