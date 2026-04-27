@@ -79,11 +79,11 @@ export const LIVE_METRICS: Record<string, LiveMetricConfig> = {
     },
   },
   'google-workspace': {
-    action: 'list_users',
-    params: { limit: 1 },
+    action: 'list_files',
+    params: { pageSize: 5 },
     extract: (d: any) => {
-      const n = d?.total ?? (Array.isArray(d) ? d.length : null);
-      return n != null ? `${n} user${n !== 1 ? 's' : ''}` : null;
+      const n = Array.isArray(d) ? d.length : (d?.files?.length ?? null);
+      return n != null ? `${n} file${n !== 1 ? 's' : ''} in Drive` : null;
     },
   },
 };
