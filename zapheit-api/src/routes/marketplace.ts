@@ -2551,10 +2551,11 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
     const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
       status: 'neq.waitlisted',
-      select: 'service_type,status,last_sync_at,last_error_at,last_error_msg,metadata',
+      select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg,metadata',
     }))) as Array<{
       service_type: string;
       status: string;
+      connected_at: string | null;
       last_sync_at: string | null;
       last_error_at: string | null;
       last_error_msg: string | null;
@@ -2562,7 +2563,11 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
     }>;
     const map = new Map<string, InstalledAppHealth>();
     (rows || []).forEach((r) => {
-      if (!activeStatuses.has(String(r.status || '').toLowerCase())) return;
+      const normalizedStatus = String(r.status || '').toLowerCase();
+      if (!activeStatuses.has(normalizedStatus)) return;
+      // OAuth initiation/callback failures can persist an `error` row before the app has ever
+      // been connected. Those should not be shown as installed/fixable connections in the apps UI.
+      if ((normalizedStatus === 'error' || normalizedStatus === 'expired') && !r.connected_at) return;
       // Prefer marketplace rows when both exist for the same service_type.
       const isMarketplace = r.metadata?.marketplace_app === 'true';
       const nextValue: InstalledAppHealth = {
