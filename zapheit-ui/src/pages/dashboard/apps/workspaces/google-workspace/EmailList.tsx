@@ -71,6 +71,55 @@ function senderInitial(from?: string): string {
   return (senderName(from)[0] ?? '?').toUpperCase();
 }
 
+function sanitizeEmailHtml(html: string): string {
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return html;
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    doc.querySelectorAll('script, iframe, object, embed, form, input, button, textarea, select, base').forEach((node) => {
+      node.remove();
+    });
+
+    doc.querySelectorAll('*').forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        const value = attr.value.trim().toLowerCase();
+        if (name.startsWith('on')) {
+          el.removeAttribute(attr.name);
+          return;
+        }
+        if ((name === 'href' || name === 'src') && value.startsWith('javascript:')) {
+          el.removeAttribute(attr.name);
+          return;
+        }
+        if (name === 'target') {
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+      });
+    });
+
+    return doc.documentElement.outerHTML;
+  } catch {
+    return html;
+  }
+}
+
+function htmlToPlainText(html: string): string {
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return html.replace(/<[^>]+>/g, ' ');
+  }
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    return doc.body.textContent || '';
+  } catch {
+    return html.replace(/<[^>]+>/g, ' ');
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Compose / Reply box                                                */
 /* ------------------------------------------------------------------ */
@@ -179,7 +228,10 @@ function EmailDetailView({ connectorId, emailMeta, onBack, onArchived, onActionC
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState<'reply' | 'forward' | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [viewMode, setViewMode] = useState<'rendered' | 'plain' | 'source'>('rendered');
+  const [iframeHeight, setIframeHeight] = useState(520);
   const loaded = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (loaded.current) return;
@@ -235,6 +287,32 @@ function EmailDetailView({ connectorId, emailMeta, onBack, onArchived, onActionC
   };
 
   const email = detail ?? emailMeta;
+  const emailBody = (detail as EmailDetail | null)?.body || email.snippet || '(empty)';
+  const isHtmlEmail = Boolean((detail as EmailDetail | null)?.isHtml && (detail as EmailDetail | null)?.body);
+  const sanitizedHtml = useMemo(
+    () => (isHtmlEmail ? sanitizeEmailHtml((detail as EmailDetail).body || '') : ''),
+    [detail, isHtmlEmail],
+  );
+  const plainTextBody = useMemo(
+    () => (isHtmlEmail ? htmlToPlainText((detail as EmailDetail).body || '') : emailBody),
+    [detail, emailBody, isHtmlEmail],
+  );
+
+  useEffect(() => {
+    setViewMode(isHtmlEmail ? 'rendered' : 'plain');
+  }, [emailMeta.id, isHtmlEmail]);
+
+  const handleIframeLoad = useCallback(() => {
+    const frame = iframeRef.current;
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    const height = Math.max(
+      doc.documentElement?.scrollHeight || 0,
+      doc.body?.scrollHeight || 0,
+      320,
+    );
+    setIframeHeight(Math.min(height + 8, 2400));
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -312,9 +390,45 @@ function EmailDetailView({ connectorId, emailMeta, onBack, onArchived, onActionC
                 ))}
               </div>
             )}
-            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
-              {(detail as EmailDetail | null)?.body || email.snippet || '(empty)'}
-            </div>
+            {isHtmlEmail && (
+              <div className="mb-4 flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.03] p-1 w-fit">
+                {[
+                  { id: 'rendered', label: 'Rendered' },
+                  { id: 'plain', label: 'Plain text' },
+                  { id: 'source', label: 'Source' },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => setViewMode(option.id as typeof viewMode)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+                      viewMode === option.id
+                        ? 'bg-white/[0.10] text-white'
+                        : 'text-slate-400 hover:text-slate-200',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isHtmlEmail && viewMode === 'rendered' ? (
+              <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white">
+                <iframe
+                  ref={iframeRef}
+                  title={email.subject || 'Email content'}
+                  srcDoc={sanitizedHtml}
+                  sandbox=""
+                  className="w-full"
+                  style={{ height: `${iframeHeight}px` }}
+                  onLoad={handleIframeLoad}
+                />
+              </div>
+            ) : (
+              <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                {viewMode === 'source' ? emailBody : plainTextBody}
+              </div>
+            )}
           </div>
         )}
       </div>
