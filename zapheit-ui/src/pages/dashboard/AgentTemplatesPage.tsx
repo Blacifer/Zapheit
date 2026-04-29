@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { X, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare, ShieldCheck, AlertTriangle, BriefcaseBusiness, Server, KeyRound } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { toast } from '../../lib/toast';
 import { USD_TO_INR } from '../../lib/currency';
 import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
 import { getFrontendConfig } from '../../lib/config';
+import { buildTemplateLaunchPackage, type TemplateLaunchPackage } from '../../lib/template-launch-package';
 
 interface LiveModel {
   id: string;
@@ -27,8 +28,8 @@ type TemplateReadinessItem = {
 };
 
 interface AgentTemplatesPageProps {
-  onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
-  onLaunchInChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
+  onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[]; launch_package?: TemplateLaunchPackage }) => Promise<void>;
+  onLaunchInChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[]; launch_package?: TemplateLaunchPackage }) => Promise<void>;
 }
 
 export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTemplatesPageProps) {
@@ -84,20 +85,13 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
     load().finally(() => setModelsLoading(false));
   }, []);
 
-  // Static marketplace social proof per template
-  const TEMPLATE_META: Record<string, { teams: number; setupMins: number; featured?: boolean }> = {
-    'hr-policy-assistant':      { teams: 412,  setupMins: 5,  featured: true },
-    'support-triage-bot':       { teams: 891,  setupMins: 3,  featured: true },
-    'interview-scheduler':      { teams: 278,  setupMins: 8,  featured: true },
-    'expense-approver':         { teams: 634,  setupMins: 5,  featured: true },
-    'meeting-note-taker':       { teams: 567,  setupMins: 4,  featured: true },
-    'leave-management':         { teams: 321,  setupMins: 6  },
-    'performance-review':       { teams: 198,  setupMins: 10 },
-    'it-helpdesk':              { teams: 445,  setupMins: 5  },
-    'sales-lead-qualifier':     { teams: 388,  setupMins: 7  },
-    'finance-invoice':          { teams: 256,  setupMins: 8  },
-  };
-  const FEATURED_IDS = Object.entries(TEMPLATE_META).filter(([, v]) => v.featured).map(([k]) => k);
+  const FEATURED_IDS = useMemo(
+    () => AGENT_TEMPLATES
+      .filter((template) => template.maturity === 'Core')
+      .slice(0, 6)
+      .map((template) => template.id),
+    [],
+  );
 
   const resolveModel = useCallback((modelId: string) =>
     (() => {
@@ -200,6 +194,14 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
   const monthlyTokens = clampMonthlyTokens(monthlyTokensMillions * 1_000_000);
   const monthlyCost = calcMonthlyCost(selectedModel, monthlyTokens);
   const industries = [...AGENT_TEMPLATE_INDUSTRIES];
+  const selectedLaunchPackage = useMemo(() => {
+    if (!selectedTemplate) return null;
+    return buildTemplateLaunchPackage({
+      template: selectedTemplate,
+      modelSelected: Boolean(selectedModel),
+      monthlyCostInr: monthlyCost.status === 'priced' ? monthlyCost.inr : null,
+    });
+  }, [monthlyCost, selectedModel, selectedTemplate]);
 
   const filteredTemplates = useMemo(() => {
     let result = AGENT_TEMPLATES;
@@ -217,59 +219,13 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
     return result;
   }, [selectedIndustry, templateSearchQuery]);
 
-  const selectedTemplateReadiness = useMemo<TemplateReadinessItem[]>(() => {
-    if (!selectedTemplate) return [];
-
-    const requiredSystems = selectedTemplate.requiredSystems ?? [];
-    const hasBudget = selectedTemplate.budget > 0;
-    const budgetOverrun =
-      monthlyCost.status === 'priced' && hasBudget && monthlyCost.inr > selectedTemplate.budget;
-
-    return [
-      {
-        label: 'Live model selected',
-        ready: Boolean(selectedModel),
-        detail: selectedModel
-          ? `${selectedModel.name} via ${selectedModel.provider}`
-          : 'Select a model from the live catalog before deploying.',
-      },
-      {
-        label: 'Budget guardrail',
-        ready: hasBudget && !budgetOverrun,
-        detail: budgetOverrun
-          ? `Estimated monthly spend is above the ₹${selectedTemplate.budget.toLocaleString('en-IN')} budget.`
-          : hasBudget
-            ? `Budget cap set at ₹${selectedTemplate.budget.toLocaleString('en-IN')}/month.`
-            : 'Add a monthly budget before production launch.',
-      },
-      {
-        label: 'Required systems declared',
-        ready: requiredSystems.length > 0,
-        detail: requiredSystems.length > 0
-          ? requiredSystems.join(', ')
-          : 'Add the real apps, data sources, and permission scopes this agent needs.',
-      },
-      {
-        label: 'Approval policy default',
-        ready: Boolean(selectedTemplate.approvalDefault),
-        detail: selectedTemplate.approvalDefault || 'Define which actions are advisory, approval-gated, or blocked.',
-      },
-      {
-        label: 'Risk and purpose documented',
-        ready: Boolean(selectedTemplate.riskLevel && selectedTemplate.businessPurpose),
-        detail: selectedTemplate.riskLevel
-          ? `${selectedTemplate.riskLevel} risk with a documented business purpose.`
-          : 'Set risk level and business purpose before production review.',
-      },
-      {
-        label: 'Audit evidence path',
-        ready: Boolean(selectedTemplate.certifications?.length || selectedTemplate.maturity === 'Core'),
-        detail: selectedTemplate.certifications?.length
-          ? `Evidence labels: ${selectedTemplate.certifications.join(', ')}`
-          : 'Attach compliance or audit evidence labels for paid-pilot review.',
-      },
-    ];
-  }, [monthlyCost, selectedModel, selectedTemplate]);
+  const selectedTemplateReadiness = useMemo<TemplateReadinessItem[]>(() => (
+    selectedLaunchPackage?.checks.map((check) => ({
+      label: check.label,
+      detail: check.detail,
+      ready: check.ready,
+    })) || []
+  ), [selectedLaunchPackage]);
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, { bg: string; border: string; text: string; light: string }> = {
@@ -345,10 +301,9 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
       {/* Featured strip — shown only on "All" with no search */}
       {selectedIndustry === 'all' && !templateSearchQuery && (
         <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Most popular</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Core launch packages</p>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {AGENT_TEMPLATES.filter((t) => FEATURED_IDS.includes(t.id)).map((t) => {
-              const meta = TEMPLATE_META[t.id];
               const Icon = t.icon;
               const colors = (() => {
                 const all: Record<string, { text: string; light: string }> = {
@@ -374,11 +329,11 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white whitespace-nowrap">{t.name}</p>
-                    {(t.usedBy || t.setupMinutes) && (
+                    {(t.setupMinutes || t.riskLevel) && (
                       <p className="text-[11px] text-slate-500">
-                        {t.usedBy ? `${t.usedBy.toLocaleString()} teams` : ''}
-                        {t.usedBy && t.setupMinutes ? ' · ' : ''}
-                        {t.setupMinutes ? `~${t.setupMinutes} min` : ''}
+                        {t.riskLevel ? `${t.riskLevel} risk` : ''}
+                        {t.riskLevel && t.setupMinutes ? ' · ' : ''}
+                        {t.setupMinutes ? `~${t.setupMinutes} min setup` : ''}
                       </p>
                     )}
                   </div>
@@ -486,12 +441,12 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
 
                 <div className="flex-1"></div>
 
-                {/* Social proof + setup time */}
-                {(template.usedBy || template.setupMinutes) && (
+                {/* Setup time */}
+                {(template.setupMinutes || template.maturity) && (
                   <p className="mb-3 text-[11px] text-slate-500">
-                    {template.usedBy ? `Used by ${template.usedBy.toLocaleString()} teams` : ''}
-                    {template.usedBy && template.setupMinutes ? ' · ' : ''}
-                    {template.setupMinutes ? `~${template.setupMinutes} min to set up` : ''}
+                    {template.maturity ? `${template.maturity} package` : ''}
+                    {template.maturity && template.setupMinutes ? ' · ' : ''}
+                    {template.setupMinutes ? `~${template.setupMinutes} min setup estimate` : ''}
                   </p>
                 )}
 
@@ -669,13 +624,39 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                       </p>
                     </div>
                     <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-                      selectedTemplateReadiness.every((item) => item.ready)
+                      selectedLaunchPackage?.canLaunch
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                         : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
                     }`}>
-                      {selectedTemplateReadiness.every((item) => item.ready) ? 'Ready for governed launch' : 'Needs production setup'}
+                      {selectedLaunchPackage?.canLaunch ? 'Ready for governed launch' : 'Needs production setup'}
                     </span>
                   </div>
+
+                  {selectedLaunchPackage && (
+                    <div className="mb-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <BriefcaseBusiness className="h-4 w-4" />
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Owner</p>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-white">{selectedLaunchPackage.ownerRole}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <Server className="h-4 w-4" />
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Runtime</p>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-white">{selectedLaunchPackage.runtimeTarget}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <ShieldCheck className="h-4 w-4" />
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em]">Risk</p>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-white">{selectedLaunchPackage.riskLevel} · ₹{selectedLaunchPackage.budgetInr.toLocaleString('en-IN')}/mo cap</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid gap-3 md:grid-cols-2">
                     {selectedTemplateReadiness.map((item) => (
@@ -700,12 +681,32 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                     ))}
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-                    <p className="text-sm font-semibold text-cyan-100">Launch contract</p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                      Deploying creates a governed agent record with model, budget, policy context, and audit trail. Connector access still depends on real app connections and certified connector actions.
-                    </p>
-                  </div>
+                  {selectedLaunchPackage && (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                        <div className="flex items-center gap-2">
+                          <KeyRound className="h-4 w-4 text-cyan-200" />
+                          <p className="text-sm font-semibold text-cyan-100">Permission contract</p>
+                        </div>
+                        <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-400">
+                          {selectedLaunchPackage.requiredPermissions.length > 0
+                            ? selectedLaunchPackage.requiredPermissions.slice(0, 4).map((permission) => <li key={permission}>{permission}</li>)
+                            : <li>Permission scopes must be declared before production launch.</li>}
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                        <p className="text-sm font-semibold text-cyan-100">Launch contract</p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                          Deploying creates a governed agent record with model, budget, launch package, and audit context. Connector access still depends on real app connections and certified connector actions.
+                        </p>
+                        {!selectedLaunchPackage.canLaunch && (
+                          <p className="mt-2 text-xs text-amber-200">
+                            Blocked for governed chat: {selectedLaunchPackage.blockers.join(', ')}.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -955,6 +956,11 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                     <div className="flex gap-3 mt-6">
                       <button
                         onClick={async () => {
+                          if (!selectedLaunchPackage?.canLaunch) {
+                            setActiveTab('readiness');
+                            toast.error('Complete the launch package before opening this template in governed chat.');
+                            return;
+                          }
                           setPendingAction('chat');
                           try {
                             await onLaunchInChat({
@@ -963,6 +969,7 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                               platform: selectedModel?.provider ?? selectedTemplate.platform,
                               system_prompt: systemPrompt,
                               integration_ids: [],
+                              launch_package: selectedLaunchPackage,
                             });
                             toast.success(`${selectedTemplate.name} deployed and opened in governed Chat`);
                             setSelectedTemplate(null);
@@ -976,7 +983,7 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                         className="flex-1 py-3 rounded-xl font-bold text-slate-950 bg-cyan-300 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
                       >
                         <MessageSquare className="w-4 h-4" />
-                        {pendingAction === 'chat' ? 'Deploying...' : 'Deploy to Governed Chat'}
+                        {pendingAction === 'chat' ? 'Deploying...' : selectedLaunchPackage?.canLaunch ? 'Deploy to Governed Chat' : 'Complete Package for Chat'}
                       </button>
                       <button
                         onClick={async () => {
@@ -988,8 +995,11 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                               platform: selectedModel?.provider ?? selectedTemplate.platform,
                               system_prompt: systemPrompt,
                               integration_ids: [],
+                              launch_package: selectedLaunchPackage || undefined,
                             });
-                            toast.success(`${selectedTemplate.name} added to Fleet — connect a channel from the workspace to go live`);
+                            toast.success(selectedLaunchPackage?.canLaunch
+                              ? `${selectedTemplate.name} added to Fleet with a production launch package`
+                              : `${selectedTemplate.name} saved as a draft Fleet package — complete readiness blockers before live use`);
                             setSelectedTemplate(null);
                           } catch (error) {
                             toast.error(error instanceof Error ? error.message : 'Failed to add template to fleet');
@@ -1000,7 +1010,7 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                         disabled={pendingAction !== null}
                         className={`flex-1 py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`}
                       >
-                        {pendingAction === 'fleet' ? 'Adding...' : 'Add to Production Fleet'}
+                        {pendingAction === 'fleet' ? 'Adding...' : selectedLaunchPackage?.canLaunch ? 'Add to Production Fleet' : 'Save Draft to Fleet'}
                       </button>
                       <button
                         onClick={() => setSelectedTemplate(null)}
