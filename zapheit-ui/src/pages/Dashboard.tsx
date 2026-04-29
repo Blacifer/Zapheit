@@ -29,6 +29,7 @@ const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
 const ConnectAgentPage = lazy(() => import('./dashboard/ConnectAgentPage'));
 const FleetPage = lazy(() => import('./dashboard/FleetPage'));
+const AgentProfilePage = lazy(() => import('./dashboard/AgentProfilePage'));
 const WorkItemsPage = lazy(() => import('./dashboard/WorkItemsPage'));
 const ActionPoliciesPage = lazy(() => import('./dashboard/ActionPoliciesPage'));
 const IncidentsPage = lazy(() => import('./dashboard/IncidentsPage'));
@@ -1160,6 +1161,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     </SectionErrorBoundary>
                   } />
                   <Route path="fleet" element={<Navigate to="/dashboard/agents" replace />} />
+                  <Route path="agents/:agentId/profile" element={
+                    <SectionErrorBoundary fallbackMessage="Agent profile failed to load">
+                      <AgentProfilePage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
                   {/* Agent Studio — consolidates Templates + Agent Library + Playbooks */}
                   <Route path="agent-studio" element={
                     <SectionErrorBoundary fallbackMessage="Agent Studio failed to load">

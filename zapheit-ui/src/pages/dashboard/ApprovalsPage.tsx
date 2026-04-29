@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckSquare, Clock, RefreshCw, CheckCircle2, XCircle,
   AlertCircle, Ban, ChevronDown, ChevronUp, Loader2,
@@ -307,6 +307,7 @@ function PendingCard({
   onSnooze: (id: string, hours: number) => Promise<void>;
   onEscalate: (id: string) => Promise<void>;
 }) {
+  const navigate = useNavigate();
   const [review, setReview] = useState<ReviewState>({ note: '', submitting: false });
   const [showNote, setShowNote] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -407,6 +408,15 @@ function PendingCard({
             <span>Requested by: <span className="text-slate-300">{request.requested_by}</span></span>
             <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
             {request.source ? <span>Via: <span className="text-slate-300 capitalize">{request.source}</span></span> : null}
+            {request.agent_id ? (
+              <button
+                onClick={() => navigate(`/dashboard/agents/${request.agent_id}/profile`)}
+                className="inline-flex items-center gap-1 text-cyan-300 transition-colors hover:text-cyan-200"
+              >
+                <Bot className="h-3 w-3" />
+                Agent profile
+              </button>
+            ) : null}
           </div>
           {/* Tags */}
           {(request as any).tags && (request as any).tags.length > 0 && (

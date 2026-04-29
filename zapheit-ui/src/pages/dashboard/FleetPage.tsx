@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
   ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3,
-  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info, Ban, Share2, Check
+  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info, Ban, Share2, Check, FileText
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
@@ -1600,7 +1600,14 @@ export default function FleetPage({
                         {agent.publishStatus === 'live' ? <Eye className="w-4 h-4" /> : connectedTargetCount > 0 ? <Rocket className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
                         {nextActionLabel}
                       </button>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => onOpenOperationsPage?.(`agents/${agent.id}/profile`)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-cyan-500/10 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Profile
+                        </button>
                         <button
                           onClick={() => openWorkspace(agent.id)}
                           className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
