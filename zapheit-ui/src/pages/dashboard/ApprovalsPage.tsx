@@ -111,6 +111,25 @@ function friendlyAction(action: string): string {
   return ACTION_LABELS[normalized] ?? action.replace(/_/g, ' ').toLowerCase();
 }
 
+function friendlyService(service?: string | null): string {
+  const normalized = String(service || '').toLowerCase();
+  if (normalized.includes('greythr') || normalized.includes('greyt')) return 'greytHR';
+  if (normalized.includes('tally')) return 'TallyPrime';
+  if (normalized.includes('naukri')) return 'Naukri';
+  if (normalized.includes('cashfree')) return 'Cashfree';
+  if (normalized.includes('razorpay')) return 'Razorpay';
+  if (normalized.includes('keka')) return 'Keka';
+  if (normalized.includes('darwinbox')) return 'Darwinbox';
+  if (normalized.includes('whatsapp')) return 'WhatsApp';
+  if (normalized.includes('slack')) return 'Slack';
+  if (normalized.includes('github')) return 'GitHub';
+  if (normalized.includes('jira')) return 'Jira';
+  if (normalized.includes('hubspot')) return 'HubSpot';
+  if (normalized.includes('google')) return 'Google Workspace';
+  if (normalized.includes('microsoft')) return 'Microsoft 365';
+  return service ? service.replace(/[-_]/g, ' ') : 'Connected app';
+}
+
 function computeRiskScore(request: ApprovalRequest): number {
   // If API already computed a 0-1 float score, convert
   if (request.risk_score != null) {
@@ -140,6 +159,96 @@ function RiskBadge({ score }: { score: number }) {
       Risk {score}/100
     </span>
   );
+}
+
+function walkPayload(payload: unknown, visit: (key: string, value: unknown) => void, parentKey = '') {
+  if (!payload || typeof payload !== 'object') return;
+  if (Array.isArray(payload)) {
+    payload.forEach((value, index) => walkPayload(value, visit, `${parentKey}[${index}]`));
+    return;
+  }
+  Object.entries(payload as Record<string, unknown>).forEach(([key, value]) => {
+    const path = parentKey ? `${parentKey}.${key}` : key;
+    visit(path, value);
+    if (value && typeof value === 'object') walkPayload(value, visit, path);
+  });
+}
+
+function extractDecisionContext(request: ApprovalRequest, riskScore: number) {
+  const payload = request.action_payload || {};
+  const flatText = JSON.stringify(payload);
+  let amount: string | null = null;
+  let entity: string | null = null;
+  let recipient: string | null = null;
+  let externalUrl: string | null = null;
+  const sensitive = new Set<string>();
+
+  walkPayload(payload, (key, value) => {
+    const lowerKey = key.toLowerCase();
+    const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+    if (!text) return;
+
+    if (!amount && /(amount|total|price|salary|ctc|refund|invoice|payment|payout)/i.test(lowerKey)) {
+      const numeric = Number(String(text).replace(/[^\d.-]/g, ''));
+      if (Number.isFinite(numeric) && numeric > 0) {
+        const currency = /(usd|dollar|\$)/i.test(flatText) ? 'USD' : 'INR';
+        amount = new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency,
+          maximumFractionDigits: numeric >= 100 ? 0 : 2,
+        }).format(numeric);
+      }
+    }
+
+    if (!recipient && /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/i.test(text)) {
+      recipient = text.match(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/i)?.[0] || null;
+    }
+
+    if (!recipient && /(phone|mobile|whatsapp|to|recipient|customer|employee|candidate|vendor)/i.test(lowerKey) && text.length <= 80) {
+      recipient = text;
+    }
+
+    if (!externalUrl && /^https?:\/\//i.test(text) && !/localhost|127\.0\.0\.1/i.test(text)) {
+      externalUrl = text;
+    }
+
+    if (!entity && /(employee|candidate|customer|vendor|invoice|ticket|issue|order|record|lead|job|account|user).*?(id|name|number)?$/i.test(lowerKey) && text.length <= 80) {
+      entity = text;
+    }
+
+    if (/\b(aadhaar|pan|passport|password|secret|token|api[_-]?key|bank|ifsc|upi)\b/i.test(`${lowerKey} ${text}`)) {
+      sensitive.add(lowerKey.split('.').pop()?.replace(/_/g, ' ') || 'sensitive data');
+    }
+  });
+
+  const action = request.action.toLowerCase();
+  const impact = (() => {
+    if (action.includes('delete') || action.includes('remove')) return 'Approving will permanently remove or disable data in the connected app.';
+    if (amount) return `Approving may create or update a financial action worth ${amount}.`;
+    if (recipient && (action.includes('send') || action.includes('message') || action.includes('email'))) return `Approving will send communication to ${recipient}.`;
+    if (action.includes('update')) return 'Approving will modify an existing business record.';
+    if (action.includes('create')) return 'Approving will create a new business record.';
+    return 'Approving lets the agent continue this governed workflow.';
+  })();
+
+  const whyReview = request.reason_message
+    || request.recommended_next_action
+    || (riskScore >= 70 ? 'High-risk action based on payload, destination, or action type.' : 'This action matched a human-review policy.');
+
+  const safeToShowSignals = Array.from(sensitive).slice(0, 3);
+
+  return {
+    app: friendlyService(request.service),
+    action: friendlyAction(request.action),
+    amount,
+    entity,
+    recipient,
+    externalUrl,
+    impact,
+    whyReview,
+    sensitiveSignals: safeToShowSignals,
+    expectedOutcome: `${friendlyService(request.service)} will receive the ${friendlyAction(request.action)} request and Zapheit will attach the approval decision to the audit trail.`,
+  };
 }
 
 function SlaCountdown({ createdAt, slaHours, escalatedAt }: { createdAt: string; slaHours?: number | null; escalatedAt?: string | null }) {
@@ -173,6 +282,7 @@ function PendingCard({
   onDeny,
   onCancel,
   onSnooze,
+  onEscalate,
 }: {
   request: ApprovalRequest & { risk_score?: number | null; sla_deadline?: string | null; sla_hours?: number | null; escalated_at?: string | null; delegate_to_user_id?: string | null; snoozed_until?: string | null; sub_tasks?: Array<{title: string; completed: boolean}>; tags?: string[] };
   selected: boolean;
@@ -182,12 +292,14 @@ function PendingCard({
   onDeny: (id: string, note: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
   onSnooze: (id: string, hours: number) => Promise<void>;
+  onEscalate: (id: string) => Promise<void>;
 }) {
   const [review, setReview] = useState<ReviewState>({ note: '', submitting: false });
   const [showNote, setShowNote] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showSnooze, setShowSnooze] = useState(false);
   const [showDelegate, setShowDelegate] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
   const [delegateEmail, setDelegateEmail] = useState('');
   const [delegating, setDelegating] = useState(false);
   const [comment, setComment] = useState('');
@@ -234,6 +346,8 @@ function PendingCard({
   };
 
   const riskScore = computeRiskScore(request);
+  const decisionContext = extractDecisionContext(request, riskScore);
+  const riskTone = riskScore >= 70 ? 'risk' : riskScore >= 40 ? 'review' : 'standard';
 
   return (
     <div className={cn(
@@ -257,13 +371,21 @@ function PendingCard({
         <div className="flex-1 min-w-0">
           {/* Plain-English "wants to" headline */}
           <p className="text-base font-semibold text-white leading-tight">
-            Your AI wants to{' '}
-            <span className="text-cyan-300">{friendlyAction(request.action)}</span>
-            {request.service ? <span className="text-slate-400 font-normal text-sm"> via {request.service}</span> : null}
+            Agent wants approval to{' '}
+            <span className="text-cyan-300">{decisionContext.action}</span>
+            <span className="text-slate-400 font-normal text-sm"> in {decisionContext.app}</span>
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <RiskBadge score={riskScore} />
             <SlaCountdown createdAt={request.created_at} slaHours={(request as any).sla_hours} escalatedAt={(request as any).escalated_at} />
+            <span className={cn(
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold',
+              riskTone === 'risk' ? 'border-rose-500/20 bg-rose-500/10 text-rose-300'
+                : riskTone === 'review' ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+                : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+            )}>
+              {riskTone === 'risk' ? 'Manager review' : riskTone === 'review' ? 'Needs context' : 'Routine check'}
+            </span>
             {(request as any).delegate_to_user_id && (
               <span className="inline-flex items-center gap-1 text-xs text-violet-400"><UserCheck className="w-3 h-3" />Delegated</span>
             )}
@@ -295,8 +417,62 @@ function PendingCard({
         </div>
       </div>
 
-      {/* Payload */}
-      <PayloadPreview payload={request.action_payload} />
+      {/* Decision brief */}
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Decision brief</p>
+            <p className="mt-1 text-sm font-semibold text-white">{decisionContext.impact}</p>
+            <p className="mt-1 text-xs text-slate-400">{decisionContext.whyReview}</p>
+          </div>
+          <button
+            onClick={() => setShowPayload(v => !v)}
+            className="self-start rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
+          >
+            {showPayload ? 'Hide payload' : 'Inspect payload'}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'App', value: decisionContext.app },
+            { label: 'Affected item', value: decisionContext.entity || decisionContext.recipient || 'Not specified' },
+            { label: 'Amount', value: decisionContext.amount || 'No amount detected' },
+            { label: 'Audit result', value: request.audit_ref ? `Ref ${request.audit_ref}` : 'Decision will be logged' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+              <p className="mt-1 truncate text-xs font-medium text-slate-200">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {(decisionContext.sensitiveSignals.length > 0 || decisionContext.externalUrl) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {decisionContext.sensitiveSignals.map((signal) => (
+              <span key={signal} className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300">
+                Sensitive: {signal}
+              </span>
+            ))}
+            {decisionContext.externalUrl && (
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-300">
+                External destination
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 rounded-lg border border-cyan-500/15 bg-cyan-500/[0.05] px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300">If approved</p>
+          <p className="mt-1 text-xs text-slate-300">{decisionContext.expectedOutcome}</p>
+        </div>
+
+        {showPayload && (
+          <div className="mt-3">
+            <PayloadPreview payload={request.action_payload} />
+          </div>
+        )}
+      </div>
 
       <ReasonCallout
         reasonMessage={request.reason_message}
@@ -333,6 +509,13 @@ function PendingCard({
             <button onClick={() => setShowSnooze(v => !v)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors">
               <BellOff className="w-3 h-3" />
               Snooze
+            </button>
+            <button
+              onClick={() => onEscalate(request.id)}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              <ShieldAlert className="w-3 h-3" />
+              Escalate
             </button>
             <button onClick={() => setShowDelegate(v => !v)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors">
               <UserCheck className="w-3 h-3" />
@@ -446,6 +629,19 @@ function PendingCard({
               Block
             </button>
             <button
+              onClick={() => {
+                setShowNote(true);
+                setReview(r => ({
+                  ...r,
+                  note: r.note || 'Please revise the payload and resubmit with clearer business justification.',
+                }));
+              }}
+              disabled={review.submitting}
+              className="flex min-h-[44px] items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-200 text-sm font-semibold transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              Ask changes
+            </button>
+            <button
               onClick={() => onCancel(request.id)}
               disabled={review.submitting}
               className="ml-auto flex min-h-[44px] items-center gap-1.5 px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] text-xs transition-colors disabled:opacity-50"
@@ -522,6 +718,22 @@ export default function ApprovalsPage() {
   const pending = all.filter(r => r.status === 'pending');
   const history = all.filter(r => r.status !== 'pending');
   const focusedApproval = approvalIdParam ? all.find((request) => request.id === approvalIdParam) : null;
+  const sortedPending = [...pending].sort((left, right) => {
+    const leftRisk = computeRiskScore(left);
+    const rightRisk = computeRiskScore(right);
+    const leftDue = new Date((left as any).sla_deadline || left.expires_at).getTime();
+    const rightDue = new Date((right as any).sla_deadline || right.expires_at).getTime();
+    const leftOverdue = Number.isFinite(leftDue) && leftDue < Date.now();
+    const rightOverdue = Number.isFinite(rightDue) && rightDue < Date.now();
+    if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
+    if (leftRisk !== rightRisk) return rightRisk - leftRisk;
+    return (Number.isFinite(leftDue) ? leftDue : Infinity) - (Number.isFinite(rightDue) ? rightDue : Infinity);
+  });
+  const highRiskPending = pending.filter((request) => computeRiskScore(request) >= 70);
+  const overduePending = pending.filter((request) => {
+    const dueAt = new Date((request as any).sla_deadline || request.expires_at).getTime();
+    return Number.isFinite(dueAt) && dueAt < Date.now();
+  });
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -614,6 +826,16 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleEscalate = async (id: string) => {
+    const res = await api.approvals.escalate(id);
+    if (res.success) {
+      toast.success('Request escalated');
+      setAll(prev => prev.map(r => r.id === id ? { ...r, ...(res.data || {}), escalated_at: new Date().toISOString() } : r));
+    } else {
+      toast.error(res.error || 'Failed to escalate request');
+    }
+  };
+
   const handleBulkApprove = async () => {
     if (selected.size === 0) return;
     setBulkSubmitting(true);
@@ -685,6 +907,21 @@ export default function ApprovalsPage() {
           </button>
         </div>
       )}
+
+      <div className="grid gap-3 md:grid-cols-4">
+        {[
+          { label: 'Pending decisions', value: pending.length, tone: pending.length > 0 ? 'text-amber-300' : 'text-emerald-300', note: 'Waiting for human review' },
+          { label: 'High-risk', value: highRiskPending.length, tone: highRiskPending.length > 0 ? 'text-rose-300' : 'text-emerald-300', note: 'Needs extra context' },
+          { label: 'Overdue', value: overduePending.length, tone: overduePending.length > 0 ? 'text-rose-300' : 'text-emerald-300', note: 'Past SLA or expiry' },
+          { label: 'Reviewed', value: history.length, tone: 'text-cyan-300', note: 'Audit-ready decisions' },
+        ].map((card) => (
+          <div key={card.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
+            <p className={cn('mt-1 text-2xl font-bold', card.tone)}>{card.value}</p>
+            <p className="mt-1 text-xs text-slate-500">{card.note}</p>
+          </div>
+        ))}
+      </div>
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
@@ -760,7 +997,7 @@ export default function ApprovalsPage() {
             {/* Smart bulk groups: 3+ identical action types get a one-click group approve */}
             {(() => {
               const actionGroups: Record<string, ApprovalRequest[]> = {};
-              pending.forEach(r => {
+              sortedPending.forEach(r => {
                 const key = r.action || 'unknown';
                 actionGroups[key] = [...(actionGroups[key] || []), r];
               });
@@ -796,7 +1033,7 @@ export default function ApprovalsPage() {
                 </div>
               );
             })()}
-            {pending.map(r => (
+            {sortedPending.map(r => (
               <PendingCard
                 key={r.id}
                 request={r as any}
@@ -807,6 +1044,7 @@ export default function ApprovalsPage() {
                 onDeny={handleDeny}
                 onCancel={handleCancel}
                 onSnooze={handleSnooze}
+                onEscalate={handleEscalate}
               />
             ))}
           </div>
