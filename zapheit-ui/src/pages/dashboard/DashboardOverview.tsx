@@ -255,16 +255,265 @@ type CrossAppInsight = {
   greythrHires: number;
 };
 
+type PriorityTone = 'risk' | 'warn' | 'info' | 'good';
+
+type CommandPriorityItem = {
+  id: string;
+  tone: PriorityTone;
+  label: string;
+  title: string;
+  detail: string;
+  meta: string;
+  cta: string;
+  route?: string;
+  priority: number;
+};
+
+function normalizeRiskScore(score?: number | null): number {
+  if (score == null || !Number.isFinite(score)) return 0;
+  const normalized = score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(normalized)));
+}
+
+function formatPriorityTime(value?: string | null): string {
+  if (!value) return 'No deadline';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No deadline';
+  const diffMs = date.getTime() - Date.now();
+  const absMinutes = Math.max(0, Math.round(Math.abs(diffMs) / 60000));
+  if (diffMs < 0) {
+    if (absMinutes < 60) return `${absMinutes}m overdue`;
+    const hours = Math.round(absMinutes / 60);
+    if (hours < 24) return `${hours}h overdue`;
+    return `${Math.round(hours / 24)}d overdue`;
+  }
+  if (absMinutes < 60) return `Due in ${absMinutes}m`;
+  const hours = Math.round(absMinutes / 60);
+  if (hours < 24) return `Due in ${hours}h`;
+  return `Due in ${Math.round(hours / 24)}d`;
+}
+
+function friendlyServiceName(service?: string | null): string {
+  const normalized = String(service || '').toLowerCase();
+  if (normalized.includes('greythr') || normalized.includes('greyt')) return 'greytHR';
+  if (normalized.includes('tally')) return 'TallyPrime';
+  if (normalized.includes('naukri')) return 'Naukri';
+  if (normalized.includes('cashfree')) return 'Cashfree';
+  if (normalized.includes('razorpay')) return 'Razorpay';
+  if (normalized.includes('keka')) return 'Keka';
+  if (normalized.includes('darwinbox')) return 'Darwinbox';
+  if (normalized.includes('whatsapp')) return 'WhatsApp';
+  if (normalized.includes('slack')) return 'Slack';
+  if (normalized.includes('github')) return 'GitHub';
+  if (normalized.includes('jira')) return 'Jira';
+  if (normalized.includes('hubspot')) return 'HubSpot';
+  if (normalized.includes('google')) return 'Google Workspace';
+  if (normalized.includes('microsoft')) return 'Microsoft 365';
+  return service ? service.replace(/[-_]/g, ' ') : 'Zapheit';
+}
+
+function friendlyActionName(action?: string | null): string {
+  const normalized = String(action || '').trim().toLowerCase().replace(/[-\s]/g, '_');
+  const labels: Record<string, string> = {
+    send_message: 'send a message',
+    send_email: 'send an email',
+    create_record: 'create a record',
+    update_record: 'update a record',
+    delete_record: 'delete a record',
+    create_issue: 'create an issue',
+    update_issue: 'update an issue',
+    close_issue: 'close an issue',
+    create_task: 'create a task',
+    update_task: 'update a task',
+    post_comment: 'post a comment',
+    list_records: 'read records',
+    search: 'run a search',
+    execute: 'run a command',
+    webhook: 'trigger a webhook',
+    api_call: 'make an API call',
+  };
+  return labels[normalized] || normalized.replace(/_/g, ' ') || 'take an action';
+}
+
+function priorityToneClasses(tone: PriorityTone) {
+  if (tone === 'risk') {
+    return {
+      row: 'border-rose-500/25 bg-rose-500/[0.05]',
+      badge: 'border-rose-500/25 bg-rose-500/10 text-rose-300',
+      dot: 'bg-rose-400',
+      button: 'border-rose-500/25 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25',
+    };
+  }
+  if (tone === 'warn') {
+    return {
+      row: 'border-amber-500/25 bg-amber-500/[0.05]',
+      badge: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+      dot: 'bg-amber-400',
+      button: 'border-amber-500/25 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25',
+    };
+  }
+  if (tone === 'good') {
+    return {
+      row: 'border-emerald-500/20 bg-emerald-500/[0.05]',
+      badge: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+      dot: 'bg-emerald-400',
+      button: 'border-emerald-500/25 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25',
+    };
+  }
+  return {
+    row: 'border-blue-500/20 bg-blue-500/[0.04]',
+    badge: 'border-blue-500/25 bg-blue-500/10 text-blue-300',
+    dot: 'bg-blue-400',
+    button: 'border-blue-500/25 bg-blue-500/15 text-blue-200 hover:bg-blue-500/25',
+  };
+}
+
+function buildPriorityItems(args: {
+  pendingApprovals: ApprovalRequest[];
+  teamActivity: AuditLogEntry[];
+  incidents: Incident[];
+  agents: AIAgent[];
+  agentsWithoutBudget: AIAgent[];
+  staleApprovals: ApprovalRequest[];
+  severeIncidents: Incident[];
+  openIncidents: Incident[];
+  crossAppInsight?: CrossAppInsight | null;
+}): CommandPriorityItem[] {
+  const handledApprovalIds = new Set<string>();
+  const sortedApprovals = [...args.pendingApprovals].sort((left, right) => {
+    const leftRisk = normalizeRiskScore(left.risk_score);
+    const rightRisk = normalizeRiskScore(right.risk_score);
+    const leftOverdue = left.sla_deadline ? new Date(left.sla_deadline).getTime() < Date.now() : false;
+    const rightOverdue = right.sla_deadline ? new Date(right.sla_deadline).getTime() < Date.now() : false;
+    if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
+    if (leftRisk !== rightRisk) return rightRisk - leftRisk;
+    return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+  });
+
+  const approvalItems = sortedApprovals.slice(0, 4).map((approval, index): CommandPriorityItem => {
+    handledApprovalIds.add(approval.id);
+    const score = normalizeRiskScore(approval.risk_score);
+    const overdue = approval.sla_deadline ? new Date(approval.sla_deadline).getTime() < Date.now() : false;
+    const service = friendlyServiceName(approval.service);
+    const action = friendlyActionName(approval.action);
+    const tone: PriorityTone = overdue || score >= 70 ? 'risk' : score >= 40 ? 'warn' : 'info';
+    return {
+      id: `approval:${approval.id}`,
+      tone,
+      label: overdue ? 'Overdue approval' : score >= 70 ? 'High-risk approval' : 'Approval',
+      title: `${service} wants to ${action}`,
+      detail: approval.reason_message || approval.recommended_next_action || 'Human approval is required before this agent can continue.',
+      meta: `${score > 0 ? `Risk ${score}/100 · ` : ''}${formatPriorityTime(approval.sla_deadline || approval.expires_at)}`,
+      cta: 'Review',
+      route: 'approvals',
+      priority: index + (tone === 'risk' ? 0 : tone === 'warn' ? 10 : 20),
+    };
+  });
+
+  const incidentItems = args.severeIncidents.slice(0, 2).map((incident, index): CommandPriorityItem => ({
+    id: `incident:${incident.id}`,
+    tone: 'risk',
+    label: `${incident.severity} incident`,
+    title: incident.title,
+    detail: incident.description || `${incident.agent_name} needs attention before the workflow is trusted again.`,
+    meta: `${incident.agent_name || 'Agent'} · ${formatRelative(incident.created_at)}`,
+    cta: 'Open incident',
+    route: 'incidents',
+    priority: 30 + index,
+  }));
+
+  const staleApprovalCount = args.staleApprovals.filter((approval) => !handledApprovalIds.has(approval.id)).length;
+  const staleItem: CommandPriorityItem | null = staleApprovalCount > 0
+    ? {
+      id: 'stale-approvals',
+      tone: 'warn',
+      label: 'Stale queue',
+      title: `${staleApprovalCount} approval${staleApprovalCount !== 1 ? 's' : ''} waiting more than 1 hour`,
+      detail: 'Old approvals slow down agent execution and create operational drag for the team.',
+      meta: 'Approval SLA needs attention',
+      cta: 'Clear queue',
+      route: 'approvals',
+      priority: 45,
+    }
+    : null;
+
+  const budgetItem: CommandPriorityItem | null = args.agentsWithoutBudget.length > 0
+    ? {
+      id: 'budget-caps',
+      tone: 'warn',
+      label: 'Budget control',
+      title: `${args.agentsWithoutBudget.length} agent${args.agentsWithoutBudget.length !== 1 ? 's' : ''} without budget caps`,
+      detail: 'Set spend limits so high-volume agents cannot create surprise LLM costs.',
+      meta: `${args.agents.length} total agent${args.agents.length !== 1 ? 's' : ''}`,
+      cta: 'Add caps',
+      route: 'agents',
+      priority: 50,
+    }
+    : null;
+
+  const crossAppItem: CommandPriorityItem | null =
+    args.crossAppInsight && args.crossAppInsight.naukriApplicants > 10 && args.crossAppInsight.greythrHires < args.crossAppInsight.naukriApplicants * 0.1
+      ? {
+        id: 'cross-app:naukri-greythr',
+        tone: 'warn',
+        label: 'Cross-app insight',
+        title: 'Hiring pipeline may be leaking after offer',
+        detail: `${args.crossAppInsight.naukriApplicants} Naukri candidates but only ${args.crossAppInsight.greythrHires} greytHR hire${args.crossAppInsight.greythrHires !== 1 ? 's' : ''} this month.`,
+        meta: 'Naukri + greytHR',
+        cta: 'Review',
+        route: 'apps/naukri/workspace',
+        priority: 60,
+      }
+      : null;
+
+  const agentActions = args.teamActivity.filter((entry) =>
+    entry.action.startsWith('agent.') || entry.details?.via === 'agent',
+  ).slice(0, 2);
+
+  const activityItems = agentActions.map((entry, index): CommandPriorityItem => ({
+    id: `activity:${entry.id}`,
+    tone: 'info',
+    label: 'Agent work handled',
+    title: friendlyActionName(entry.action.replace(/^agent\./, 'agent_')),
+    detail: `${entry.users?.full_name || entry.users?.email || 'Zapheit Agent'} recorded governed activity.`,
+    meta: formatRelative(entry.created_at),
+    cta: 'View audit',
+    route: 'audit-log',
+    priority: 70 + index,
+  }));
+
+  const allItems = [
+    ...approvalItems,
+    ...incidentItems,
+    staleItem,
+    budgetItem,
+    crossAppItem,
+    ...activityItems,
+  ].filter(Boolean) as CommandPriorityItem[];
+
+  return allItems.sort((left, right) => left.priority - right.priority).slice(0, 7);
+}
+
 function TodaysPriorities({
   pendingApprovals,
   teamActivity,
   incidents,
+  agents,
+  agentsWithoutBudget,
+  staleApprovals,
+  severeIncidents,
+  openIncidents,
   crossAppInsight,
   onNavigate,
 }: {
   pendingApprovals: ApprovalRequest[];
   teamActivity: AuditLogEntry[];
   incidents: Incident[];
+  agents: AIAgent[];
+  agentsWithoutBudget: AIAgent[];
+  staleApprovals: ApprovalRequest[];
+  severeIncidents: Incident[];
+  openIncidents: Incident[];
   crossAppInsight?: CrossAppInsight | null;
   onNavigate?: (route: string) => void;
 }) {
@@ -272,184 +521,127 @@ function TodaysPriorities({
     e.action.startsWith('agent.') || e.details?.via === 'agent',
   ).slice(0, 5);
 
-  const totalItems = pendingApprovals.length + agentActions.length;
-  const allClear = pendingApprovals.length === 0 && incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length === 0;
-
-  function serviceName(appr: ApprovalRequest): string {
-    const s = appr.service || '';
-    if (s.includes('greythr') || s.includes('greyt')) return 'greytHR 🇮🇳';
-    if (s.includes('tally')) return 'TallyPrime 🇮🇳';
-    if (s.includes('naukri')) return 'Naukri 🇮🇳';
-    if (s.includes('cashfree')) return 'Cashfree 🇮🇳';
-    if (s.includes('slack')) return 'Slack';
-    if (s.includes('github')) return 'GitHub';
-    if (s.includes('jira')) return 'Jira';
-    if (s.includes('hubspot')) return 'HubSpot';
-    if (s.includes('google')) return 'Google Workspace';
-    if (s.includes('whatsapp')) return 'WhatsApp 🇮🇳';
-    return s.replace(/_/g, ' ');
-  }
-
-  function riskColor(score?: number | null): string {
-    if (!score) return 'border-amber-400/15 bg-amber-500/[0.03]';
-    if (score >= 0.7) return 'border-rose-400/15 bg-rose-500/[0.03]';
-    if (score >= 0.4) return 'border-amber-400/15 bg-amber-500/[0.03]';
-    return 'border-white/8 bg-white/[0.02]';
-  }
-
-  function actionLabel(entry: AuditLogEntry): string {
-    const a = entry.action;
-    if (a === 'agent.created') return 'New agent deployed';
-    if (a === 'agent.updated') return 'Agent configuration updated';
-    if (a === 'incident.resolved') return 'Incident resolved automatically';
-    if (a === 'approval.approved') return 'Approval decision recorded';
-    if (a.startsWith('agent.')) return a.replace('agent.', 'Agent: ').replace(/_/g, ' ');
-    return a.replace(/_/g, ' ');
-  }
+  const priorityItems = buildPriorityItems({
+    pendingApprovals,
+    teamActivity,
+    incidents,
+    agents,
+    agentsWithoutBudget,
+    staleApprovals,
+    severeIncidents,
+    openIncidents,
+    crossAppInsight,
+  });
+  const highRiskApprovalCount = pendingApprovals.filter((approval) => normalizeRiskScore(approval.risk_score) >= 70).length;
+  const urgentCount = pendingApprovals.length + severeIncidents.length;
+  const allClear = pendingApprovals.length === 0 && openIncidents.length === 0 && agentsWithoutBudget.length === 0;
+  const statusLine = urgentCount > 0
+    ? `${urgentCount} decision${urgentCount !== 1 ? 's' : ''} need attention before agents continue.`
+    : 'Your AI workforce is operating normally.';
+  const counters = [
+    { label: 'Pending approvals', value: pendingApprovals.length, tone: pendingApprovals.length > 0 ? 'warn' as const : 'good' as const },
+    { label: 'High-risk', value: highRiskApprovalCount + severeIncidents.length, tone: highRiskApprovalCount + severeIncidents.length > 0 ? 'risk' as const : 'good' as const },
+    { label: 'Open incidents', value: openIncidents.length, tone: openIncidents.length > 0 ? 'risk' as const : 'good' as const },
+    { label: 'Agent work handled', value: agentActions.length, tone: 'info' as const },
+  ];
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.02] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-white">Today's Priorities</p>
-          {totalItems > 0 && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/[0.07] text-slate-400 border border-white/10 font-medium">
-              {totalItems} item{totalItems !== 1 ? 's' : ''}
-            </span>
-          )}
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div className="px-5 py-4 border-b border-white/8">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${urgentCount > 0 ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+              <p className="text-sm font-semibold text-white">Today's Command Center</p>
+            </div>
+            <p className={`mt-1 text-xs ${urgentCount > 0 ? 'text-rose-200' : 'text-emerald-200'}`}>{statusLine}</p>
+          </div>
+          <button
+            onClick={() => onNavigate?.('approvals')}
+            className="self-start text-xs font-semibold text-blue-300 hover:text-blue-200 transition-colors"
+          >
+            Open approvals
+          </button>
         </div>
-        <button
-          onClick={() => onNavigate?.('approvals')}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          All approvals →
-        </button>
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {counters.map((counter) => {
+            const tone = priorityToneClasses(counter.tone);
+            return (
+              <div key={counter.label} className={`rounded-xl border px-3 py-2 ${tone.row}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">{counter.label}</p>
+                </div>
+                <p className="mt-1 text-lg font-semibold text-white">{counter.value}</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="divide-y divide-white/[0.05]">
-        {/* ── Needs your decision ──────────────────────────────────────── */}
-        <div className="px-5 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-rose-400" />
-            <p className="text-xs font-semibold text-rose-300">
-              Needs your decision {pendingApprovals.length > 0 && `(${pendingApprovals.length})`}
-            </p>
-          </div>
-          {pendingApprovals.length === 0 ? (
-            <p className="text-xs text-slate-500 pl-4">No pending decisions — you're all caught up.</p>
-          ) : (
-            <div className="space-y-2">
-              {pendingApprovals.slice(0, 4).map((appr) => (
-                <div key={appr.id} className={`rounded-xl border px-4 py-3 flex items-start justify-between gap-3 ${riskColor(appr.risk_score)}`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-semibold text-slate-400 bg-white/[0.06] border border-white/10 rounded px-1.5 py-0.5">{serviceName(appr)}</span>
-                      {appr.risk_score && appr.risk_score >= 0.7 && (
-                        <span className="text-[10px] text-rose-400 font-medium">High risk</span>
-                      )}
+      <div className="px-5 py-4">
+        {priorityItems.length > 0 ? (
+          <div className="space-y-2">
+            {priorityItems.map((item) => {
+              const tone = priorityToneClasses(item.tone);
+              return (
+                <div key={item.id} className={`rounded-xl border px-4 py-3 ${tone.row}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone.badge}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                          {item.label}
+                        </span>
+                        <span className="text-[11px] text-slate-500">{item.meta}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-white line-clamp-1">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-400 line-clamp-2">{item.detail}</p>
                     </div>
-                    <p className="text-xs text-white mt-1 line-clamp-1">
-                      {appr.reason_message || appr.action?.replace(/_/g, ' ') || 'Approval required'}
-                    </p>
-                    {appr.sla_deadline && (
-                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Due {new Date(appr.sla_deadline).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
+                    <button
+                      onClick={() => item.route && onNavigate?.(item.route)}
+                      disabled={!item.route}
+                      className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-60 ${tone.button}`}
+                    >
+                      {item.cta}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onNavigate?.('approvals')}
-                    className="shrink-0 px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.13] text-white text-xs font-semibold transition-colors"
-                  >
-                    Review
-                  </button>
                 </div>
-              ))}
-              {pendingApprovals.length > 4 && (
-                <button onClick={() => onNavigate?.('approvals')} className="text-xs text-blue-400 hover:text-blue-300 pl-1 transition-colors">
-                  +{pendingApprovals.length - 4} more →
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Your agents handled ──────────────────────────────────────── */}
-        <div className="px-5 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <p className="text-xs font-semibold text-amber-300">
-              Your agents handled {agentActions.length > 0 && `(${agentActions.length})`}
-            </p>
+              );
+            })}
           </div>
-          {agentActions.length === 0 ? (
-            <p className="text-xs text-slate-500 pl-4">No recent agent activity to show.</p>
-          ) : (
-            <div className="space-y-2">
-              {agentActions.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-white capitalize">{actionLabel(entry)}</p>
-                    <p className="text-[11px] text-slate-500">
-                      {entry.users?.full_name || entry.users?.email || 'Zapheit Agent'} · {new Date(entry.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <span className="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded px-1.5 py-0.5 font-medium shrink-0">Agent</span>
+        ) : (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <p className="text-sm font-semibold text-white">All clear across the AI workforce</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── Cross-app insight ────────────────────────────────────────── */}
-        {crossAppInsight && crossAppInsight.naukriApplicants > 10 && crossAppInsight.greythrHires < crossAppInsight.naukriApplicants * 0.1 && (
-          <div className="px-5 py-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-yellow-400" />
-              <p className="text-xs font-semibold text-yellow-300">Cross-app insight</p>
-            </div>
-            <div className="rounded-xl border border-yellow-400/20 bg-yellow-500/[0.04] px-4 py-3 flex items-start gap-3">
-              <span className="text-base leading-none mt-0.5">🔍</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-white">
-                  <span className="font-semibold text-yellow-300">{crossAppInsight.naukriApplicants} candidates</span> in Naukri pipeline but only <span className="font-semibold text-yellow-300">{crossAppInsight.greythrHires} new hire{crossAppInsight.greythrHires !== 1 ? 's' : ''}</span> in greytHR this month.
+                <p className="mt-1 text-xs text-emerald-200">
+                  No pending approvals, open incidents, or unbudgeted agents need attention right now.
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1">Review your offer-to-join conversion — candidates may be dropping off after the offer stage.</p>
+                {agentActions.length > 0 && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    {agentActions.length} governed agent action{agentActions.length !== 1 ? 's' : ''} handled recently.
+                  </p>
+                )}
               </div>
               <button
-                onClick={() => onNavigate?.('apps/naukri/workspace')}
-                className="shrink-0 px-3 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 text-xs font-semibold transition-colors border border-yellow-400/20"
+                onClick={() => onNavigate?.('roi')}
+                className="shrink-0 rounded-lg border border-emerald-500/25 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/25"
               >
-                Review
+                Review ROI
               </button>
             </div>
           </div>
         )}
-
-        {/* ── All clear ────────────────────────────────────────────────── */}
-        <div className="px-5 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <p className="text-xs font-semibold text-emerald-300">System status</p>
+        {allClear && priorityItems.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" />
+            Core controls are clear; remaining items are informational.
           </div>
-          {allClear ? (
-            <div className="flex items-center gap-2 pl-1">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <p className="text-xs text-emerald-300">All agents healthy · No active incidents · No critical alerts</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 pl-1">
-              <AlertCircle className="w-4 h-4 text-amber-400" />
-              <p className="text-xs text-amber-300">
-                {incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length} high-severity incident{incidents.filter((i) => i.severity === 'high' || i.severity === 'critical').length !== 1 ? 's' : ''} active
-              </p>
-              <button onClick={() => onNavigate?.('incidents')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors ml-1">View →</button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1053,6 +1245,11 @@ const hasData = agents.length > 0;
         pendingApprovals={pendingApprovals}
         teamActivity={teamActivity}
         incidents={incidents}
+        agents={agents}
+        agentsWithoutBudget={agentsWithoutBudget}
+        staleApprovals={staleApprovals}
+        severeIncidents={severeIncidents}
+        openIncidents={openIncidents}
         crossAppInsight={crossAppInsight}
         onNavigate={onNavigate}
       />
