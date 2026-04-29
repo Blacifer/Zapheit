@@ -23,6 +23,24 @@ function resolveAuth(creds: Record<string, string>) {
   return { token };
 }
 
+const GOOGLE_WORKSPACE_WRITE_ACTIONS = new Set([
+  'share_file',
+  'create_document',
+  'send_email',
+  'reply_email',
+  'forward_email',
+  'archive_email',
+  'mark_email_read',
+  'mark_email_unread',
+  'create_event',
+  'update_event',
+  'cancel_event',
+  'delete_event',
+  'create_user',
+  'suspend_user',
+  'nl_command',
+]);
+
 // Extract all headers from a Gmail payload into a flat { name → value } map.
 function extractHeaders(payload: any): Record<string, string> {
   const result: Record<string, string> = {};
@@ -240,10 +258,17 @@ const googleAdapter: ConnectorAdapter = {
   },
 
   async executeWrite(action, params, creds): Promise<ActionResult> {
+    if (GOOGLE_WORKSPACE_WRITE_ACTIONS.has(action) && process.env.GOOGLE_WORKSPACE_WRITES === 'false') {
+      return { success: false, error: 'Google Workspace write actions are temporarily disabled', statusCode: 503 };
+    }
+
     const { token } = resolveAuth(creds);
     const headers = bearerHeaders(token);
 
     switch (action) {
+      case 'nl_command':
+        return { success: true, data: { message: 'Command received' } };
+
       case 'send_email': {
         const { to, subject, body } = params;
         if (!to || !subject) return { success: false, error: 'to and subject are required' };
