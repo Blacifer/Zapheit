@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 import { auditLog } from '../lib/audit-logger';
+import { recordProductionActivity, type ProductionActivityTone, type ProductionReadinessStatus } from '../lib/production-activity';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { notifySlackApprovalRequestAsync } from '../lib/slack-approvals';
 import { evaluatePolicyConstraints, type PolicyConstraints } from '../lib/action-policy-constraints';
@@ -47,6 +48,19 @@ function requireRoleForConnectorAction(action: string): Role {
   if (action.startsWith('it.')) return 'admin';
   if (action.startsWith('sales.') || action.startsWith('support.')) return 'manager';
   return 'admin';
+}
+
+function jobActivityState(status: string): { readiness: ProductionReadinessStatus; tone: ProductionActivityTone } {
+  if (status === 'pending_approval') return { readiness: 'needs_policy', tone: 'warn' };
+  if (status === 'queued' || status === 'running') return { readiness: status === 'queued' ? 'ready' : 'deployed', tone: 'info' };
+  if (status === 'succeeded') return { readiness: 'deployed', tone: 'success' };
+  if (status === 'failed') return { readiness: 'blocked', tone: 'risk' };
+  if (status === 'canceled') return { readiness: 'blocked', tone: 'warn' };
+  return { readiness: 'deployed', tone: 'info' };
+}
+
+function jobTypeLabel(type: string) {
+  return String(type || 'job').replace(/_/g, ' ');
 }
 
 type RoutingRule = { condition?: string | null; required_role: string; required_user_id?: string | null };
@@ -327,15 +341,26 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
       });
     }
 
-    await auditLog.log({
-      user_id: userId,
-      action: 'job.created',
-      resource_type: 'agent_job',
-      resource_id: job.id,
-      organization_id: orgId,
-      ip_address: req.ip || (req.socket as any)?.remoteAddress,
-      user_agent: req.get('user-agent') || undefined,
+    const createdJobActivity = jobActivityState(job.status);
+    await recordProductionActivity({
+      organizationId: orgId,
+      actorId: userId,
+      auditAction: 'job.created',
+      resourceType: 'agent_job',
+      resourceId: job.id,
+      event: {
+        type: 'job',
+        title: `Runtime job ${job.status}: ${jobTypeLabel(data.type)}`,
+        detail: `${job.runtime_instance_id ? `Runtime ${job.runtime_instance_id}` : 'Runtime pending'} · ${autoApproved ? 'approval satisfied' : 'approval required'}`,
+        status: createdJobActivity.readiness,
+        tone: createdJobActivity.tone,
+        route: 'jobs',
+        sourceRef: job.id,
+        evidenceRef: approval?.id || job.id,
+      },
       metadata: {
+        ip_address: req.ip || (req.socket as any)?.remoteAddress,
+        user_agent: req.get('user-agent') || undefined,
         agent_id: data.agent_id,
         type: data.type,
         status: job.status,
@@ -627,15 +652,26 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
       })) as any[];
     }
 
-    await auditLog.log({
-      user_id: userId,
-      action: 'job.decision',
-      resource_type: 'agent_job',
-      resource_id: id,
-      organization_id: orgId,
-      ip_address: req.ip || (req.socket as any)?.remoteAddress,
-      user_agent: req.get('user-agent') || undefined,
+    const decisionActivity = jobActivityState(newJobStatus);
+    await recordProductionActivity({
+      organizationId: orgId,
+      actorId: userId,
+      auditAction: 'job.decision',
+      resourceType: 'agent_job',
+      resourceId: id,
+      event: {
+        type: 'approval',
+        title: `Job approval ${finalDecision}: ${jobTypeLabel(job.type)}`,
+        detail: `${job.input?.connector?.service || job.input?.connector?.connector_id || 'runtime job'} · ${newJobStatus}`,
+        status: decisionActivity.readiness,
+        tone: finalDecision === 'approved' ? 'success' : finalDecision === 'rejected' ? 'risk' : decisionActivity.tone,
+        route: 'approvals',
+        sourceRef: approval.id,
+        evidenceRef: id,
+      },
       metadata: {
+        ip_address: req.ip || (req.socket as any)?.remoteAddress,
+        user_agent: req.get('user-agent') || undefined,
         decision,
         final_decision: finalDecision,
         previous_status: job.status,

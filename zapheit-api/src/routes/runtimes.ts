@@ -10,10 +10,57 @@ import { notifyJobCompletedAsync } from '../lib/notification-service';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 import { evaluatePolicyConstraints } from '../lib/action-policy-constraints';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
+import { recordProductionActivity, type ProductionActivityTone, type ProductionReadinessStatus } from '../lib/production-activity';
 
 const router = Router();
 
 const GCP_RUNTIME_SECRET_NAME = 'ZAPHEIT_RUNTIME_SECRET';
+
+function jobActivityState(status: string): { readiness: ProductionReadinessStatus; tone: ProductionActivityTone } {
+  if (status === 'running') return { readiness: 'deployed', tone: 'info' };
+  if (status === 'succeeded') return { readiness: 'deployed', tone: 'success' };
+  if (status === 'failed') return { readiness: 'blocked', tone: 'risk' };
+  if (status === 'canceled') return { readiness: 'blocked', tone: 'warn' };
+  if (status === 'queued') return { readiness: 'ready', tone: 'info' };
+  return { readiness: 'deployed', tone: 'info' };
+}
+
+function jobTypeLabel(type: string) {
+  return String(type || 'job').replace(/_/g, ' ');
+}
+
+function recordRuntimeJobActivity(args: {
+  organizationId: string;
+  job: any;
+  status: string;
+  title: string;
+  detail?: string;
+}) {
+  const state = jobActivityState(args.status);
+  void recordProductionActivity({
+    organizationId: args.organizationId,
+    actorId: null,
+    auditAction: `job.${args.status}`,
+    resourceType: 'agent_job',
+    resourceId: args.job.id,
+    event: {
+      type: 'job',
+      title: args.title,
+      detail: args.detail || `${args.job.runtime_instance_id ? `Runtime ${args.job.runtime_instance_id}` : 'Runtime'} · ${jobTypeLabel(args.job.type)}`,
+      status: state.readiness,
+      tone: state.tone,
+      route: 'jobs',
+      sourceRef: args.job.id,
+      evidenceRef: args.job.id,
+    },
+    metadata: {
+      agent_id: args.job.agent_id || null,
+      runtime_instance_id: args.job.runtime_instance_id || null,
+      type: args.job.type || null,
+      status: args.status,
+    },
+  });
+}
 
 async function persistRuntimeSecretToGCPFromAPI(secret: string, orgId: string): Promise<void> {
   try {
@@ -467,7 +514,14 @@ router.get('/jobs/poll', requireRuntimeAuth(), async (req: Request, res: Respons
       })) as any[];
 
       if (patched?.length) {
-        claimed.push(patched[0]);
+        const claimedJob = patched[0];
+        claimed.push(claimedJob);
+        recordRuntimeJobActivity({
+          organizationId: ctx.organization_id,
+          job: claimedJob,
+          status: 'running',
+          title: `Runtime job running: ${jobTypeLabel(claimedJob.type)}`,
+        });
       }
     }
 
@@ -548,7 +602,14 @@ router.get('/jobs/stream', requireRuntimeAuth(), async (req: Request, res: Respo
         })) as any[];
 
         if (patched?.length) {
-          send('job', patched[0]);
+          const claimedJob = patched[0];
+          recordRuntimeJobActivity({
+            organizationId: ctx.organization_id,
+            job: claimedJob,
+            status: 'running',
+            title: `Runtime job running: ${jobTypeLabel(claimedJob.type)}`,
+          });
+          send('job', claimedJob);
         }
       }
     } catch (err: any) {
@@ -596,6 +657,15 @@ router.post('/jobs/:id/complete', requireRuntimeAuth(), async (req: Request, res
     if (!patched?.length) return res.status(404).json({ success: false, error: 'Job not found for this runtime' });
 
     const completedJob = patched[0];
+    recordRuntimeJobActivity({
+      organizationId: ctx.organization_id,
+      job: completedJob,
+      status: data.status,
+      title: `Runtime job ${data.status}: ${jobTypeLabel(completedJob.type)}`,
+      detail: data.error
+        ? `${jobTypeLabel(completedJob.type)} · ${data.error}`
+        : `${jobTypeLabel(completedJob.type)} completed by runtime`,
+    });
 
     if (completedJob?.type === 'chat_turn' || completedJob?.type === 'workflow_run') {
       const input = completedJob.input && typeof completedJob.input === 'object' ? completedJob.input : {};

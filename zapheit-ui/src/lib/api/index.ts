@@ -23,6 +23,8 @@ export {
 export { marketplaceApi } from './marketplace';
 export { approvalsApi } from './approvals';
 export type { ApprovalRequest } from './approvals';
+export { activityApi } from './activity';
+export type { ActivityEventsResponse, ActivityStreamEventName } from './activity';
 export { alertChannelsApi } from './alert-channels';
 export type { AlertChannel, ChannelType, SeverityLevel, CreateAlertChannelInput } from './alert-channels';
 export { paymentsApi } from './payments';
@@ -94,6 +96,7 @@ import {
 } from './platform';
 import { marketplaceApi } from './marketplace';
 import { approvalsApi } from './approvals';
+import { activityApi } from './activity';
 import { alertChannelsApi } from './alert-channels';
 import { paymentsApi } from './payments';
 import { recruitmentApi } from './recruitment';
@@ -151,6 +154,7 @@ export const api = {
   sessionRecording: sessionRecordingApi,
   marketplace: marketplaceApi,
   approvals: approvalsApi,
+  activity: activityApi,
   alertChannels: alertChannelsApi,
   slack: slackApi,
   recruitment: recruitmentApi,
