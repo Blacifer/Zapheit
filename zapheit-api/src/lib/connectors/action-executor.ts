@@ -12,9 +12,8 @@ import { connectorActionFingerprint } from '../preflight-gate';
 import { supabaseRest, eq, gte } from '../supabase-rest';
 import { getRegisteredAdapter, isReadAction as isReadActionType } from './adapter';
 
-// Import adapters to register them
-import './adapters/slack';
-import './adapters/jira';
+// Import all adapters for side-effect registration
+import './adapters';
 
 export type ActionResult = {
   success: boolean;
