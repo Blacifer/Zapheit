@@ -1018,7 +1018,7 @@ const hasData = agents.length > 0;
         return true;
       })
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 6);
+      .slice(0, 12);
   }, [agents, costData, incidents, liveActivityEvents, pendingApprovals, teamActivity]);
 
   const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
@@ -1036,7 +1036,9 @@ const hasData = agents.length > 0;
     severeIncidents: severeIncidents.length,
     connectedConnectors: telemetry?.integrations.healthy ?? agents.filter((agent) => (agent.integrationIds || []).length > 0).length,
     degradedConnectors: telemetry?.integrations.degraded ?? 0,
-  }), [agents, openIncidents.length, pendingApprovals.length, severeIncidents.length, telemetry]);
+    activityEvents: activityFeed,
+    costSignalCount: costData.length,
+  }), [activityFeed, agents, costData.length, openIncidents.length, pendingApprovals.length, severeIncidents.length, telemetry]);
   const avgRiskScore = Math.round(agents.reduce((sum, agent) => sum + agent.risk_score, 0) / Math.max(agents.length, 1));
   const totalConversations = agents.reduce((sum, agent) => sum + agent.conversations, 0);
   const averageSpendPerAgent = totalCost / Math.max(agents.length, 1);
@@ -1194,6 +1196,21 @@ const hasData = agents.length > 0;
         description: 'Connect one app, run one test, and confirm the first tracked request so the workspace starts with real signal.',
         tone: 'info' as const,
         action: () => onNavigate?.('getting-started'),
+      }
+      : null,
+    orgReadiness.issues.length > 0
+      ? {
+        id: `readiness-${orgReadiness.issues[0].id}`,
+        title: orgReadiness.issues[0].title,
+        description: orgReadiness.issues[0].detail,
+        tone: orgReadiness.issues[0].status === 'blocked'
+          ? 'risk' as const
+          : orgReadiness.issues[0].status === 'degraded' || orgReadiness.issues[0].status === 'needs_policy'
+            ? 'warn' as const
+            : 'info' as const,
+        action: () => {
+          if (orgReadiness.issues[0].route) onNavigate?.(orgReadiness.issues[0].route);
+        },
       }
       : null,
     severeIncidents.length > 0
@@ -1466,6 +1483,38 @@ const hasData = agents.length > 0;
             </div>
           )}
         </div>
+
+        <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Evidence coverage</p>
+              <p className="text-xs text-slate-500">The score only improves when production signals reach Zapheit, not when a placeholder metric exists.</p>
+            </div>
+            <span className="text-xs text-slate-400">
+              {orgReadiness.signalCoverage.filter((signal) => signal.present).length}/{orgReadiness.signalCoverage.length} sources live
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            {orgReadiness.signalCoverage.map((signal) => (
+              <button
+                key={signal.type}
+                onClick={() => onNavigate?.(signal.type === 'audit' ? 'audit-log' : signal.type === 'cost' ? 'costs' : signal.type === 'job' ? 'jobs' : signal.type === 'connector' ? 'apps' : `${signal.type}s`)}
+                className={`rounded-xl border px-3 py-3 text-left transition hover:brightness-110 ${
+                  signal.present
+                    ? 'border-emerald-500/20 bg-emerald-500/[0.06]'
+                    : 'border-slate-700/70 bg-slate-900/45'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${signal.present ? 'bg-emerald-300' : 'bg-slate-500'}`} />
+                  <p className="text-xs font-semibold text-white">{signal.label}</p>
+                </div>
+                <p className="mt-2 text-lg font-bold tabular-nums text-slate-100">{signal.count}</p>
+                <p className="mt-1 text-[11px] text-slate-500">{signal.lastAt ? formatRelative(signal.lastAt) : 'No signal yet'}</p>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       {primaryAction && (
@@ -1722,7 +1771,7 @@ const hasData = agents.length > 0;
       <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
         <div className="grid gap-6 xl:grid-cols-2">
           <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-slate-500 mb-3">Command center</p>
+            <p className="text-xs font-medium uppercase tracking-widest text-slate-500 mb-3">Command center v1</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${heroTone === 'risk' ? 'bg-rose-500/10 text-rose-400' : heroTone === 'warn' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
@@ -1732,9 +1781,9 @@ const hasData = agents.length > 0;
                 Risk {avgRiskScore}/100
               </span>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold text-white">Overview</h1>
+            <h1 className="mt-3 text-2xl font-semibold text-white">Production Command Center</h1>
             <p className="mt-1 max-w-xl text-sm text-slate-400 leading-relaxed">
-              What&apos;s running, what needs attention, and what to do next.
+              What&apos;s running, what needs attention, and what production evidence backs it.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
               <div className="inline-flex items-center gap-1.5">
@@ -2071,10 +2120,31 @@ const hasData = agents.length > 0;
                     <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-blue-300'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-4">
-                        <p className="font-semibold text-white">{item.title}</p>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${readinessTone(item.status)}`}>
+                              {READINESS_LABELS[item.status]}
+                            </span>
+                            <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                              {item.type}
+                            </span>
+                            {item.evidenceRef && (
+                              <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
+                                Evidence
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-2 font-semibold text-white">{item.title}</p>
+                        </div>
                         <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(item.at)}</span>
                       </div>
                       <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
+                      {(item.actor || item.sourceRef) && (
+                        <p className="mt-2 text-[11px] text-slate-600">
+                          {item.actor ? `Actor: ${activityActorLabel(item.actor)} · ` : ''}
+                          {item.sourceRef ? `Source: ${item.sourceRef}` : ''}
+                        </p>
+                      )}
                     </div>
                   </motion.div>
                 ))}

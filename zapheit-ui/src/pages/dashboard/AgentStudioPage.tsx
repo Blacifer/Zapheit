@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
 import type { AgentTemplate } from '../../config/agentTemplates';
+import type { TemplateLaunchPackage } from '../../lib/template-launch-package';
 import { AddAgentModal } from './fleet/AddAgentModal';
 
 const AgentTemplatesPage = lazy(() => import('./AgentTemplatesPage'));
@@ -39,8 +40,8 @@ type TabId = typeof TABS[number]['id'];
 type ShadowWorkflowId = 'hiring' | 'hr' | 'finance' | 'support' | 'sales' | 'devops' | string;
 
 interface AgentStudioPageProps {
-  onDeployTemplate: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
-  onLaunchTemplateChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
+  onDeployTemplate: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[]; launch_package?: TemplateLaunchPackage }) => Promise<void>;
+  onLaunchTemplateChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[]; launch_package?: TemplateLaunchPackage }) => Promise<void>;
   onDeployLibraryAgent: (agentData: any) => Promise<void>;
   agents: AIAgent[];
   onNavigate?: (page: string) => void;

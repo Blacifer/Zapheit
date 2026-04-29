@@ -13,6 +13,10 @@ import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { runPreflightGate } from '../lib/preflight-gate';
 import { connectorActionTitle, recordProductionActivity } from '../lib/production-activity';
 import { appendAuditChainEvent } from '../lib/trust-audit-chain';
+import {
+  deriveConnectorCertification,
+  type ConnectorCertification,
+} from '../lib/connector-certification';
 
 const router = Router();
 
@@ -3708,37 +3712,12 @@ import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 
 type ProductionReadinessStatus = 'not_configured' | 'needs_policy' | 'ready' | 'deployed' | 'degraded' | 'blocked';
-type ConnectorCertificationState = 'production_ready' | 'approval_gated' | 'read_only' | 'unavailable' | 'degraded';
 type CatalogCapabilityPolicy = {
   capability: string;
   requires_human_approval: boolean;
   risk_level: 'low' | 'medium' | 'high';
   enabled: boolean;
 };
-
-const PRODUCTION_CERTIFIED_CONNECTORS = new Set([
-  'slack',
-  'google-workspace',
-  'google_workspace',
-  'microsoft-365',
-  'microsoft_365',
-  'jira',
-  'github',
-  'hubspot',
-  'quickbooks',
-  'cashfree',
-  'naukri',
-  'greythr',
-]);
-
-function normalizeConnectorKey(value: string) {
-  return String(value || '').trim().toLowerCase().replace(/_/g, '-');
-}
-
-function isProductionCertifiedConnector(connectorId: string) {
-  const normalized = normalizeConnectorKey(connectorId);
-  return PRODUCTION_CERTIFIED_CONNECTORS.has(connectorId) || PRODUCTION_CERTIFIED_CONNECTORS.has(normalized);
-}
 
 function buildConnectorProductionMetadata(args: {
   connectorId: string;
@@ -3751,88 +3730,29 @@ function buildConnectorProductionMetadata(args: {
   actionsUnlocked?: string[];
 }): {
   readiness_status: ProductionReadinessStatus;
-  connector_certification: {
-    connectorId: string;
-    state: ConnectorCertificationState;
-    certified: boolean;
-    label: string;
-    reasons: string[];
-    readActions: number;
-    writeActions: number;
-    approvalGatedActions: number;
-  };
+  connector_certification: ConnectorCertification;
 } {
-  const enabledPolicies = args.capabilityPolicies.filter((policy) => policy.enabled !== false);
-  const approvalGatedActions = enabledPolicies.filter((policy) => policy.requires_human_approval).length;
-  const highRiskActions = enabledPolicies.filter((policy) => policy.risk_level === 'high' || policy.risk_level === 'medium').length;
-  const writeActions = Math.max(approvalGatedActions, highRiskActions, args.actionsUnlocked?.length || 0);
-  const readActions = Math.max(enabledPolicies.length - writeActions, args.permissions?.length || 0, 0);
-  const certified = !args.comingSoon && isProductionCertifiedConnector(args.connectorId);
-  const degraded = Boolean(args.connected && (args.status === 'error' || args.status === 'expired' || args.healthStatus === 'degraded'));
+  const connectorCertification = deriveConnectorCertification(args);
 
-  if (degraded) {
+  if (connectorCertification.state === 'degraded') {
     return {
       readiness_status: 'degraded',
-      connector_certification: {
-        connectorId: args.connectorId,
-        state: 'degraded',
-        certified,
-        label: 'Connection degraded',
-        reasons: ['Installed connector health or credentials need attention before production use.'],
-        readActions,
-        writeActions,
-        approvalGatedActions,
-      },
+      connector_certification: connectorCertification,
     };
   }
 
-  if (!certified) {
+  if (!connectorCertification.certified) {
     return {
       readiness_status: args.comingSoon ? 'blocked' : 'not_configured',
-      connector_certification: {
-        connectorId: args.connectorId,
-        state: 'unavailable',
-        certified: false,
-        label: args.comingSoon ? 'Not production-certified yet' : 'Certification required',
-        reasons: args.comingSoon
-          ? ['This connector is not exposed as a production-ready path yet.']
-          : ['Use after auth, action policy, failure handling, and audit capture are verified.'],
-        readActions,
-        writeActions,
-        approvalGatedActions,
-      },
+      connector_certification: connectorCertification,
     };
   }
-
-  const state: ConnectorCertificationState =
-    approvalGatedActions > 0 || writeActions > 0
-      ? 'approval_gated'
-      : readActions > 0
-        ? 'read_only'
-        : 'production_ready';
 
   return {
     readiness_status: args.connected
-      ? (writeActions > 0 && approvalGatedActions === 0 ? 'needs_policy' : 'deployed')
+      ? (connectorCertification.writeActions > 0 && connectorCertification.approvalGatedActions === 0 ? 'needs_policy' : 'deployed')
       : 'not_configured',
-    connector_certification: {
-      connectorId: args.connectorId,
-      state,
-      certified: true,
-      label: state === 'approval_gated'
-        ? 'Certified with governed writes'
-        : state === 'read_only'
-          ? 'Certified read path'
-          : 'Certified production path',
-      reasons: [state === 'approval_gated'
-        ? 'Write actions are available only through configured policy, approval, and audit evidence.'
-        : state === 'read_only'
-          ? 'Read actions are available for production workflows.'
-          : 'Connector path is certified for production setup.'],
-      readActions,
-      writeActions,
-      approvalGatedActions,
-    },
+    connector_certification: connectorCertification,
   };
 }
 // GET /api/connectors/catalog/unified — merged catalog (marketplace + spec-driven)

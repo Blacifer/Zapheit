@@ -46,6 +46,30 @@ export interface ConnectorCertification {
   readActions: number;
   writeActions: number;
   approvalGatedActions: number;
+  evidence: string[];
+  missingChecks: string[];
+  certificationLevel: 'pilot_certified' | 'requires_certification' | 'degraded';
+}
+
+export type ConnectorCertificationCheck =
+  | 'auth'
+  | 'read'
+  | 'approval_policy'
+  | 'write_audit'
+  | 'failure_handling'
+  | 'disconnect'
+  | 'tenant_isolation';
+
+export interface ConnectorCertificationManifest {
+  connectorId: string;
+  label: string;
+  state: Exclude<ConnectorCertificationState, 'unavailable' | 'degraded'>;
+  readActions: number;
+  writeActions: number;
+  approvalGatedActions: number;
+  checks: Record<ConnectorCertificationCheck, boolean>;
+  evidence: string[];
+  owner: string;
 }
 
 export interface AgentProductionProfile {
@@ -75,6 +99,13 @@ export interface OrgReadinessScore {
   label: string;
   summary: string;
   issues: OrgReadinessIssue[];
+  signalCoverage: Array<{
+    type: UnifiedActivityEventType;
+    label: string;
+    present: boolean;
+    count: number;
+    lastAt?: string | null;
+  }>;
 }
 
 type CapabilityPolicyLike = {
@@ -83,20 +114,149 @@ type CapabilityPolicyLike = {
   enabled?: boolean;
 };
 
-export const PRODUCTION_CERTIFIED_CONNECTORS = new Set([
-  'slack',
-  'google-workspace',
-  'google_workspace',
-  'microsoft-365',
-  'microsoft_365',
-  'jira',
-  'github',
-  'hubspot',
-  'quickbooks',
-  'cashfree',
-  'naukri',
-  'greythr',
-]);
+function certificationChecks(overrides: Partial<Record<ConnectorCertificationCheck, boolean>> = {}) {
+  return {
+    auth: true,
+    read: true,
+    approval_policy: true,
+    write_audit: true,
+    failure_handling: true,
+    disconnect: true,
+    tenant_isolation: true,
+    ...overrides,
+  };
+}
+
+const BASE_CERTIFICATION_EVIDENCE = [
+  'Authentication path is explicit and tenant-scoped.',
+  'Read actions are separated from write actions.',
+  'Write-capable actions require policy or approval before side effects.',
+  'Connector actions write audit evidence and activity-stream records.',
+  'Failure and disconnect states are visible to operators.',
+];
+
+export const CONNECTOR_CERTIFICATION_MANIFEST: Record<string, ConnectorCertificationManifest> = {
+  slack: {
+    connectorId: 'slack',
+    label: 'Slack',
+    state: 'approval_gated',
+    readActions: 2,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Collaboration',
+  },
+  'google-workspace': {
+    connectorId: 'google-workspace',
+    label: 'Google Workspace',
+    state: 'approval_gated',
+    readActions: 4,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Productivity',
+  },
+  'microsoft-365': {
+    connectorId: 'microsoft-365',
+    label: 'Microsoft 365',
+    state: 'approval_gated',
+    readActions: 4,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Productivity',
+  },
+  jira: {
+    connectorId: 'jira',
+    label: 'Jira',
+    state: 'approval_gated',
+    readActions: 3,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Engineering',
+  },
+  github: {
+    connectorId: 'github',
+    label: 'GitHub',
+    state: 'approval_gated',
+    readActions: 4,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Engineering',
+  },
+  hubspot: {
+    connectorId: 'hubspot',
+    label: 'HubSpot',
+    state: 'approval_gated',
+    readActions: 3,
+    writeActions: 2,
+    approvalGatedActions: 2,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Sales',
+  },
+  quickbooks: {
+    connectorId: 'quickbooks',
+    label: 'QuickBooks',
+    state: 'approval_gated',
+    readActions: 3,
+    writeActions: 1,
+    approvalGatedActions: 1,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Finance',
+  },
+  cashfree: {
+    connectorId: 'cashfree',
+    label: 'Cashfree',
+    state: 'approval_gated',
+    readActions: 3,
+    writeActions: 1,
+    approvalGatedActions: 1,
+    checks: certificationChecks(),
+    evidence: BASE_CERTIFICATION_EVIDENCE,
+    owner: 'Finance',
+  },
+  naukri: {
+    connectorId: 'naukri',
+    label: 'Naukri RMS',
+    state: 'read_only',
+    readActions: 3,
+    writeActions: 0,
+    approvalGatedActions: 0,
+    checks: certificationChecks({ approval_policy: true, write_audit: true }),
+    evidence: [
+      'Candidate reads are tenant-scoped through configured credentials.',
+      'Write-capable recruiting actions remain unavailable until separately certified.',
+      'Workspace activity and failures surface in the command center.',
+    ],
+    owner: 'Recruiting',
+  },
+  greythr: {
+    connectorId: 'greythr',
+    label: 'greytHR',
+    state: 'read_only',
+    readActions: 4,
+    writeActions: 0,
+    approvalGatedActions: 0,
+    checks: certificationChecks({ approval_policy: true, write_audit: true }),
+    evidence: [
+      'Employee and attendance reads are separated from write-capable HR actions.',
+      'Write-capable HR actions remain unavailable until separately certified.',
+      'Workspace activity and failures surface in the command center.',
+    ],
+    owner: 'HR',
+  },
+};
+
+export const PRODUCTION_CERTIFIED_CONNECTORS = new Set(Object.keys(CONNECTOR_CERTIFICATION_MANIFEST));
 
 export const READINESS_LABELS: Record<ReadinessStatus, string> = {
   not_configured: 'Not configured',
@@ -112,8 +272,22 @@ export function normalizeConnectorId(value: string) {
 }
 
 export function isCertifiedProductionConnector(connectorId: string) {
+  return Boolean(getConnectorCertificationManifest(connectorId));
+}
+
+export function getConnectorCertificationManifest(connectorId: string) {
   const normalized = normalizeConnectorId(connectorId);
-  return PRODUCTION_CERTIFIED_CONNECTORS.has(connectorId) || PRODUCTION_CERTIFIED_CONNECTORS.has(normalized);
+  return CONNECTOR_CERTIFICATION_MANIFEST[normalized] || null;
+}
+
+function missingCertificationChecks(manifest: ConnectorCertificationManifest | null) {
+  if (!manifest) {
+    return ['auth', 'read', 'approval_policy', 'write_audit', 'failure_handling', 'disconnect', 'tenant_isolation'];
+  }
+
+  return Object.entries(manifest.checks)
+    .filter(([, passed]) => !passed)
+    .map(([check]) => check);
 }
 
 export function readinessTone(status: ReadinessStatus) {
@@ -143,17 +317,23 @@ export function deriveConnectorCertification(args: {
   permissions?: string[];
   actionsUnlocked?: string[];
 }): ConnectorCertification {
+  const manifest = getConnectorCertificationManifest(args.connectorId);
   const policies = args.capabilityPolicies || [];
   const enabledPolicies = policies.filter((policy) => policy.enabled !== false);
-  const approvalGatedActions = enabledPolicies.filter((policy) => policy.requires_human_approval).length;
+  const manifestApprovalGatedActions = manifest?.approvalGatedActions || 0;
+  const approvalGatedActions = Math.max(
+    manifestApprovalGatedActions,
+    enabledPolicies.filter((policy) => policy.requires_human_approval).length,
+  );
   const highRiskActions = enabledPolicies.filter((policy) => policy.risk_level === 'high' || policy.risk_level === 'medium').length;
-  const writeActions = Math.max(approvalGatedActions, highRiskActions, args.actionsUnlocked?.length || 0);
+  const writeActions = Math.max(manifest?.writeActions || 0, approvalGatedActions, highRiskActions, args.actionsUnlocked?.length || 0);
   const readActions = Math.max(
+    manifest?.readActions || 0,
     enabledPolicies.length - writeActions,
     args.permissions?.length || 0,
     0,
   );
-  const certified = !args.comingSoon && isCertifiedProductionConnector(args.connectorId);
+  const certified = !args.comingSoon && Boolean(manifest) && missingCertificationChecks(manifest).length === 0;
   const connectionDegraded = Boolean(
     args.connected && (
       args.status === 'error'
@@ -172,10 +352,14 @@ export function deriveConnectorCertification(args: {
       readActions,
       writeActions,
       approvalGatedActions,
+      evidence: manifest?.evidence || [],
+      missingChecks: missingCertificationChecks(manifest),
+      certificationLevel: 'degraded',
     };
   }
 
   if (!certified) {
+    const missingChecks = missingCertificationChecks(manifest);
     return {
       connectorId: args.connectorId,
       state: 'unavailable',
@@ -187,10 +371,15 @@ export function deriveConnectorCertification(args: {
       readActions,
       writeActions,
       approvalGatedActions,
+      evidence: manifest?.evidence || [],
+      missingChecks,
+      certificationLevel: 'requires_certification',
     };
   }
 
-  if (approvalGatedActions > 0 || writeActions > 0) {
+  const manifestState = manifest?.state || 'production_ready';
+
+  if (manifestState === 'approval_gated' || approvalGatedActions > 0 || writeActions > 0) {
     return {
       connectorId: args.connectorId,
       state: 'approval_gated',
@@ -200,18 +389,24 @@ export function deriveConnectorCertification(args: {
       readActions,
       writeActions,
       approvalGatedActions,
+      evidence: manifest?.evidence || [],
+      missingChecks: [],
+      certificationLevel: 'pilot_certified',
     };
   }
 
   return {
     connectorId: args.connectorId,
-    state: readActions > 0 ? 'read_only' : 'production_ready',
+    state: manifestState === 'read_only' || readActions > 0 ? 'read_only' : 'production_ready',
     certified: true,
-    label: readActions > 0 ? 'Certified read path' : 'Certified production path',
-    reasons: [readActions > 0 ? 'Read actions are available for production workflows.' : 'Connector path is certified for production setup.'],
+    label: manifestState === 'read_only' || readActions > 0 ? 'Certified read path' : 'Certified production path',
+    reasons: [manifestState === 'read_only' || readActions > 0 ? 'Read actions are available for production workflows.' : 'Connector path is certified for production setup.'],
     readActions,
     writeActions,
     approvalGatedActions,
+    evidence: manifest?.evidence || [],
+    missingChecks: [],
+    certificationLevel: 'pilot_certified',
   };
 }
 
@@ -267,11 +462,37 @@ export function deriveOrgReadinessScore(args: {
   severeIncidents: number;
   connectedConnectors?: number;
   degradedConnectors?: number;
+  activityEvents?: UnifiedActivityEvent[];
+  costSignalCount?: number;
 }): OrgReadinessScore {
   const profiles = args.agents.map(deriveAgentProductionProfile);
   const agentsWithoutBudget = profiles.filter((profile) => profile.budgetInr <= 0);
   const agentsWithoutApps = profiles.filter((profile) => profile.connectedApps.length === 0);
   const activeAgents = args.agents.filter((agent) => agent.status === 'active');
+  const activityEvents = args.activityEvents || [];
+  const signalCoverage = ([
+    ['approval', 'Approvals'],
+    ['incident', 'Incidents'],
+    ['job', 'Runtime jobs'],
+    ['connector', 'Connector actions'],
+    ['audit', 'Audit evidence'],
+    ['cost', 'Cost tracking'],
+  ] as const).map(([type, label]) => {
+    const matching = activityEvents.filter((event) => event.type === type);
+    return {
+      type,
+      label,
+      present: matching.length > 0 || (type === 'cost' && (args.costSignalCount || 0) > 0),
+      count: type === 'cost' ? Math.max(matching.length, args.costSignalCount || 0) : matching.length,
+      lastAt: matching
+        .map((event) => event.at)
+        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null,
+    };
+  });
+  const missingAuditEvidence = !signalCoverage.find((signal) => signal.type === 'audit')?.present;
+  const missingRuntimeEvidence = activeAgents.length > 0 && !signalCoverage.find((signal) => signal.type === 'job')?.present;
+  const missingConnectorActionEvidence = (args.connectedConnectors || 0) > 0 && !signalCoverage.find((signal) => signal.type === 'connector')?.present;
+  const missingCostEvidence = args.agents.length > 0 && !signalCoverage.find((signal) => signal.type === 'cost')?.present;
   const issues: OrgReadinessIssue[] = [];
 
   if (args.agents.length === 0) {
@@ -344,6 +565,46 @@ export function deriveOrgReadinessScore(args: {
     });
   }
 
+  if (missingRuntimeEvidence) {
+    issues.push({
+      id: 'runtime-evidence',
+      status: 'needs_policy',
+      title: 'Runtime execution evidence missing',
+      detail: 'At least one active agent exists, but no runtime job event has reached the evidence stream yet.',
+      route: 'jobs',
+    });
+  }
+
+  if (missingConnectorActionEvidence) {
+    issues.push({
+      id: 'connector-action-evidence',
+      status: 'needs_policy',
+      title: 'Connector action evidence missing',
+      detail: 'Connected apps are present, but no connector execution evidence is visible yet.',
+      route: 'apps',
+    });
+  }
+
+  if (missingCostEvidence) {
+    issues.push({
+      id: 'cost-evidence',
+      status: 'needs_policy',
+      title: 'Cost evidence missing',
+      detail: 'Cost tracking must emit at least one signal before ROI and budget claims are production-grade.',
+      route: 'costs',
+    });
+  }
+
+  if (missingAuditEvidence) {
+    issues.push({
+      id: 'audit-evidence',
+      status: 'needs_policy',
+      title: 'Audit evidence missing from stream',
+      detail: 'Production proof depends on audit records reaching the command center.',
+      route: 'audit-log',
+    });
+  }
+
   const penalty =
     (args.agents.length === 0 ? 25 : 0)
     + ((args.connectedConnectors || 0) === 0 ? 20 : 0)
@@ -351,7 +612,11 @@ export function deriveOrgReadinessScore(args: {
     + Math.min(15, agentsWithoutApps.length * 5)
     + Math.min(15, args.pendingApprovals * 3)
     + Math.min(30, args.openIncidents * 8 + args.severeIncidents * 8)
-    + Math.min(15, (args.degradedConnectors || 0) * 5);
+    + Math.min(15, (args.degradedConnectors || 0) * 5)
+    + (missingRuntimeEvidence ? 8 : 0)
+    + (missingConnectorActionEvidence ? 8 : 0)
+    + (missingCostEvidence ? 6 : 0)
+    + (missingAuditEvidence ? 8 : 0);
 
   const score = Math.max(0, Math.min(100, 100 - penalty));
   const status: ReadinessStatus =
@@ -361,7 +626,7 @@ export function deriveOrgReadinessScore(args: {
         ? 'degraded'
         : args.agents.length === 0 || (args.connectedConnectors || 0) === 0
           ? 'not_configured'
-          : agentsWithoutBudget.length > 0 || args.pendingApprovals > 0
+          : agentsWithoutBudget.length > 0 || args.pendingApprovals > 0 || missingRuntimeEvidence || missingConnectorActionEvidence || missingCostEvidence || missingAuditEvidence
             ? 'needs_policy'
             : activeAgents.length > 0
               ? 'deployed'
@@ -383,7 +648,7 @@ export function deriveOrgReadinessScore(args: {
   const summary =
     issues.length > 0
       ? `${issues.length} production requirement${issues.length !== 1 ? 's' : ''} need attention before this workspace is hard to dismiss.`
-      : 'Core production signals are clean: agents, connectors, policies, incidents, and approvals are in good shape.';
+      : 'Core production signals are clean: agents, connectors, policies, incidents, approvals, runtime jobs, cost, and audit evidence are in good shape.';
 
-  return { score, status, label, summary, issues };
+  return { score, status, label, summary, issues, signalCoverage };
 }

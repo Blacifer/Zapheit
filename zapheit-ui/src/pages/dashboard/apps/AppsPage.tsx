@@ -717,6 +717,16 @@ function AppCard({
               Certification required before this connector should be used for paid-pilot production work.
             </p>
           )}
+          {certification.certified && certification.evidence.length > 0 && (
+            <p className="mt-1 text-[11px] text-emerald-300/75">
+              Evidence: {certification.evidence.slice(0, 2).join(' · ')}
+            </p>
+          )}
+          {!certification.certified && certification.missingChecks.length > 0 && app.productionStatus !== 'coming_soon' && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Missing checks: {certification.missingChecks.slice(0, 3).join(', ')}
+            </p>
+          )}
 
           {/* Live metric + usage counter chips */}
           {isConnected && (liveMetric || usageCount != null) && (

@@ -23,6 +23,7 @@ import { useDashboardNotifications, readNotificationState, buildCoverageNotifica
 import { useDashboardAgentConnections, writeFocusedAgentWorkspace } from '../hooks/useDashboardAgentConnections';
 import { useDashboardSetup } from '../hooks/useDashboardSetup';
 import type { AgentTemplate } from '../config/agentTemplates';
+import type { TemplateLaunchPackage } from '../lib/template-launch-package';
 
 import { MfaNudgeBanner } from '../components/MfaNudgeBanner';
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
@@ -94,7 +95,11 @@ interface DashboardProps {
   onSignUp?: () => void;
 }
 
-type DeployableTemplate = AgentTemplate & { system_prompt?: string; integration_ids?: string[] };
+type DeployableTemplate = AgentTemplate & {
+  system_prompt?: string;
+  integration_ids?: string[];
+  launch_package?: TemplateLaunchPackage;
+};
 
 function DashboardSectionLoading() {
   return (
@@ -278,7 +283,13 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       platform: template.platform, model_name: template.model, budget_limit: template.budget,
       ...(primaryPack ? { primary_pack: primaryPack } : {}),
       integration_ids: template.integration_ids || [],
-      system_prompt: template.system_prompt || '', config: {},
+      system_prompt: template.system_prompt || '',
+      config: template.launch_package
+        ? {
+            production_launch_package: template.launch_package,
+            readiness_status: template.launch_package.readiness,
+          }
+        : {},
     });
     if (!created.success || !created.data) {
       throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');

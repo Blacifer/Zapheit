@@ -14,6 +14,14 @@ const flags = {
 
 const checks = [
   {
+    name: 'UI truthfulness audit',
+    cwd: '.',
+    cmd: 'node',
+    args: ['scripts/truthfulness-audit.js'],
+    required: true,
+    description: 'Blocks launch-facing fake adoption, unsupported production claims, and missing evidence language.',
+  },
+  {
     name: 'Frontend build',
     cwd: 'zapheit-ui',
     cmd: 'pnpm',
