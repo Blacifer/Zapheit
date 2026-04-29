@@ -1,5 +1,6 @@
 import { authenticatedFetch } from './_helpers';
 import type { ApiResponse } from './_helpers';
+import type { ConnectorCertification, ReadinessStatus } from '../production-readiness';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,6 +80,8 @@ export type UnifiedConnectorEntry = {
   advanced_setup_modes?: Array<'oauth' | 'direct' | 'api_key'>;
   canonical_sources?: string[];
   primary_service_id?: string;
+  readiness_status?: ReadinessStatus;
+  connector_certification?: ConnectorCertification;
 };
 
 export type ConnectorAction = {

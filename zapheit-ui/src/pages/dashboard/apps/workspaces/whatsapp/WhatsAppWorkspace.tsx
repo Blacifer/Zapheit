@@ -7,7 +7,7 @@ import {
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
-import { StatusBadge, EmptyState } from '../shared';
+import { StatusBadge, EmptyState, ProductionTruthBanner } from '../shared';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -57,7 +57,7 @@ interface WhatsAppContact {
 const CONNECTOR_ID = 'whatsapp';
 
 /* ------------------------------------------------------------------ */
-/*  Demo data (shown when connector is not yet live)                   */
+/*  Sample data (shown when connector is not yet live)                 */
 /* ------------------------------------------------------------------ */
 
 const DEMO_CONVERSATIONS: WhatsAppConversation[] = [
@@ -260,20 +260,22 @@ export default function WhatsAppWorkspace() {
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold text-white">WhatsApp Business</h1>
           <p className="text-[11px] text-slate-400">
-            {connected === null ? 'Checking…' : connected ? 'Connected via Meta Cloud API' : 'Demo Mode — Connect to go live'}
+            {connected === null ? 'Checking...' : connected ? 'Connected via Meta Cloud API' : 'Meta Cloud API required for production'}
           </p>
         </div>
-        <StatusBadge status={connected ? 'active' : 'demo'} />
+        <StatusBadge status={connected ? 'active' : 'sample_data'} label={connected ? undefined : 'Sample data'} />
         <button onClick={loadConversations} className="text-slate-400 hover:text-white transition-colors p-1">
           <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
         </button>
       </div>
 
-      {/* Demo data banner — shown when not live-connected */}
+      {/* Sample data banner — shown when not live-connected */}
       {!connected && (
-        <div className="mx-4 mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-2.5 flex items-center gap-2.5">
-          <span className="text-amber-400 text-sm">⚠</span>
-          <p className="text-xs text-amber-200 font-medium">Demo data — live connection coming soon. Connect your Meta Cloud API key to go live.</p>
+        <div className="mx-4 mt-3">
+          <ProductionTruthBanner title="WhatsApp sample records visible" connectorName="WhatsApp Business">
+            Connect and verify Meta Cloud API credentials before sending messages, syncing conversations, or using these records for customer proof.
+            Sample conversations are not audit, SLA, or ROI evidence.
+          </ProductionTruthBanner>
         </div>
       )}
 

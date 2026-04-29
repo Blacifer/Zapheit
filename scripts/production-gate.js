@@ -15,7 +15,7 @@ const flags = {
 const checks = [
   {
     name: 'Frontend build',
-    cwd: 'zapheit',
+    cwd: 'zapheit-ui',
     cmd: 'pnpm',
     args: ['build'],
     required: true,
@@ -87,7 +87,7 @@ const checks = [
   },
   {
     name: 'Frontend smoke suite',
-    cwd: 'zapheit',
+    cwd: 'zapheit-ui',
     cmd: 'pnpm',
     args: ['e2e'],
     required: flags.withUiSmoke,

@@ -24,3 +24,4 @@ export type { EmptyStateProps } from './EmptyState';
 export { PendingApprovalRow } from './PendingApprovalRow';
 export { GovernanceActivityFeed } from './GovernanceActivityFeed';
 export type { GovernanceActivityFeedProps } from './GovernanceActivityFeed';
+export { ProductionTruthBanner } from './ProductionTruthBanner';

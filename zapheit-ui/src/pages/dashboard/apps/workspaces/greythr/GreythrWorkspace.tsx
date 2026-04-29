@@ -6,6 +6,7 @@ import {
   ExternalLink, Search, AlertCircle, TrendingUp,
 } from 'lucide-react';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
+import { ProductionTruthBanner } from '../shared';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -57,7 +58,7 @@ interface AuditEntry {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Mock data — used when greytHR adapter returns no data
+   Sample data — used when greytHR adapter returns no data
 ──────────────────────────────────────────────────────────────────────────── */
 
 const MOCK_EMPLOYEES: Employee[] = [
@@ -242,13 +243,13 @@ function LeaveTab({ leaves, loading, onApprove, onReject }: {
                       onClick={() => onReject(leave.id)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-300 text-xs font-semibold hover:bg-rose-500/20 transition-colors"
                     >
-                      <XCircle className="w-3.5 h-3.5" /> Reject
+                      <XCircle className="w-3.5 h-3.5" /> Remove sample
                     </button>
                     <button
                       onClick={() => onApprove(leave.id)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Request approval
                     </button>
                   </div>
                 </div>
@@ -283,9 +284,28 @@ function LeaveTab({ leaves, loading, onApprove, onReject }: {
    Tab: Payroll
 ──────────────────────────────────────────────────────────────────────────── */
 
-function PayrollTab({ summary, loading }: { summary: PayrollSummary | null; loading: boolean }) {
+function PayrollTab({
+  summary,
+  loading,
+  onRequestDisbursement,
+}: {
+  summary: PayrollSummary | null;
+  loading: boolean;
+  onRequestDisbursement: (summary: PayrollSummary) => Promise<void>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-500" /></div>;
   if (!summary) return <div className="py-12 text-center text-sm text-slate-500">Payroll data unavailable.</div>;
+
+  const requestDisbursement = async () => {
+    setSubmitting(true);
+    try {
+      await onRequestDisbursement(summary);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -319,10 +339,11 @@ function PayrollTab({ summary, loading }: { summary: PayrollSummary | null; load
           )}
         </div>
         <button
-          onClick={() => toast.info('Payroll disbursement requires approval — creating approval request…')}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+          onClick={() => void requestDisbursement()}
+          disabled={submitting}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
         >
-          <IndianRupee className="w-3.5 h-3.5" /> Disburse Payroll
+          <IndianRupee className="w-3.5 h-3.5" /> {submitting ? 'Requesting...' : 'Request disbursement'}
         </button>
       </div>
 
@@ -379,7 +400,7 @@ export default function GreythrWorkspace() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [payroll, setPayroll] = useState<PayrollSummary | null>(null);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'sample_data' | 'disconnected'>('checking');
   const [loading, setLoading] = useState({ employees: false, leave: false, payroll: false });
 
   const pendingLeaveCount = leaves.filter((l) => l.status === 'pending').length;
@@ -393,11 +414,11 @@ export default function GreythrWorkspace() {
         setConnectionStatus('connected');
       } else {
         setEmployees(MOCK_EMPLOYEES);
-        setConnectionStatus('connected');
+        setConnectionStatus('sample_data');
       }
     } catch {
       setEmployees(MOCK_EMPLOYEES);
-      setConnectionStatus('connected');
+      setConnectionStatus('sample_data');
     } finally {
       setLoading((p) => ({ ...p, employees: false }));
     }
@@ -436,15 +457,22 @@ export default function GreythrWorkspace() {
     if (!leave) return;
     try {
       await api.approvals.create({
+        service: 'greythr',
         action: 'approve_leave',
-        description: `Approve ${leave.type} for ${leave.employee} (${leave.fromDate} → ${leave.toDate}, ${leave.days} days)`,
-        connector_id: 'greythr',
-        connector_action: 'approve_leave_request',
-        payload: { leave_id: id },
-        risk_level: 'low',
-      } as unknown as Parameters<typeof api.approvals.create>[0]);
+        action_payload: {
+          leave_id: id,
+          employee: leave.employee,
+          leave_type: leave.type,
+          from_date: leave.fromDate,
+          to_date: leave.toDate,
+          days: leave.days,
+        },
+        requested_by: 'HR Assistant',
+        required_role: 'manager',
+        expires_in_hours: 8,
+      });
       setLeaves((prev) => prev.map((l) => l.id === id ? { ...l, status: 'approved' as const } : l));
-      toast.success(`Leave approved for ${leave.employee}`);
+      toast.success(`Leave approval request created for ${leave.employee}`);
     } catch {
       toast.error('Failed to approve leave. Try again.');
     }
@@ -454,8 +482,29 @@ export default function GreythrWorkspace() {
     const leave = leaves.find((l) => l.id === id);
     if (!leave) return;
     setLeaves((prev) => prev.map((l) => l.id === id ? { ...l, status: 'rejected' as const } : l));
-    toast.success(`Leave rejected for ${leave.employee}`);
+    toast.success(`Sample leave request removed for ${leave.employee}`);
   }, [leaves]);
+
+  const handleRequestPayrollDisbursement = useCallback(async (summary: PayrollSummary) => {
+    try {
+      await api.approvals.create({
+        service: 'greythr',
+        action: 'disburse_payroll',
+        action_payload: {
+          month: summary.month,
+          headcount: summary.headcount,
+          total_net: summary.totalNet,
+          pending_count: summary.pendingCount,
+        },
+        requested_by: 'HR Assistant',
+        required_role: 'admin',
+        expires_in_hours: 4,
+      });
+      toast.success('Payroll disbursement approval request created');
+    } catch {
+      toast.error('Failed to request payroll disbursement approval');
+    }
+  }, []);
 
   return (
     <div className="min-h-full bg-[#080f1a] px-6 py-6">
@@ -477,8 +526,21 @@ export default function GreythrWorkspace() {
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-white">greytHR</h1>
                 <span className="text-[10px]">🇮🇳</span>
-                <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium', connectionStatus === 'connected' ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-slate-600/40 bg-white/[0.04] text-slate-500')}>
-                  {connectionStatus === 'checking' ? 'Checking…' : connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                <span className={cn(
+                  'text-[11px] px-2 py-0.5 rounded-full border font-medium',
+                  connectionStatus === 'connected'
+                    ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
+                    : connectionStatus === 'sample_data'
+                      ? 'border-amber-400/25 bg-amber-500/10 text-amber-200'
+                      : 'border-slate-600/40 bg-white/[0.04] text-slate-500',
+                )}>
+                  {connectionStatus === 'checking'
+                    ? 'Checking...'
+                    : connectionStatus === 'connected'
+                      ? 'Connected'
+                      : connectionStatus === 'sample_data'
+                        ? 'Sample data'
+                        : 'Disconnected'}
                 </span>
               </div>
               <p className="text-xs text-slate-500">HR Management · {employees.length} employees</p>
@@ -519,6 +581,11 @@ export default function GreythrWorkspace() {
         {/* Agent banner */}
         {showBanner && <AgentSuggestionBanner serviceId="greythr" onDismiss={() => setShowBanner(false)} />}
 
+        <ProductionTruthBanner title="greytHR sample sections visible" connectorName="greytHR">
+          Employee, leave, payroll, or activity panels may contain sample records when greytHR does not return production data.
+          The sample audit log is not compliance evidence; use only connector-returned records for paid-pilot proof.
+        </ProductionTruthBanner>
+
         {/* Tabs */}
         <div className="flex gap-1 border-b border-white/8 pb-0">
           {TABS.map((tab) => (
@@ -545,7 +612,7 @@ export default function GreythrWorkspace() {
         <div>
           {activeTab === 'employees' && <EmployeesTab employees={employees} loading={loading.employees} />}
           {activeTab === 'leave'     && <LeaveTab leaves={leaves} loading={loading.leave} onApprove={handleApprove} onReject={handleReject} />}
-          {activeTab === 'payroll'   && <PayrollTab summary={payroll} loading={loading.payroll} />}
+          {activeTab === 'payroll'   && <PayrollTab summary={payroll} loading={loading.payroll} onRequestDisbursement={handleRequestPayrollDisbursement} />}
           {activeTab === 'activity'  && <ActivityTab entries={auditLog} />}
         </div>
       </div>

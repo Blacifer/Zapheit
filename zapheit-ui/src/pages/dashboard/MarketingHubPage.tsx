@@ -134,7 +134,7 @@ export default function MarketingHubPage() {
     setBusy(true);
     try {
       const res: any = await authenticatedFetch('/hubs/demo/generate', { method: 'POST', body: JSON.stringify({ hub: 'marketing' }) });
-      if (res.success) { toast.success('Sample data loaded'); void load(); }
+      if (res.success) { toast.success('Sample records loaded - not production evidence'); void load(); }
       else toast.error(res.error || 'Failed to load sample data');
     } catch (e: any) { toast.error(e?.message || 'Failed'); }
     finally { setBusy(false); }
@@ -293,6 +293,9 @@ export default function MarketingHubPage() {
                 </div>
                 <p className="text-slate-300 font-medium">No campaigns yet</p>
                 <p className="text-slate-500 text-sm mt-1 max-w-xs">Create your first campaign to start reaching your audience via Email, WhatsApp, or SMS.</p>
+                <p className="text-amber-300/80 text-xs mt-3 max-w-xs">
+                  Sample records are for layout inspection only and are not ROI, audit, or paid-pilot evidence.
+                </p>
                 <div className="flex items-center gap-2 mt-4">
                   <button
                     onClick={() => setShowCreate(true)}
@@ -307,7 +310,7 @@ export default function MarketingHubPage() {
                     className="h-9 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-slate-200 text-sm transition-colors flex items-center gap-1.5"
                   >
                     <Database className="w-3.5 h-3.5" />
-                    Load sample data
+                    Load sample records
                   </button>
                 </div>
               </div>

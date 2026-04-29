@@ -9,6 +9,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
+import { ProductionTruthBanner } from '../shared';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -49,7 +50,7 @@ interface PaymentLink {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Mock data
+   Sample data
 ──────────────────────────────────────────────────────────────────────────── */
 
 const fmtINR = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -171,7 +172,7 @@ const PAYOUT_STATUS_COLOR: Record<string, string> = {
   failed:     'bg-red-500/15 text-red-400',
 };
 
-function PayoutsTab({ payouts, setPayouts }: { payouts: Payout[]; setPayouts: React.Dispatch<React.SetStateAction<Payout[]>> }) {
+function PayoutsTab({ payouts }: { payouts: Payout[] }) {
   const [submitting, setSubmitting] = useState<string | null>(null);
 
   const initiatePayout = async (payoutId: string, amount: number, beneficiary: string) => {
@@ -185,7 +186,6 @@ function PayoutsTab({ payouts, setPayouts }: { payouts: Payout[]; setPayouts: Re
         required_role: 'admin',
         expires_in_hours: 4,
       });
-      setPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, status: 'processing' } : p));
       toast.success('Payout approval requested — admin will be notified');
     } catch {
       toast.error('Failed to initiate payout');
@@ -379,7 +379,7 @@ export default function CashfreeWorkspace() {
     setLoading(true);
     try {
       await api.unifiedConnectors?.executeAction?.('cashfree', 'list_transactions', {});
-    } catch { /* fall through to mock */ }
+    } catch { /* fall through to sample records */ }
     setTxns(MOCK_TRANSACTIONS);
     setPayouts(MOCK_PAYOUTS);
     setLoading(false);
@@ -437,6 +437,11 @@ export default function CashfreeWorkspace() {
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
         {showBanner && <AgentSuggestionBanner serviceId="cashfree" onDismiss={() => setShowBanner(false)} />}
 
+        <ProductionTruthBanner title="Cashfree sample records visible" connectorName="Cashfree">
+          This workspace currently displays sample transactions, payouts, payment links, and activity while the Cashfree production datasets are being mapped.
+          Approval actions still create governed requests, but these amounts and records are not audit evidence.
+        </ProductionTruthBanner>
+
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -444,7 +449,7 @@ export default function CashfreeWorkspace() {
         ) : (
           <>
             {tab === 'transactions' && <TransactionsTab txns={txns} />}
-            {tab === 'payouts'      && <PayoutsTab payouts={payouts} setPayouts={setPayouts} />}
+            {tab === 'payouts'      && <PayoutsTab payouts={payouts} />}
             {tab === 'links'        && <PaymentLinksTab />}
             {tab === 'activity'     && <ActivityTab />}
           </>

@@ -47,6 +47,26 @@ const formatCompact = (value: number) => {
 };
 const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
 
+function buildSparklinePath(points: TrendPoint[]) {
+  if (!points.length) return 'M0,25 L100,25';
+
+  const values = points.map((point) => point.requests);
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values);
+  const range = Math.max(max - min, 1);
+  const width = 100;
+  const height = 30;
+  const xStep = points.length > 1 ? width / (points.length - 1) : width;
+
+  return values
+    .map((value, index) => {
+      const x = index * xStep;
+      const y = height - 5 - ((value - min) / range) * 20;
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
 export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -376,11 +396,10 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
               {formatNumber(data.totals.requests)}
             </h2>
 
-            {/* Fake Sparkline SVG for aesthetics resembling OpenAI Usage */}
+            {/* Request trend sparkline */}
             <div className="h-10 w-full mb-6">
               <svg viewBox="0 0 100 30" className="w-full h-full preserve-aspect-ratio-none">
-                <path d="M0,25 L15,25 L20,20 L25,25 L35,25 L40,25 L60,25 L70,25 L80,25 L85,25 L90,15 L95,25 L100,25" fill="none" stroke="#f43f5e" strokeWidth="1.2" />
-                <circle cx="95" cy="25" r="1.5" fill="#f43f5e" />
+                <path d={buildSparklinePath(data.trend)} fill="none" stroke="#f43f5e" strokeWidth="1.2" />
               </svg>
             </div>
 

@@ -3,6 +3,7 @@ import type { MarketplaceApp } from '../../../lib/api-client';
 import type { UnifiedConnectorEntry } from '../../../lib/api/connectors';
 import type { UnifiedApp, TrustTier, Maturity, GuardrailStatus, AppSetupMode } from './types';
 import { LOGO_DOMAINS } from './constants';
+import { deriveConnectorCertification, type ReadinessStatus } from '../../../lib/production-readiness';
 
 // ─── Color helpers ──────────────────────────────────────────────────────────
 
@@ -59,6 +60,21 @@ export function fromMarketplaceApp(app: MarketplaceApp): UnifiedApp {
     : app.connectionStatus === 'syncing' ? 'syncing'
     : app.installed                      ? 'connected'
     : 'disconnected' as const;
+  const certification = deriveConnectorCertification({
+    connectorId: app.id,
+    comingSoon: app.comingSoon,
+    connected: app.installed,
+    status,
+    permissions: app.permissions,
+    actionsUnlocked: app.actionsUnlocked,
+  });
+  const readinessStatus: ReadinessStatus = app.comingSoon
+    ? 'blocked'
+    : status === 'error' || status === 'expired'
+      ? 'degraded'
+      : app.installed
+        ? 'deployed'
+        : 'not_configured';
   return {
     id: `app:${app.id}`,
     appId: app.id,
@@ -94,6 +110,8 @@ export function fromMarketplaceApp(app: MarketplaceApp): UnifiedApp {
       enabledActionCount: app.actionsUnlocked?.length || 0,
     },
     appData: app,
+    readinessStatus,
+    connectorCertification: certification,
   };
 }
 
@@ -105,6 +123,21 @@ export function fromIntegration(row: any): UnifiedApp {
     : raw === 'error'                        ? 'error'
     : raw === 'expired' || row.tokenExpired  ? 'expired'
     : 'disconnected' as const;
+  const certification = deriveConnectorCertification({
+    connectorId: row.id,
+    comingSoon: row.specStatus === 'COMING_SOON',
+    connected: status === 'connected',
+    status,
+    permissions: row.capabilities?.reads?.map((r: string) => `Read: ${r}`) || [],
+    actionsUnlocked: row.capabilities?.writes?.map((w: any) => w.label) || [],
+  });
+  const readinessStatus: ReadinessStatus = row.specStatus === 'COMING_SOON'
+    ? 'blocked'
+    : status === 'error' || status === 'expired'
+      ? 'degraded'
+      : status === 'connected'
+        ? 'deployed'
+        : 'not_configured';
   return {
     id: `int:${row.id}`,
     appId: row.id,
@@ -133,6 +166,8 @@ export function fromIntegration(row: any): UnifiedApp {
     wave1GuardrailsApplied: row.wave1GuardrailsApplied,
     wave1GuardrailsTotal: row.wave1GuardrailsTotal,
     integrationData: row,
+    readinessStatus,
+    connectorCertification: certification,
   };
 }
 
@@ -170,6 +205,25 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
       : authType === 'api_key'
         ? 'api_key'
         : 'direct');
+  const certification = entry.connector_certification || deriveConnectorCertification({
+    connectorId: appId,
+    comingSoon: Boolean(entry.comingSoon),
+    connected,
+    status,
+    healthStatus: entry.health_status,
+    capabilityPolicies,
+    permissions: entry.permissions || [],
+    actionsUnlocked: capabilityPolicies.map((item) => item.capability),
+  });
+  const readinessStatus: ReadinessStatus = entry.readiness_status || (
+    entry.comingSoon
+      ? 'blocked'
+      : status === 'error' || status === 'expired' || entry.health_status === 'degraded'
+        ? 'degraded'
+        : connected
+          ? 'deployed'
+          : 'not_configured'
+  );
   return {
     id: `${entry.source}:${appId}`,
     appId,
@@ -239,6 +293,8 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
     capabilityPolicies,
     mcpTools: entry.mcp_tools || [],
     secureCredentialHandling: entry.credential_handling,
+    readinessStatus,
+    connectorCertification: certification,
   };
 }
 

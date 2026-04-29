@@ -54,6 +54,12 @@ import { useCountUp } from '../../hooks/useCountUp';
 import { useApp } from '../../context/AppContext';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
 import { HubLiveMetrics, type IntegrationConfig } from './hubs/HubLiveMetrics';
+import {
+  deriveOrgReadinessScore,
+  readinessTone,
+  READINESS_LABELS,
+  type UnifiedActivityEvent,
+} from '../../lib/production-readiness';
 
 // ── Connected App Metrics for Dashboard Overview ──────────────────────────────
 const DASHBOARD_INTEGRATIONS: IntegrationConfig[] = [
@@ -107,13 +113,45 @@ interface DashboardOverviewProps {
   onNavigate?: (page: string) => void;
 }
 
-type ActivityItem = {
-  id: string;
-  at: string;
-  title: string;
-  detail: string;
-  tone: 'info' | 'warn' | 'risk';
-};
+type ActivityItem = UnifiedActivityEvent;
+
+const ACTIVITY_EVENT_TYPES = new Set<ActivityItem['type']>(['approval', 'incident', 'job', 'connector', 'audit', 'cost']);
+const ACTIVITY_STATUSES = new Set<ActivityItem['status']>(['not_configured', 'needs_policy', 'ready', 'deployed', 'degraded', 'blocked']);
+const ACTIVITY_TONES = new Set<ActivityItem['tone']>(['info', 'success', 'warn', 'risk']);
+
+function activityFromAuditEntry(entry: AuditLogEntry): ActivityItem {
+  const raw = entry.details?.unified_activity_event;
+  if (raw && typeof raw === 'object') {
+    const type = ACTIVITY_EVENT_TYPES.has(raw.type) ? raw.type : 'audit';
+    const status = ACTIVITY_STATUSES.has(raw.status) ? raw.status : 'deployed';
+    const tone = ACTIVITY_TONES.has(raw.tone) ? raw.tone : 'success';
+    return {
+      id: String(raw.id || `audit-${entry.id}`),
+      type,
+      at: String(raw.at || entry.created_at),
+      title: String(raw.title || entry.action.replace(/[._]/g, ' ')),
+      detail: String(raw.detail || `${entry.resource_type.replace(/_/g, ' ')} · audit evidence recorded`),
+      status,
+      tone,
+      route: typeof raw.route === 'string' ? raw.route : 'audit-log',
+      actor: typeof raw.actor === 'string' ? raw.actor : entry.user_id,
+      sourceRef: typeof raw.sourceRef === 'string' ? raw.sourceRef : entry.id,
+      evidenceRef: typeof raw.evidenceRef === 'string' ? raw.evidenceRef : null,
+    };
+  }
+
+  return {
+    id: `audit-${entry.id}`,
+    type: 'audit',
+    at: entry.created_at,
+    title: entry.action.replace(/[._]/g, ' '),
+    detail: `${entry.resource_type.replace(/_/g, ' ')} · audit evidence recorded`,
+    status: 'deployed',
+    tone: 'success',
+    route: 'audit-log',
+    sourceRef: entry.id,
+  };
+}
 
 type OverviewTelemetry = {
   generatedAt: string;
@@ -889,24 +927,48 @@ const hasData = agents.length > 0;
     const items: ActivityItem[] = [
       ...incidents.slice(0, 6).map((incident): ActivityItem => ({
         id: `incident-${incident.id}`,
+        type: 'incident',
         at: incident.created_at,
         title: incident.title,
         detail: `${incident.agent_name} · ${incident.severity} · ${incident.status}`,
+        status: ['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'blocked' : 'degraded',
         tone: ['high', 'critical'].includes((incident.severity || '').toLowerCase()) ? 'risk' : 'warn',
+        route: 'incidents',
+        sourceRef: incident.id,
       })),
+      ...pendingApprovals.slice(0, 6).map((approval): ActivityItem => ({
+        id: `approval-${approval.id}`,
+        type: 'approval',
+        at: approval.created_at,
+        title: `Approval waiting: ${approval.action.replace(/_/g, ' ')}`,
+        detail: `${approval.service} · required role ${approval.required_role || 'manager'}`,
+        status: 'needs_policy',
+        tone: 'warn',
+        route: 'approvals',
+        sourceRef: approval.id,
+      })),
+      ...teamActivity.slice(0, 6).map(activityFromAuditEntry),
       ...agents.slice(0, 6).map((agent): ActivityItem => ({
         id: `agent-${agent.id}`,
+        type: 'job',
         at: agent.created_at,
         title: `${agent.name} added to agents`,
         detail: `${(agent as any).config?.display_provider || agent.platform} · ${agent.model_name}`,
+        status: agent.status === 'terminated' ? 'blocked' : agent.conversations > 0 ? 'deployed' : 'ready',
         tone: agent.status === 'terminated' ? 'warn' : 'info',
+        route: 'agents',
+        sourceRef: agent.id,
       })),
       ...costData.slice(0, 6).map((entry): ActivityItem => ({
         id: `cost-${entry.id}`,
+        type: 'cost',
         at: entry.date,
         title: `Cost recorded ${formatCurrency(entry.cost)}`,
         detail: `${entry.requests.toLocaleString()} request(s) · ${entry.tokens.toLocaleString()} tokens`,
+        status: 'deployed',
         tone: 'info',
+        route: 'costs',
+        sourceRef: entry.id,
       })),
     ];
 
@@ -914,7 +976,7 @@ const hasData = agents.length > 0;
       .filter((item) => item.at)
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 6);
-  }, [agents, costData, incidents]);
+  }, [agents, costData, incidents, pendingApprovals, teamActivity]);
 
   const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
   const latestCostAt = [...costData]
@@ -924,6 +986,14 @@ const hasData = agents.length > 0;
   const agentsWithoutBudget = agents.filter((agent) => Number(agent.budget_limit || 0) <= 0);
   const openIncidents = incidents.filter((incident) => ['open', 'investigating'].includes((incident.status || '').toLowerCase()) && incident.source !== 'manual_test');
   const severeIncidents = openIncidents.filter((incident) => ['high', 'critical'].includes((incident.severity || '').toLowerCase()));
+  const orgReadiness = useMemo(() => deriveOrgReadinessScore({
+    agents,
+    pendingApprovals: pendingApprovals.length,
+    openIncidents: openIncidents.length,
+    severeIncidents: severeIncidents.length,
+    connectedConnectors: telemetry?.integrations.healthy ?? agents.filter((agent) => (agent.integrationIds || []).length > 0).length,
+    degradedConnectors: telemetry?.integrations.degraded ?? 0,
+  }), [agents, openIncidents.length, pendingApprovals.length, severeIncidents.length, telemetry]);
   const avgRiskScore = Math.round(agents.reduce((sum, agent) => sum + agent.risk_score, 0) / Math.max(agents.length, 1));
   const totalConversations = agents.reduce((sum, agent) => sum + agent.conversations, 0);
   const averageSpendPerAgent = totalCost / Math.max(agents.length, 1);
@@ -1298,6 +1368,62 @@ const hasData = agents.length > 0;
         crossAppInsight={crossAppInsight}
         onNavigate={onNavigate}
       />
+
+      <section className="rounded-2xl border border-white/[0.10] bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_38%),rgba(255,255,255,0.04)] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)' }}>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">Production readiness</p>
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${readinessTone(orgReadiness.status)}`}>
+                {READINESS_LABELS[orgReadiness.status]}
+              </span>
+            </div>
+            <h2 className="mt-3 text-2xl font-bold text-white">{orgReadiness.score}/100 · {orgReadiness.label}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{orgReadiness.summary}</p>
+          </div>
+          <div className="grid min-w-[260px] grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-slate-950/30 p-3">
+            <div className="text-center">
+              <p className="text-xl font-bold text-white">{agents.length}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">Agents</p>
+            </div>
+            <div className="border-x border-white/10 text-center">
+              <p className="text-xl font-bold text-emerald-300">{telemetry?.integrations.healthy ?? agents.filter((agent) => (agent.integrationIds || []).length > 0).length}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">Connected</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold text-amber-300">{pendingApprovals.length + openIncidents.length}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">Open work</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {orgReadiness.issues.slice(0, 3).map((issue) => (
+            <button
+              key={issue.id}
+              onClick={() => issue.route && onNavigate?.(issue.route)}
+              className={`group rounded-xl border p-4 text-left transition hover:brightness-110 ${readinessTone(issue.status)}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">{issue.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-300/85">{issue.detail}</p>
+                </div>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-90" />
+              </div>
+            </button>
+          ))}
+          {orgReadiness.issues.length === 0 && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 lg:col-span-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                <p className="text-sm font-semibold text-white">No production blockers detected from currently loaded signals.</p>
+              </div>
+              <p className="mt-1 text-xs text-emerald-100/75">Keep monitoring approvals, incidents, runtime jobs, connector health, cost, and audit evidence from this command center.</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {primaryAction && (
         <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
@@ -1993,11 +2119,12 @@ const hasData = agents.length > 0;
           </div>
           <div className="space-y-2">
             {teamActivity.map((entry: AuditLogEntry) => {
+              const activity = activityFromAuditEntry(entry);
               const actor = entry.users?.email
                 ? entry.users.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
                 : 'System';
-              const action = entry.action.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-              const resource = entry.resource_type.replace(/_/g, ' ');
+              const action = activity.title.replace(/\b\w/g, (c: string) => c.toUpperCase());
+              const resource = activity.detail;
               return (
                 <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2.5">
                   <div className="h-7 w-7 shrink-0 rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-300">

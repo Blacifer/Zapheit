@@ -11,6 +11,7 @@ import { getAdapter } from '../lib/integrations/adapters';
 import { interceptAgentToolCall } from '../lib/agentic-tool-execution';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { runPreflightGate } from '../lib/preflight-gate';
+import { connectorActionTitle, recordProductionActivity } from '../lib/production-activity';
 import { appendAuditChainEvent } from '../lib/trust-audit-chain';
 
 const router = Router();
@@ -3705,6 +3706,135 @@ router.delete('/scrapers/:id', requirePermission('connectors.manage'), async (re
 import { PARTNER_APP_CATALOG, getInstalledAppHealth } from './marketplace';
 import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
+
+type ProductionReadinessStatus = 'not_configured' | 'needs_policy' | 'ready' | 'deployed' | 'degraded' | 'blocked';
+type ConnectorCertificationState = 'production_ready' | 'approval_gated' | 'read_only' | 'unavailable' | 'degraded';
+type CatalogCapabilityPolicy = {
+  capability: string;
+  requires_human_approval: boolean;
+  risk_level: 'low' | 'medium' | 'high';
+  enabled: boolean;
+};
+
+const PRODUCTION_CERTIFIED_CONNECTORS = new Set([
+  'slack',
+  'google-workspace',
+  'google_workspace',
+  'microsoft-365',
+  'microsoft_365',
+  'jira',
+  'github',
+  'hubspot',
+  'quickbooks',
+  'cashfree',
+  'naukri',
+  'greythr',
+]);
+
+function normalizeConnectorKey(value: string) {
+  return String(value || '').trim().toLowerCase().replace(/_/g, '-');
+}
+
+function isProductionCertifiedConnector(connectorId: string) {
+  const normalized = normalizeConnectorKey(connectorId);
+  return PRODUCTION_CERTIFIED_CONNECTORS.has(connectorId) || PRODUCTION_CERTIFIED_CONNECTORS.has(normalized);
+}
+
+function buildConnectorProductionMetadata(args: {
+  connectorId: string;
+  comingSoon?: boolean;
+  connected: boolean;
+  status?: string | null;
+  healthStatus?: string | null;
+  capabilityPolicies: CatalogCapabilityPolicy[];
+  permissions?: string[];
+  actionsUnlocked?: string[];
+}): {
+  readiness_status: ProductionReadinessStatus;
+  connector_certification: {
+    connectorId: string;
+    state: ConnectorCertificationState;
+    certified: boolean;
+    label: string;
+    reasons: string[];
+    readActions: number;
+    writeActions: number;
+    approvalGatedActions: number;
+  };
+} {
+  const enabledPolicies = args.capabilityPolicies.filter((policy) => policy.enabled !== false);
+  const approvalGatedActions = enabledPolicies.filter((policy) => policy.requires_human_approval).length;
+  const highRiskActions = enabledPolicies.filter((policy) => policy.risk_level === 'high' || policy.risk_level === 'medium').length;
+  const writeActions = Math.max(approvalGatedActions, highRiskActions, args.actionsUnlocked?.length || 0);
+  const readActions = Math.max(enabledPolicies.length - writeActions, args.permissions?.length || 0, 0);
+  const certified = !args.comingSoon && isProductionCertifiedConnector(args.connectorId);
+  const degraded = Boolean(args.connected && (args.status === 'error' || args.status === 'expired' || args.healthStatus === 'degraded'));
+
+  if (degraded) {
+    return {
+      readiness_status: 'degraded',
+      connector_certification: {
+        connectorId: args.connectorId,
+        state: 'degraded',
+        certified,
+        label: 'Connection degraded',
+        reasons: ['Installed connector health or credentials need attention before production use.'],
+        readActions,
+        writeActions,
+        approvalGatedActions,
+      },
+    };
+  }
+
+  if (!certified) {
+    return {
+      readiness_status: args.comingSoon ? 'blocked' : 'not_configured',
+      connector_certification: {
+        connectorId: args.connectorId,
+        state: 'unavailable',
+        certified: false,
+        label: args.comingSoon ? 'Not production-certified yet' : 'Certification required',
+        reasons: args.comingSoon
+          ? ['This connector is not exposed as a production-ready path yet.']
+          : ['Use after auth, action policy, failure handling, and audit capture are verified.'],
+        readActions,
+        writeActions,
+        approvalGatedActions,
+      },
+    };
+  }
+
+  const state: ConnectorCertificationState =
+    approvalGatedActions > 0 || writeActions > 0
+      ? 'approval_gated'
+      : readActions > 0
+        ? 'read_only'
+        : 'production_ready';
+
+  return {
+    readiness_status: args.connected
+      ? (writeActions > 0 && approvalGatedActions === 0 ? 'needs_policy' : 'deployed')
+      : 'not_configured',
+    connector_certification: {
+      connectorId: args.connectorId,
+      state,
+      certified: true,
+      label: state === 'approval_gated'
+        ? 'Certified with governed writes'
+        : state === 'read_only'
+          ? 'Certified read path'
+          : 'Certified production path',
+      reasons: [state === 'approval_gated'
+        ? 'Write actions are available only through configured policy, approval, and audit evidence.'
+        : state === 'read_only'
+          ? 'Read actions are available for production workflows.'
+          : 'Connector path is certified for production setup.'],
+      readActions,
+      writeActions,
+      approvalGatedActions,
+    },
+  };
+}
 // GET /api/connectors/catalog/unified — merged catalog (marketplace + spec-driven)
 // with per-org install status and agent-usage counts.
 router.get('/catalog/unified', authenticateToken, async (req, res) => {
@@ -3910,6 +4040,17 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         tools: registryTools,
         openApiCapabilities: openApiCapabilityMap.get(app.id) as Array<Record<string, any>> | undefined,
       });
+      const healthStatus = !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded');
+      const productionMeta = buildConnectorProductionMetadata({
+        connectorId: canonicalAppKey,
+        comingSoon: !!app.comingSoon,
+        connected: !!health,
+        status: health?.status ?? null,
+        healthStatus,
+        capabilityPolicies,
+        permissions: app.permissions,
+        actionsUnlocked: app.actionsUnlocked,
+      });
       entries.push({
         id: app.id,
         app_key: canonicalAppKey,
@@ -3938,7 +4079,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         is_connected: !!health,
         connectionStatus: health?.status ?? null,
         connection_status: health?.status ?? null,
-        health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
+        health_status: healthStatus,
         supports_health_test: app.installMethod !== 'free',
         health_test_mode: app.installMethod !== 'free' ? 'direct' : 'none',
         primary_setup_mode: setupModes.primary,
@@ -3957,6 +4098,8 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         supports_agent_linking: true,
         agent_capabilities: capabilityPolicies.map((item) => item.capability),
         capability_policies: capabilityPolicies,
+        readiness_status: productionMeta.readiness_status,
+        connector_certification: productionMeta.connector_certification,
         mcp_tools: buildMcpTools(app.id, { tools: registryTools, openApiCapabilities: openApiCapabilityMap.get(app.id) as Array<Record<string, any>> | undefined }),
         credential_handling: 'server_injected',
       });
@@ -3979,6 +4122,17 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         openApiCapabilities: openApiCapabilityMap.get(spec.id) as Array<Record<string, any>> | undefined,
       });
       const supportsHealthTest = spec.id === 'internal' || Boolean(getAdapter(spec.id));
+      const healthStatus = !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded');
+      const productionMeta = buildConnectorProductionMetadata({
+        connectorId: canonicalAppKey,
+        comingSoon: spec.status === 'COMING_SOON',
+        connected: !!health,
+        status: health?.status ?? null,
+        healthStatus,
+        capabilityPolicies,
+        permissions: spec.capabilities?.reads?.map((r: string) => `Read: ${r}`),
+        actionsUnlocked: spec.capabilities?.writes?.map((w: any) => w.label),
+      });
       entries.push({
         id: spec.id,
         app_key: canonicalAppKey,
@@ -4006,7 +4160,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         is_connected: !!health,
         connectionStatus: health?.status ?? null,
         connection_status: health?.status ?? null,
-        health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
+        health_status: healthStatus,
         supports_health_test: supportsHealthTest,
         health_test_mode: supportsHealthTest ? 'adapter' : 'unsupported',
         primary_setup_mode: setupModes.primary,
@@ -4026,6 +4180,8 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         supports_agent_linking: true,
         agent_capabilities: capabilityPolicies.map((item) => item.capability),
         capability_policies: capabilityPolicies,
+        readiness_status: productionMeta.readiness_status,
+        connector_certification: productionMeta.connector_certification,
         mcp_tools: buildMcpTools(spec.id, { tools: registryTools, openApiCapabilities: openApiCapabilityMap.get(spec.id) as Array<Record<string, any>> | undefined }),
         credential_handling: 'server_injected',
       });
@@ -4179,7 +4335,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
         approvalId = approvalRows?.[0]?.id || null;
       }
 
-      await supabaseRestAsService('connector_action_executions', '', {
+      const pendingExecutionRows = await supabaseRestAsService('connector_action_executions', '', {
         method: 'POST',
         body: {
           organization_id: orgId,
@@ -4225,7 +4381,8 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
             : { suggested: preflight.recommendedNextAction },
           created_at: now,
         },
-      }).catch(() => {});
+      }).catch(() => []);
+      const pendingExecutionId = Array.isArray(pendingExecutionRows) ? pendingExecutionRows?.[0]?.id || null : null;
 
       if (preflight.approvalRequired) {
         void appendAuditChainEvent({
@@ -4241,6 +4398,33 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
             audit_ref: preflight.auditRef,
           },
         });
+        await recordProductionActivity({
+          organizationId: orgId,
+          actorId: (req as any).user?.id || 'user',
+          auditAction: 'approval.requested',
+          resourceType: 'approval_request',
+          resourceId: approvalId,
+          event: {
+            type: 'approval',
+            title: `Approval waiting: ${connectorActionTitle(resolvedConnectorId, action)}`,
+            detail: preflight.reasonMessage || preflight.blockReason,
+            status: 'needs_policy',
+            tone: 'warn',
+            route: 'approvals',
+            sourceRef: approvalId || pendingExecutionId || `${resolvedConnectorId}:${action}`,
+            evidenceRef: preflight.auditRef,
+          },
+          metadata: {
+            production_journey: { stage: 'approval_requested', source: 'connector_console' },
+            connector_id: resolvedConnectorId,
+            connector_action: action,
+            approval_id: approvalId,
+            execution_id: pendingExecutionId,
+            agent_id: agentId || null,
+            reason_category: preflight.reasonCategory,
+            recommended_next_action: preflight.recommendedNextAction,
+          },
+        });
         return res.json({
           success: true,
           pending: true,
@@ -4252,6 +4436,33 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           message: preflight.blockReason,
         });
       }
+
+      await recordProductionActivity({
+        organizationId: orgId,
+        actorId: (req as any).user?.id || 'user',
+        auditAction: 'connector.action.blocked',
+        resourceType: 'connector_action_execution',
+        resourceId: pendingExecutionId,
+        event: {
+          type: 'connector',
+          title: `Blocked: ${connectorActionTitle(resolvedConnectorId, action)}`,
+          detail: preflight.reasonMessage || preflight.blockReason,
+          status: 'blocked',
+          tone: 'risk',
+          route: 'governed-actions',
+          sourceRef: pendingExecutionId || `${resolvedConnectorId}:${action}`,
+          evidenceRef: preflight.auditRef,
+        },
+        metadata: {
+          production_journey: { stage: 'policy_blocked', source: 'connector_console' },
+          connector_id: resolvedConnectorId,
+          connector_action: action,
+          execution_id: pendingExecutionId,
+          agent_id: agentId || null,
+          reason_category: preflight.reasonCategory,
+          recommended_next_action: preflight.recommendedNextAction,
+        },
+      });
 
       return res.status(403).json({
         success: false,
@@ -4274,6 +4485,27 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
 
     const connectedIntegration = (integrations || []).find((row) => row.status === 'connected');
     if (!connectedIntegration) {
+      await recordProductionActivity({
+        organizationId: orgId,
+        actorId: (req as any).user?.id || 'user',
+        auditAction: 'connector.action.not_configured',
+        resourceType: 'connector_action',
+        event: {
+          type: 'connector',
+          title: `Missing connection: ${connectorActionTitle(resolvedConnectorId, action)}`,
+          detail: `${resolvedConnectorId} must be connected before this production action can run.`,
+          status: 'not_configured',
+          tone: 'warn',
+          route: 'apps',
+          sourceRef: `${resolvedConnectorId}:${action}`,
+        },
+        metadata: {
+          production_journey: { stage: 'missing_connector', source: 'connector_console' },
+          connector_id: resolvedConnectorId,
+          connector_action: action,
+          agent_id: agentId || null,
+        },
+      });
       return res.status(400).json({ success: false, error: `${resolvedConnectorId} is not connected` });
     }
 
@@ -4291,10 +4523,12 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     const start = Date.now();
     const result = await executeConnectorAction(resolvedConnectorId, action, params, credentials, orgId, agentId || null, integrationId);
     const duration = Date.now() - start;
+    const auditRef = `exec_${createHash('sha1').update(`${orgId}:${connectorId}:${action}:${Date.now()}`).digest('hex').slice(0, 16)}`;
 
     // Log the action execution
+    let executionId: string | null = null;
     try {
-      await supabaseRestAsService('connector_action_executions', '', {
+      const executionRows = await supabaseRestAsService('connector_action_executions', '', {
         method: 'POST',
         body: {
           organization_id: orgId,
@@ -4321,7 +4555,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
             agentId: agentId || null,
             durationMs: duration,
             idempotencyKey: result.idempotencyKey || null,
-            auditRef: `exec_${createHash('sha1').update(`${orgId}:${connectorId}:${action}:${Date.now()}`).digest('hex').slice(0, 16)}`,
+            auditRef,
             existingSnapshot: {
               policy_gate: preflight.policySnapshot,
               budget_gate: preflight.budgetSnapshot,
@@ -4331,6 +4565,7 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
           remediation: result.success ? {} : { suggested: 'Check connector credentials, provider state, and retry conditions.' },
         },
       });
+      executionId = Array.isArray(executionRows) ? executionRows?.[0]?.id || null : null;
     } catch { /* non-critical */ }
     void appendAuditChainEvent({
       organization_id: orgId,
@@ -4341,6 +4576,37 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
         success: result.success,
         status_code: result.statusCode || null,
         requested_by: (req as any).user?.id || null,
+        audit_ref: auditRef,
+      },
+    });
+    await recordProductionActivity({
+      organizationId: orgId,
+      actorId: (req as any).user?.id || 'user',
+      auditAction: result.success ? 'connector.action.executed' : 'connector.action.failed',
+      resourceType: 'connector_action_execution',
+      resourceId: executionId,
+      event: {
+        type: 'connector',
+        title: `${result.success ? 'Executed' : 'Failed'}: ${connectorActionTitle(resolvedConnectorId, action)}`,
+        detail: result.success
+          ? `Provider call completed in ${duration}ms with audit evidence.`
+          : result.error || 'Provider call failed after policy checks.',
+        status: result.success ? 'deployed' : 'degraded',
+        tone: result.success ? 'success' : 'risk',
+        route: 'apps',
+        sourceRef: executionId || `${resolvedConnectorId}:${action}`,
+        evidenceRef: auditRef,
+      },
+      metadata: {
+        production_journey: { stage: result.success ? 'connector_executed' : 'connector_failed', source: 'connector_console' },
+        connector_id: resolvedConnectorId,
+        connector_action: action,
+        execution_id: executionId,
+        agent_id: agentId || null,
+        integration_id: integrationId,
+        duration_ms: duration,
+        idempotency_key: result.idempotencyKey || null,
+        status_code: result.statusCode || null,
       },
     });
 

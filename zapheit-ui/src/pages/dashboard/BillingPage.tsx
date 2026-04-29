@@ -38,6 +38,16 @@ interface CheckoutForm {
   company_name: string;
 }
 
+function invoiceRequestUrl(order: BillingStatus['recent_orders'][number]) {
+  const subject = encodeURIComponent(`Invoice request for ${order.merchant_order_id}`);
+  const body = encodeURIComponent([
+    `Please send the GST invoice for order ${order.merchant_order_id}.`,
+    `Plan: ${order.offer_name}`,
+    `Amount: ${order.amount}`,
+  ].join('\n'));
+  return `mailto:billing@zapheit.com?subject=${subject}&body=${body}`;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Plan definitions
 ──────────────────────────────────────────────────────────────────────────── */
@@ -460,12 +470,12 @@ export default function BillingPage({ onNavigate }: { onNavigate?: (route: strin
                     {order.status}
                   </span>
                   {order.status === 'paid' && (
-                    <button
-                      onClick={() => toast.success('Invoice download coming soon — contact billing@zapheit.com')}
+                    <a
+                      href={invoiceRequestUrl(order)}
                       className="text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0"
                     >
-                      Invoice ↓
-                    </button>
+                      Request invoice
+                    </a>
                   )}
                 </div>
               ))}

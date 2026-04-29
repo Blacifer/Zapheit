@@ -87,7 +87,7 @@ const BASE_MODELS = [
   // ── Anthropic (live fine-tuning supported via Files API + fine-tuning API) ─
   { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', tier: 'Strong Writing', inputUsdPerMillion: 3, outputUsdPerMillion: 15, liveProviderSupported: true },
   { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', tier: 'Low Latency', inputUsdPerMillion: 0.25, outputUsdPerMillion: 1.25, liveProviderSupported: true },
-  // ── Google (dataset prep + cost estimate; live submission coming soon) ────
+  // ── Google (dataset prep + cost estimate; live submission is gated by provider support) ────
   { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', tier: 'Cost Efficient', inputUsdPerMillion: 0.35, outputUsdPerMillion: 0.7, liveProviderSupported: false },
   // ── Open Source (dataset prep + export only) ──────────────────────────────
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta', tier: 'Open Model', inputUsdPerMillion: 0.88, outputUsdPerMillion: 0.88, liveProviderSupported: false },
@@ -773,7 +773,7 @@ export default function ModelFineTuningPage() {
               >
                 {BASE_MODELS.map(model => (
                   <option key={model.id} value={model.id}>
-                    {model.name} • {model.provider} • {model.tier}{model.liveProviderSupported ? ' ✓ Live' : ' — Coming Soon'}
+                    {model.name} • {model.provider} • {model.tier}{model.liveProviderSupported ? ' ✓ Live' : ' — Prep only'}
                   </option>
                 ))}
               </select>
@@ -803,7 +803,7 @@ export default function ModelFineTuningPage() {
                       {selectedModel.source === 'curated' ? 'Recommended' : 'Custom'}
                     </span>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full ${selectedModel.liveProviderSupported ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'}`}>
-                      {selectedModel.liveProviderSupported ? 'Live submission ready' : 'Dataset prep only — coming soon'}
+                      {selectedModel.liveProviderSupported ? 'Live submission ready' : 'Dataset prep only'}
                     </span>
                   </div>
                 </div>

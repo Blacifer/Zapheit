@@ -8,6 +8,7 @@ import {
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
+import { ProductionTruthBanner } from '../shared';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -41,7 +42,7 @@ interface Candidate {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Mock data
+   Sample data
 ──────────────────────────────────────────────────────────────────────────── */
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -328,7 +329,7 @@ export default function NaukriWorkspace() {
     setLoading(true);
     try {
       await api.unifiedConnectors?.executeAction?.('naukri', 'list_jobs', {});
-    } catch { /* fall through to mock */ }
+    } catch { /* fall through to sample records */ }
     setJobs(MOCK_JOBS);
     setCandidates(MOCK_CANDIDATES);
     setLoading(false);
@@ -389,6 +390,11 @@ export default function NaukriWorkspace() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
         {showBanner && <AgentSuggestionBanner serviceId="naukri" onDismiss={() => setShowBanner(false)} />}
+
+        <ProductionTruthBanner title="Recruitment sample records visible" connectorName="Naukri RMS">
+          This workspace currently displays sample job postings, candidates, and activity while production Naukri records are being mapped.
+          Use it for workflow inspection only; do not use these candidates or AI scores as customer proof or hiring evidence.
+        </ProductionTruthBanner>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">

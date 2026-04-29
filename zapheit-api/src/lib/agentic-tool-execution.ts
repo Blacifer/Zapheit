@@ -4,6 +4,7 @@ import { buildGovernedActionSnapshot } from './governed-actions';
 import { decryptSecret } from './integrations/encryption';
 import { logger } from './logger';
 import { type PreflightResult, runPreflightGate } from './preflight-gate';
+import { connectorActionTitle, recordProductionActivity } from './production-activity';
 import { appendAuditChainEvent } from './trust-audit-chain';
 import { eq, supabaseRestAsService } from './supabase-rest';
 
@@ -211,6 +212,33 @@ export async function interceptAgentToolCall(args: InterceptArgs) {
         },
       });
 
+      await recordProductionActivity({
+        organizationId: args.orgId,
+        actorId: args.requestedBy || 'agent',
+        auditAction: 'approval.requested',
+        resourceType: 'approval_request',
+        resourceId: approvalId,
+        event: {
+          type: 'approval',
+          title: `Approval waiting: ${connectorActionTitle(args.connectorId, args.action)}`,
+          detail: blockedPreflight.reasonMessage || blockedPreflight.blockReason,
+          status: 'needs_policy',
+          tone: 'warn',
+          route: 'approvals',
+          sourceRef: approvalId,
+          evidenceRef: blockedPreflight.auditRef,
+        },
+        metadata: {
+          production_journey: { stage: 'approval_requested', source: args.source },
+          connector_id: args.connectorId,
+          connector_action: args.action,
+          approval_id: approvalId,
+          agent_id: args.agentId || null,
+          reason_category: blockedPreflight.reasonCategory,
+          recommended_next_action: blockedPreflight.recommendedNextAction,
+        },
+      });
+
       return {
         success: true,
         paused: true,
@@ -245,6 +273,31 @@ export async function interceptAgentToolCall(args: InterceptArgs) {
       },
     });
 
+    await recordProductionActivity({
+      organizationId: args.orgId,
+      actorId: args.requestedBy || 'agent',
+      auditAction: 'connector.action.blocked',
+      resourceType: 'connector_action',
+      event: {
+        type: 'connector',
+        title: `Blocked: ${connectorActionTitle(args.connectorId, args.action)}`,
+        detail: blockedPreflight.reasonMessage || blockedPreflight.blockReason,
+        status: 'blocked',
+        tone: 'risk',
+        route: 'governed-actions',
+        sourceRef: `${args.connectorId}:${args.action}`,
+        evidenceRef: blockedPreflight.auditRef,
+      },
+      metadata: {
+        production_journey: { stage: 'policy_blocked', source: args.source },
+        connector_id: args.connectorId,
+        connector_action: args.action,
+        agent_id: args.agentId || null,
+        reason_category: blockedPreflight.reasonCategory,
+        recommended_next_action: blockedPreflight.recommendedNextAction,
+      },
+    });
+
     return {
       success: false,
       paused: false,
@@ -273,7 +326,7 @@ export async function interceptAgentToolCall(args: InterceptArgs) {
   const durationMs = Date.now() - startedAt;
   const auditRef = buildAuditRef(args.orgId, args.connectorId, args.action);
 
-  await supabaseRestAsService('connector_action_executions', '', {
+  const executionRows = await supabaseRestAsService('connector_action_executions', '', {
     method: 'POST',
     body: {
       organization_id: args.orgId,
@@ -306,7 +359,9 @@ export async function interceptAgentToolCall(args: InterceptArgs) {
     },
   }).catch((err: any) => {
     logger.warn('Failed to persist agent tool execution', { connectorId: args.connectorId, action: args.action, error: err?.message });
+    return [];
   });
+  const executionId = Array.isArray(executionRows) ? executionRows?.[0]?.id || null : null;
 
   await appendAuditChainEvent({
     organization_id: args.orgId,
@@ -320,6 +375,36 @@ export async function interceptAgentToolCall(args: InterceptArgs) {
       requested_by: args.requestedBy || 'agent',
       agent_id: args.agentId || null,
       audit_ref: auditRef,
+      idempotency_key: result.idempotencyKey || null,
+      status_code: result.statusCode || null,
+    },
+  });
+
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.requestedBy || 'agent',
+    auditAction: result.success ? 'connector.action.executed' : 'connector.action.failed',
+    resourceType: 'connector_action_execution',
+    resourceId: executionId,
+    event: {
+      type: 'connector',
+      title: `${result.success ? 'Executed' : 'Failed'}: ${connectorActionTitle(args.connectorId, args.action)}`,
+      detail: result.success
+        ? `Provider call completed in ${durationMs}ms with audit evidence.`
+        : result.error || 'Provider call failed after policy checks.',
+      status: result.success ? 'deployed' : 'degraded',
+      tone: result.success ? 'success' : 'risk',
+      route: 'apps',
+      sourceRef: executionId || `${args.connectorId}:${args.action}`,
+      evidenceRef: auditRef,
+    },
+    metadata: {
+      production_journey: { stage: result.success ? 'connector_executed' : 'connector_failed', source: args.source },
+      connector_id: args.connectorId,
+      connector_action: args.action,
+      agent_id: args.agentId || null,
+      integration_id: integrationId,
+      duration_ms: durationMs,
       idempotency_key: result.idempotencyKey || null,
       status_code: result.statusCode || null,
     },
@@ -399,6 +484,8 @@ export async function resumeApprovedToolCall(args: ResumeArgs) {
     },
   });
 
+  let executionId: string | null = execution?.id || null;
+
   if (execution?.id) {
     await supabaseRestAsService('connector_action_executions', new URLSearchParams({
       id: eq(execution.id),
@@ -419,7 +506,7 @@ export async function resumeApprovedToolCall(args: ResumeArgs) {
       },
     });
   } else {
-    await supabaseRestAsService('connector_action_executions', '', {
+    const insertedRows = await supabaseRestAsService('connector_action_executions', '', {
       method: 'POST',
       body: {
         organization_id: args.orgId,
@@ -441,6 +528,7 @@ export async function resumeApprovedToolCall(args: ResumeArgs) {
         created_at: now,
       },
     });
+    executionId = Array.isArray(insertedRows) ? insertedRows?.[0]?.id || null : null;
   }
 
   await appendAuditChainEvent({
@@ -456,6 +544,31 @@ export async function resumeApprovedToolCall(args: ResumeArgs) {
       reviewer_id: args.reviewerId,
       reviewer_note: args.reviewerNote || null,
       audit_ref: auditRef,
+    },
+  });
+
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.reviewerId,
+    auditAction: 'approval.approved',
+    resourceType: 'approval_request',
+    resourceId: args.approvalId,
+    event: {
+      type: 'approval',
+      title: `Approved: ${connectorActionTitle(connectorId, action)}`,
+      detail: args.reviewerNote || 'Human approval released the governed connector action.',
+      status: 'deployed',
+      tone: 'success',
+      route: 'approvals',
+      sourceRef: args.approvalId,
+      evidenceRef: auditRef,
+    },
+    metadata: {
+      production_journey: { stage: 'approval_approved', source: 'runtime' },
+      connector_id: connectorId,
+      connector_action: action,
+      approval_id: args.approvalId,
+      reviewer_note: args.reviewerNote || null,
     },
   });
 
@@ -475,6 +588,37 @@ export async function resumeApprovedToolCall(args: ResumeArgs) {
       audit_ref: auditRef,
       status_code: result.statusCode || null,
       idempotency_key: result.idempotencyKey || null,
+    },
+  });
+
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.reviewerId,
+    auditAction: result.success ? 'connector.action.executed' : 'connector.action.failed',
+    resourceType: 'connector_action_execution',
+    resourceId: executionId,
+    event: {
+      type: 'connector',
+      title: `${result.success ? 'Executed after approval' : 'Failed after approval'}: ${connectorActionTitle(connectorId, action)}`,
+      detail: result.success
+        ? `Approved connector action completed in ${durationMs}ms.`
+        : result.error || 'Approval was granted, but the provider call failed.',
+      status: result.success ? 'deployed' : 'degraded',
+      tone: result.success ? 'success' : 'risk',
+      route: 'apps',
+      sourceRef: executionId || args.approvalId,
+      evidenceRef: auditRef,
+    },
+    metadata: {
+      production_journey: { stage: result.success ? 'approved_connector_executed' : 'approved_connector_failed', source: 'runtime' },
+      connector_id: connectorId,
+      connector_action: action,
+      approval_id: args.approvalId,
+      agent_id: agentId,
+      integration_id: integrationId,
+      duration_ms: durationMs,
+      idempotency_key: result.idempotencyKey || null,
+      status_code: result.statusCode || null,
     },
   });
 
@@ -552,6 +696,32 @@ export async function markApprovalDeniedExecution(args: {
       status: 'denied',
       approval_id: args.approvalId,
       reviewer_id: args.reviewerId,
+      reviewer_note: args.reviewerNote || null,
+    },
+  });
+
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.reviewerId,
+    auditAction: 'approval.rejected',
+    resourceType: 'approval_request',
+    resourceId: args.approvalId,
+    event: {
+      type: 'approval',
+      title: execution?.connector_id && execution?.action
+        ? `Denied: ${connectorActionTitle(String(execution.connector_id), String(execution.action))}`
+        : 'Approval denied',
+      detail: args.reviewerNote || 'Reviewer denied the governed connector action.',
+      status: 'blocked',
+      tone: 'risk',
+      route: 'approvals',
+      sourceRef: args.approvalId,
+    },
+    metadata: {
+      production_journey: { stage: 'approval_denied', source: 'runtime' },
+      connector_id: execution?.connector_id || null,
+      connector_action: execution?.action || null,
+      approval_id: args.approvalId,
       reviewer_note: args.reviewerNote || null,
     },
   });

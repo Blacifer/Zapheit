@@ -9,6 +9,7 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
+import { ProductionTruthBanner } from '../shared';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -46,7 +47,7 @@ interface AnalyticsStat {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Mock data
+   Sample data
 ──────────────────────────────────────────────────────────────────────────── */
 
 const MOCK_TICKETS: SupportTicket[] = [
@@ -180,6 +181,12 @@ function ResponsesTab({ drafts, setDrafts }: { drafts: DraftResponse[]; setDraft
   const handleDecision = async (draftId: string, decision: 'approved' | 'rejected') => {
     setSubmitting(draftId);
     try {
+      if (decision === 'rejected') {
+        setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, status: 'rejected' } : d));
+        toast.success('Sample draft rejected — no customer message sent');
+        return;
+      }
+
       await api.approvals.create({
         service: 'freshdesk',
         action: 'send_reply',
@@ -188,8 +195,7 @@ function ResponsesTab({ drafts, setDrafts }: { drafts: DraftResponse[]; setDraft
         required_role: 'manager',
         expires_in_hours: 8,
       });
-      setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, status: decision } : d));
-      toast.success(decision === 'approved' ? 'Reply approved and sent to customer' : 'Draft rejected');
+      toast.success('Reply send approval request created');
     } catch {
       toast.error('Failed to process decision');
     } finally {
@@ -228,7 +234,7 @@ function ResponsesTab({ drafts, setDrafts }: { drafts: DraftResponse[]; setDraft
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
                   >
                     {submitting === draft.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                    Approve & Send
+                    Request send approval
                   </button>
                   <button
                     onClick={() => handleDecision(draft.id, 'rejected')}
@@ -255,7 +261,7 @@ function ResponsesTab({ drafts, setDrafts }: { drafts: DraftResponse[]; setDraft
                   : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-white truncate">{draft.ticketSubject}</p>
-                  <p className="text-xs text-slate-500">{draft.status === 'approved' ? 'Sent' : 'Rejected'} · {fmtTime(draft.generatedAt)}</p>
+                  <p className="text-xs text-slate-500">{draft.status === 'approved' ? 'Approved' : 'Rejected'} · {fmtTime(draft.generatedAt)}</p>
                 </div>
               </div>
             ))}
@@ -385,7 +391,7 @@ export default function FreshdeskWorkspace() {
     setLoading(true);
     try {
       await api.unifiedConnectors?.executeAction?.('freshdesk', 'list_tickets', {});
-    } catch { /* fall through to mock */ }
+    } catch { /* fall through to sample records */ }
     setTickets(MOCK_TICKETS);
     setDrafts(MOCK_DRAFTS);
     setLoading(false);
@@ -442,6 +448,11 @@ export default function FreshdeskWorkspace() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
         {showBanner && <AgentSuggestionBanner serviceId="freshdesk" onDismiss={() => setShowBanner(false)} />}
+
+        <ProductionTruthBanner title="Freshdesk sample records visible" connectorName="Freshdesk">
+          This workspace currently displays sample tickets, draft replies, analytics, and activity while production Freshdesk records are being mapped.
+          Approval actions still demonstrate the governed path, but these tickets are not SLA, audit, or customer evidence.
+        </ProductionTruthBanner>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">

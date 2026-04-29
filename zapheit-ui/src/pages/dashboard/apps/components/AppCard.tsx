@@ -3,6 +3,7 @@ import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
 import { AppLogo } from './AppLogo';
 import { trustTierTone, maturityTone } from '../helpers';
+import { certificationTone } from '../../../../lib/production-readiness';
 
 interface AppCardProps {
   app: UnifiedApp;
@@ -28,7 +29,7 @@ export function AppCard({ app, onClick }: AppCardProps) {
       </div>
 
       {/* Governance badges — front and center */}
-      {(app.trustTier || app.maturity) && (
+      {(app.trustTier || app.maturity || app.connectorCertification) && (
         <div className="flex flex-wrap gap-1">
           {app.trustTier && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(app.trustTier))}>
@@ -38,6 +39,11 @@ export function AppCard({ app, onClick }: AppCardProps) {
           {app.maturity && app.maturity !== 'connected' && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', maturityTone(app.maturity))}>
               {app.maturity}
+            </span>
+          )}
+          {app.connectorCertification && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', certificationTone(app.connectorCertification.state))}>
+              {app.connectorCertification.label}
             </span>
           )}
         </div>

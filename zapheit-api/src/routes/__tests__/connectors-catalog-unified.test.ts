@@ -258,17 +258,32 @@ describe('Connectors catalog unified canonicalization', () => {
     expect(googleRows[0].source).toBe('marketplace');
     expect(googleRows[0].primary_setup_mode).toBe('oauth');
     expect(googleRows[0].primary_service_id).toBe('google-workspace');
+    expect(googleRows[0].readiness_status).toBe('not_configured');
+    expect(googleRows[0].connector_certification).toMatchObject({
+      connectorId: 'google-workspace',
+      certified: true,
+      state: 'approval_gated',
+      label: 'Certified with governed writes',
+    });
 
     expect(microsoftRows).toHaveLength(1);
     expect(microsoftRows[0].source).toBe('marketplace');
     expect(microsoftRows[0].primary_setup_mode).toBe('oauth');
     expect(microsoftRows[0].primary_service_id).toBe('microsoft-365');
+    expect(microsoftRows[0].connector_certification.certified).toBe(true);
 
     expect(zohoPeopleRows).toHaveLength(1);
     expect(zohoPeopleRows[0].source).toBe('integration');
     expect(zohoPeopleRows[0].primary_setup_mode).toBe('oauth');
     expect(zohoPeopleRows[0].advanced_setup_modes).toEqual(expect.arrayContaining(['oauth', 'direct']));
     expect(zohoPeopleRows[0].primary_service_id).toBe('zoho_people');
+    expect(zohoPeopleRows[0].readiness_status).toBe('not_configured');
+    expect(zohoPeopleRows[0].connector_certification).toMatchObject({
+      connectorId: 'zoho-people',
+      certified: false,
+      state: 'unavailable',
+      label: 'Certification required',
+    });
 
     expect(zohoLearnRows).toHaveLength(1);
     expect(zohoLearnRows[0].source).toBe('integration');

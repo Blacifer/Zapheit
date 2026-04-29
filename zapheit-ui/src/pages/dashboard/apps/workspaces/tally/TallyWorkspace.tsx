@@ -6,6 +6,7 @@ import {
   XCircle, TrendingUp, TrendingDown, Calendar, Shield,
 } from 'lucide-react';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
+import { ProductionTruthBanner } from '../shared';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -69,7 +70,7 @@ interface AuditEntry {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Mock data
+   Sample data
 ──────────────────────────────────────────────────────────────────────────── */
 
 const MOCK_TRANSACTIONS: Transaction[] = [
@@ -214,8 +215,17 @@ function TransactionsTab({ transactions, loading }: { transactions: Transaction[
    Tab: Invoices
 ──────────────────────────────────────────────────────────────────────────── */
 
-function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: boolean }) {
+function InvoicesTab({
+  invoices,
+  loading,
+  onRequestReminder,
+}: {
+  invoices: Invoice[];
+  loading: boolean;
+  onRequestReminder: (invoices: Invoice[]) => Promise<void>;
+}) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'overdue' | 'paid'>('all');
+  const [submittingReminder, setSubmittingReminder] = useState<string | null>(null);
 
   const counts = {
     all: invoices.length,
@@ -226,6 +236,18 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
 
   const filtered = filter === 'all' ? invoices : invoices.filter((i) => i.status === filter);
   const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + i.amount, 0);
+  const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
+
+  const requestReminder = async (target: Invoice[] | Invoice, key: string) => {
+    const targets = Array.isArray(target) ? target : [target];
+    if (targets.length === 0) return;
+    setSubmittingReminder(key);
+    try {
+      await onRequestReminder(targets);
+    } finally {
+      setSubmittingReminder(null);
+    }
+  };
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-500" /></div>;
 
@@ -239,10 +261,11 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
             {counts.overdue} invoice{counts.overdue > 1 ? 's' : ''} overdue totalling <span className="font-semibold">{formatINR(overdueAmount)}</span>
           </p>
           <button
-            onClick={() => toast.success('Finance Ops Agent drafting reminder emails…')}
-            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors shrink-0"
+            onClick={() => void requestReminder(overdueInvoices, 'overdue')}
+            disabled={submittingReminder === 'overdue'}
+            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors shrink-0 disabled:opacity-50"
           >
-            Send reminders
+            {submittingReminder === 'overdue' ? 'Requesting...' : 'Request reminders'}
           </button>
         </div>
       )}
@@ -283,10 +306,11 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
               <p className="text-sm font-semibold text-white">{formatINR(inv.amount)}</p>
               {inv.status !== 'paid' && (
                 <button
-                  onClick={() => toast.success(`Reminder sent for ${inv.number}`)}
-                  className="mt-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                  onClick={() => void requestReminder(inv, inv.id)}
+                  disabled={submittingReminder === inv.id}
+                  className="mt-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
                 >
-                  Send reminder →
+                  {submittingReminder === inv.id ? 'Requesting...' : 'Request reminder ->'}
                 </button>
               )}
             </div>
@@ -301,10 +325,29 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
    Tab: GST
 ──────────────────────────────────────────────────────────────────────────── */
 
-function GSTTab({ gst, loading }: { gst: GSTSummary[]; loading: boolean }) {
+function GSTTab({
+  gst,
+  loading,
+  onRequestFiling,
+}: {
+  gst: GSTSummary[];
+  loading: boolean;
+  onRequestFiling: (summary: GSTSummary) => Promise<void>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-500" /></div>;
 
   const current = gst[0];
+
+  const requestFiling = async (summary: GSTSummary) => {
+    setSubmitting(true);
+    try {
+      await onRequestFiling(summary);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -326,10 +369,11 @@ function GSTTab({ gst, loading }: { gst: GSTSummary[]; loading: boolean }) {
             </div>
             {current.filingStatus !== 'filed' && (
               <button
-                onClick={() => toast.info('GST filing requires approval — creating approval request…')}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+                onClick={() => void requestFiling(current)}
+                disabled={submitting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
               >
-                <Shield className="w-3.5 h-3.5" /> File {current.returnType}
+                <Shield className="w-3.5 h-3.5" /> {submitting ? 'Requesting...' : `Request ${current.returnType} filing`}
               </button>
             )}
           </div>
@@ -419,11 +463,11 @@ function ApprovalsTab({ items, loading, onApprove, onReject }: {
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => onReject(item.id)}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-300 text-xs font-semibold hover:bg-rose-500/20 transition-colors">
-                <XCircle className="w-3.5 h-3.5" /> Reject
+                <XCircle className="w-3.5 h-3.5" /> Remove sample
               </button>
               <button onClick={() => onApprove(item.id)}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                <CheckCircle2 className="w-3.5 h-3.5" /> Request approval
               </button>
             </div>
           </div>
@@ -481,7 +525,7 @@ export default function TallyWorkspace() {
   const [gst, setGst] = useState<GSTSummary[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'sample_data' | 'disconnected'>('checking');
   const [loading, setLoading] = useState({ tx: false, inv: false, gst: false, approvals: false });
 
   const flaggedCount = transactions.filter((t) => t.flagged).length;
@@ -497,15 +541,19 @@ export default function TallyWorkspace() {
         api.unifiedConnectors.executeAction('tally', 'get_gst_summary', {}),
       ]);
 
-      setTransactions(txRes.status === 'fulfilled' && txRes.value?.success && txRes.value.data?.data?.transactions ? txRes.value.data.data.transactions : MOCK_TRANSACTIONS);
-      setInvoices(invRes.status === 'fulfilled' && invRes.value?.success && invRes.value.data?.data?.invoices ? invRes.value.data.data.invoices : MOCK_INVOICES);
-      setGst(gstRes.status === 'fulfilled' && gstRes.value?.success && gstRes.value.data?.data ? [gstRes.value.data.data as GSTSummary] : MOCK_GST);
-      setConnectionStatus('connected');
+      const txData = txRes.status === 'fulfilled' && txRes.value?.success ? txRes.value.data?.data?.transactions : null;
+      const invoiceData = invRes.status === 'fulfilled' && invRes.value?.success ? invRes.value.data?.data?.invoices : null;
+      const gstData = gstRes.status === 'fulfilled' && gstRes.value?.success ? gstRes.value.data?.data : null;
+
+      setTransactions(txData ?? MOCK_TRANSACTIONS);
+      setInvoices(invoiceData ?? MOCK_INVOICES);
+      setGst(gstData ? [gstData as GSTSummary] : MOCK_GST);
+      setConnectionStatus(txData && invoiceData && gstData ? 'connected' : 'sample_data');
     } catch {
       setTransactions(MOCK_TRANSACTIONS);
       setInvoices(MOCK_INVOICES);
       setGst(MOCK_GST);
-      setConnectionStatus('connected');
+      setConnectionStatus('sample_data');
     } finally {
       setLoading({ tx: false, inv: false, gst: false, approvals: false });
     }
@@ -520,13 +568,18 @@ export default function TallyWorkspace() {
     if (!item) return;
     try {
       await api.approvals.create({
-        action: 'approve_finance',
-        description: item.description,
-        connector_id: 'tally',
-        connector_action: 'approve_payment',
-        payload: { approval_id: id, amount: item.amount },
-        risk_level: item.amount > 100000 ? 'high' : 'medium',
-      } as unknown as Parameters<typeof api.approvals.create>[0]);
+        service: 'tally',
+        action: 'approve_payment',
+        action_payload: {
+          approval_id: id,
+          type: item.type,
+          description: item.description,
+          amount: item.amount,
+        },
+        requested_by: item.requestedBy || 'Finance Ops Agent',
+        required_role: item.amount > 100000 ? 'admin' : 'manager',
+        expires_in_hours: 8,
+      });
       setPendingApprovals((prev) => prev.filter((p) => p.id !== id));
       toast.success('Approval request created — your manager will be notified');
     } catch {
@@ -536,7 +589,48 @@ export default function TallyWorkspace() {
 
   const handleRejectPayment = useCallback((id: string) => {
     setPendingApprovals((prev) => prev.filter((p) => p.id !== id));
-    toast.success('Request rejected');
+    toast.success('Sample request removed — no connector action executed');
+  }, []);
+
+  const handleRequestInvoiceReminder = useCallback(async (items: Invoice[]) => {
+    try {
+      await api.approvals.create({
+        service: 'tally',
+        action: items.length === 1 ? 'send_invoice_reminder' : 'send_invoice_reminders',
+        action_payload: {
+          invoice_ids: items.map((item) => item.id),
+          invoice_numbers: items.map((item) => item.number),
+          total_amount: items.reduce((sum, item) => sum + item.amount, 0),
+        },
+        requested_by: 'Finance Ops Agent',
+        required_role: 'manager',
+        expires_in_hours: 8,
+      });
+      toast.success(items.length === 1 ? 'Reminder approval request created' : 'Reminder batch approval request created');
+    } catch {
+      toast.error('Failed to request invoice reminder approval');
+    }
+  }, []);
+
+  const handleRequestGstFiling = useCallback(async (summary: GSTSummary) => {
+    try {
+      await api.approvals.create({
+        service: 'tally',
+        action: 'file_gst_return',
+        action_payload: {
+          month: summary.month,
+          return_type: summary.returnType,
+          due_date: summary.dueDate,
+          total_tax: summary.totalTax,
+        },
+        requested_by: 'Finance Ops Agent',
+        required_role: 'admin',
+        expires_in_hours: 4,
+      });
+      toast.success('GST filing approval request created');
+    } catch {
+      toast.error('Failed to request GST filing approval');
+    }
   }, []);
 
   return (
@@ -557,8 +651,18 @@ export default function TallyWorkspace() {
                 <h1 className="text-lg font-bold text-white">TallyPrime</h1>
                 <span className="text-[10px]">🇮🇳</span>
                 <span className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium',
-                  connectionStatus === 'connected' ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-slate-600/40 bg-white/[0.04] text-slate-500')}>
-                  {connectionStatus === 'checking' ? 'Checking…' : connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                  connectionStatus === 'connected'
+                    ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
+                    : connectionStatus === 'sample_data'
+                      ? 'border-amber-400/25 bg-amber-500/10 text-amber-200'
+                      : 'border-slate-600/40 bg-white/[0.04] text-slate-500')}>
+                  {connectionStatus === 'checking'
+                    ? 'Checking...'
+                    : connectionStatus === 'connected'
+                      ? 'Connected'
+                      : connectionStatus === 'sample_data'
+                        ? 'Sample data'
+                        : 'Disconnected'}
                 </span>
               </div>
               <p className="text-xs text-slate-500">Accounting & Finance · {transactions.length} recent transactions</p>
@@ -622,6 +726,11 @@ export default function TallyWorkspace() {
         {/* Agent banner */}
         {showBanner && <AgentSuggestionBanner serviceId="tally" onDismiss={() => setShowBanner(false)} />}
 
+        <ProductionTruthBanner title="Tally sample sections visible" connectorName="TallyPrime">
+          Transactions, invoices, GST, approvals, or activity may contain sample records when TallyPrime does not return production data for that dataset.
+          Sample finance records are not audit evidence and should not be used for ROI, compliance, or paid-pilot validation.
+        </ProductionTruthBanner>
+
         {/* Tabs */}
         <div className="flex gap-1 border-b border-white/8">
           {TABS.map((tab) => (
@@ -646,8 +755,8 @@ export default function TallyWorkspace() {
         {/* Tab content */}
         <div>
           {activeTab === 'transactions' && <TransactionsTab transactions={transactions} loading={loading.tx} />}
-          {activeTab === 'invoices'     && <InvoicesTab invoices={invoices} loading={loading.inv} />}
-          {activeTab === 'gst'          && <GSTTab gst={gst} loading={loading.gst} />}
+          {activeTab === 'invoices'     && <InvoicesTab invoices={invoices} loading={loading.inv} onRequestReminder={handleRequestInvoiceReminder} />}
+          {activeTab === 'gst'          && <GSTTab gst={gst} loading={loading.gst} onRequestFiling={handleRequestGstFiling} />}
           {activeTab === 'approvals'    && <ApprovalsTab items={pendingApprovals} loading={loading.approvals} onApprove={handleApprovePayment} onReject={handleRejectPayment} />}
           {activeTab === 'activity'     && <ActivityTab entries={auditLog} />}
         </div>

@@ -1,6 +1,7 @@
 import { supabaseRestAsService, supabaseRestAsUser } from '../../lib/supabase-rest';
 import { runPreflightGate } from '../../lib/preflight-gate';
 import { executeConnectorAction } from '../../lib/connectors/action-executor';
+import { auditLog } from '../../lib/audit-logger';
 
 jest.mock('../../lib/supabase-rest', () => ({
   supabaseRestAsUser: jest.fn(),
@@ -181,6 +182,7 @@ describe('HITL engine smoke test', () => {
   const mockServiceRest = supabaseRestAsService as jest.MockedFunction<typeof supabaseRestAsService>;
   const mockPreflight = runPreflightGate as jest.MockedFunction<typeof runPreflightGate>;
   const mockExecuteConnectorAction = executeConnectorAction as jest.MockedFunction<typeof executeConnectorAction>;
+  const mockAuditLog = auditLog.log as jest.MockedFunction<typeof auditLog.log>;
 
   beforeEach(() => {
     approvalCounter = 0;
@@ -209,6 +211,7 @@ describe('HITL engine smoke test', () => {
     mockExecuteConnectorAction.mockReset();
     mockUserRest.mockReset();
     mockServiceRest.mockReset();
+    mockAuditLog.mockReset();
 
     mockPreflight.mockImplementation(async (_orgId, connectorId, action, params, agentId) => ({
       allowed: false,
@@ -400,6 +403,23 @@ describe('HITL engine smoke test', () => {
       connector_id: 'slack',
       action: 'send_message',
     }));
+    expect(mockAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'approval.requested',
+      resource_type: 'approval_request',
+      resource_id: 'approval-1',
+      metadata: expect.objectContaining({
+        connector_id: 'slack',
+        connector_action: 'send_message',
+        production_journey: expect.objectContaining({ stage: 'approval_requested' }),
+        unified_activity_event: expect.objectContaining({
+          type: 'approval',
+          status: 'needs_policy',
+          tone: 'warn',
+          route: 'approvals',
+          sourceRef: 'approval-1',
+        }),
+      }),
+    }));
   });
 
   it('denies a paused execution and appends a denied audit event without calling the provider', async () => {
@@ -431,6 +451,20 @@ describe('HITL engine smoke test', () => {
       status: 'denied',
       approval_id: 'approval-1',
       reviewer_id: TEST_USER_ID,
+    }));
+    expect(mockAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'approval.rejected',
+      resource_type: 'approval_request',
+      resource_id: 'approval-1',
+      metadata: expect.objectContaining({
+        production_journey: expect.objectContaining({ stage: 'approval_denied' }),
+        unified_activity_event: expect.objectContaining({
+          type: 'approval',
+          status: 'blocked',
+          tone: 'risk',
+          route: 'approvals',
+        }),
+      }),
     }));
   });
 
@@ -488,6 +522,37 @@ describe('HITL engine smoke test', () => {
       requested_by: TEST_USER_ID,
       agent_id: 'agent-1',
       idempotency_key: 'idem-1',
+    }));
+    expect(mockAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'approval.approved',
+      resource_type: 'approval_request',
+      resource_id: 'approval-1',
+      metadata: expect.objectContaining({
+        production_journey: expect.objectContaining({ stage: 'approval_approved' }),
+        unified_activity_event: expect.objectContaining({
+          type: 'approval',
+          status: 'deployed',
+          tone: 'success',
+          route: 'approvals',
+        }),
+      }),
+    }));
+    expect(mockAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'connector.action.executed',
+      resource_type: 'connector_action_execution',
+      resource_id: 'execution-1',
+      metadata: expect.objectContaining({
+        production_journey: expect.objectContaining({ stage: 'approved_connector_executed' }),
+        connector_id: 'slack',
+        connector_action: 'send_message',
+        unified_activity_event: expect.objectContaining({
+          type: 'connector',
+          status: 'deployed',
+          tone: 'success',
+          route: 'apps',
+          sourceRef: 'execution-1',
+        }),
+      }),
     }));
   });
 });

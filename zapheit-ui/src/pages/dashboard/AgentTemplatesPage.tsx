@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { X, Zap, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
+import { X, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { toast } from '../../lib/toast';
 import { USD_TO_INR } from '../../lib/currency';
@@ -20,6 +20,12 @@ type MonthlyCost =
   | { status: 'free' }
   | { status: 'unknown' };
 
+type TemplateReadinessItem = {
+  label: string;
+  detail: string;
+  ready: boolean;
+};
+
 interface AgentTemplatesPageProps {
   onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
   onLaunchInChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
@@ -35,10 +41,8 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
   const [modelSearch, setModelSearch] = useState('');
   const [liveModels, setLiveModels] = useState<LiveModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'configure' | 'sandbox'>('configure');
+  const [activeTab, setActiveTab] = useState<'configure' | 'readiness'>('configure');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [sandboxMessage, setSandboxMessage] = useState('');
-  const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
   const [pendingAction, setPendingAction] = useState<'fleet' | 'chat' | null>(null);
   const WORKLOAD_PRESETS = useMemo(() => [1_000_000, 10_000_000, 100_000_000], []);
   const MIN_MONTHLY_TOKENS = 1_000_000;
@@ -127,8 +131,6 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
       setModelSearch('');
       setActiveTab('configure');
       setSystemPrompt(`You are an advanced AI assistant tailored for ${selectedTemplate.industry} tasks, specializing as a ${selectedTemplate.name}.`);
-      setSandboxChat([{ role: 'agent', content: `Hi! I'm your ${selectedTemplate.name}. Send me a message to test how I respond in the sandbox.` }]);
-      setSandboxMessage('');
     }
   }, [selectedTemplate, liveModels, resolveModel]);
 
@@ -214,6 +216,60 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
     }
     return result;
   }, [selectedIndustry, templateSearchQuery]);
+
+  const selectedTemplateReadiness = useMemo<TemplateReadinessItem[]>(() => {
+    if (!selectedTemplate) return [];
+
+    const requiredSystems = selectedTemplate.requiredSystems ?? [];
+    const hasBudget = selectedTemplate.budget > 0;
+    const budgetOverrun =
+      monthlyCost.status === 'priced' && hasBudget && monthlyCost.inr > selectedTemplate.budget;
+
+    return [
+      {
+        label: 'Live model selected',
+        ready: Boolean(selectedModel),
+        detail: selectedModel
+          ? `${selectedModel.name} via ${selectedModel.provider}`
+          : 'Select a model from the live catalog before deploying.',
+      },
+      {
+        label: 'Budget guardrail',
+        ready: hasBudget && !budgetOverrun,
+        detail: budgetOverrun
+          ? `Estimated monthly spend is above the ₹${selectedTemplate.budget.toLocaleString('en-IN')} budget.`
+          : hasBudget
+            ? `Budget cap set at ₹${selectedTemplate.budget.toLocaleString('en-IN')}/month.`
+            : 'Add a monthly budget before production launch.',
+      },
+      {
+        label: 'Required systems declared',
+        ready: requiredSystems.length > 0,
+        detail: requiredSystems.length > 0
+          ? requiredSystems.join(', ')
+          : 'Add the real apps, data sources, and permission scopes this agent needs.',
+      },
+      {
+        label: 'Approval policy default',
+        ready: Boolean(selectedTemplate.approvalDefault),
+        detail: selectedTemplate.approvalDefault || 'Define which actions are advisory, approval-gated, or blocked.',
+      },
+      {
+        label: 'Risk and purpose documented',
+        ready: Boolean(selectedTemplate.riskLevel && selectedTemplate.businessPurpose),
+        detail: selectedTemplate.riskLevel
+          ? `${selectedTemplate.riskLevel} risk with a documented business purpose.`
+          : 'Set risk level and business purpose before production review.',
+      },
+      {
+        label: 'Audit evidence path',
+        ready: Boolean(selectedTemplate.certifications?.length || selectedTemplate.maturity === 'Core'),
+        detail: selectedTemplate.certifications?.length
+          ? `Evidence labels: ${selectedTemplate.certifications.join(', ')}`
+          : 'Attach compliance or audit evidence labels for paid-pilot review.',
+      },
+    ];
+  }, [monthlyCost, selectedModel, selectedTemplate]);
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, { bg: string; border: string; text: string; light: string }> = {
@@ -595,71 +651,60 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                   Configuration & Channel Setup
                 </button>
                 <button
-                  onClick={() => setActiveTab('sandbox')}
-                  className={`pb-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'sandbox' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                  onClick={() => setActiveTab('readiness')}
+                  className={`pb-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'readiness' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
                 >
-                  <Zap className="w-4 h-4" /> Sandbox Preview
+                  <ShieldCheck className="w-4 h-4" /> Production Readiness
                 </button>
               </div>
 
-              {activeTab === 'sandbox' ? (
-                <div className="bg-slate-900 border border-slate-700 rounded-xl flex flex-col h-[400px] mb-6">
-                  <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex items-center justify-between rounded-t-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                      <span className="text-sm font-medium text-white">{selectedTemplate.name} <span className="text-slate-500">- Preview Mode</span></span>
+              {activeTab === 'readiness' ? (
+                <div className="mb-6 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Production launch package</p>
+                      <h3 className="mt-1 text-lg font-semibold text-white">{selectedTemplate.name}</h3>
+                      <p className="mt-1 text-sm text-slate-400">
+                        This checklist is based on configured template data. Missing items must be completed before externally visible or write-capable work.
+                      </p>
                     </div>
-                    <button className="text-xs text-cyan-400 hover:text-cyan-300" onClick={() => setSandboxChat([{ role: 'agent', content: `Hi! I'm your ${selectedTemplate.name}. Send me a message to test how I respond in the sandbox.` }])}>Reset</button>
+                    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                      selectedTemplateReadiness.every((item) => item.ready)
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                    }`}>
+                      {selectedTemplateReadiness.every((item) => item.ready) ? 'Ready for governed launch' : 'Needs production setup'}
+                    </span>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-                    {sandboxChat.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'bg-cyan-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-bl-none'}`}>
-                          {msg.content}
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {selectedTemplateReadiness.map((item) => (
+                      <div
+                        key={item.label}
+                        className={`rounded-xl border p-3 ${
+                          item.ready
+                            ? 'border-emerald-500/20 bg-emerald-500/5'
+                            : 'border-amber-500/20 bg-amber-500/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {item.ready ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-amber-300" />
+                          )}
+                          <p className="text-sm font-semibold text-white">{item.label}</p>
                         </div>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-400">{item.detail}</p>
                       </div>
                     ))}
                   </div>
-                  <div className="p-3 border-t border-slate-700 bg-slate-800/50 rounded-b-xl">
-                    <form onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!sandboxMessage.trim()) return;
 
-                      const msg = sandboxMessage.trim();
-                      const lowerMsg = msg.toLowerCase();
-                      let reply = '';
-
-                      if (lowerMsg.includes('hi') || lowerMsg.includes('hello') || lowerMsg.includes('hey')) {
-                        reply = `Hello! I'm your ${selectedTemplate.name} running in sandbox mode. How can I assist you with your ${selectedTemplate.industry.toLowerCase()} tasks today?`;
-                      } else if (lowerMsg.includes('help') || lowerMsg.includes('what can you do')) {
-                        reply = `As your ${selectedTemplate.name}, I can help you with: ${selectedTemplate.features.join(', ')}.`;
-                      } else if (lowerMsg.includes('price') || lowerMsg.includes('cost')) {
-                        reply = `I am estimated to cost ${selectedTemplate.price} once added to your fleet, depending on usage.`;
-                      } else {
-                        const defaultResponses = [
-                          `That's a great question. In a live workflow, my response would be processed by ${selectedModel?.name || 'this model'} using your selected instructions.`,
-                          `I understand you're testing my capabilities. Once added to your fleet, this template can be governed alongside your other agents.`,
-                          `I'm currently running in Sandbox Preview mode. Your message "${msg}" was received clearly!`,
-                        ];
-                        reply = defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
-                      }
-
-                      setSandboxChat([...sandboxChat, { role: 'user', content: msg }, { role: 'agent', content: reply }]);
-                      setSandboxMessage('');
-                    }} className="relative">
-                      <input
-                        id="sandboxMessageInput"
-                        name="sandboxMessageInput"
-                        type="text"
-                        value={sandboxMessage}
-                        onChange={(e) => setSandboxMessage(e.target.value)}
-                        placeholder="Message your agent..."
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
-                      />
-                      <button type="submit" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-cyan-400 hover:text-cyan-300 transition-colors">
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-                    </form>
+                  <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                    <p className="text-sm font-semibold text-cyan-100">Launch contract</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                      Deploying creates a governed agent record with model, budget, policy context, and audit trail. Connector access still depends on real app connections and certified connector actions.
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -931,7 +976,7 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                         className="flex-1 py-3 rounded-xl font-bold text-slate-950 bg-cyan-300 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
                       >
                         <MessageSquare className="w-4 h-4" />
-                        {pendingAction === 'chat' ? 'Launching...' : 'Launch in Chat'}
+                        {pendingAction === 'chat' ? 'Deploying...' : 'Deploy to Governed Chat'}
                       </button>
                       <button
                         onClick={async () => {
@@ -955,16 +1000,8 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                         disabled={pendingAction !== null}
                         className={`flex-1 py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`}
                       >
-                        {pendingAction === 'fleet' ? 'Adding...' : 'Add to Fleet'}
+                        {pendingAction === 'fleet' ? 'Adding...' : 'Add to Production Fleet'}
                       </button>
-                      <a
-                        href={`/interview/${selectedTemplate.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors text-center text-sm flex items-center gap-1.5"
-                      >
-                        🧪 Interview
-                      </a>
                       <button
                         onClick={() => setSelectedTemplate(null)}
                         disabled={pendingAction !== null}
@@ -977,7 +1014,7 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
               )}
 
               <p className="text-center text-slate-500 text-xs mt-3">
-                Launch in Chat deploys a governed agent and opens an operator-ready session. Add to Fleet keeps the template in your managed agent inventory.
+                Governed Chat creates a real agent-backed operator session. Production Fleet keeps the agent in inventory until channels, connector permissions, and runtime policies are complete.
               </p>
             </div>
           </div>

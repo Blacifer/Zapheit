@@ -168,7 +168,7 @@ export default function HRHubPage() {
     setBusy(true);
     try {
       const res: any = await authenticatedFetch('/hubs/demo/generate', { method: 'POST', body: JSON.stringify({ hub: 'hr' }) });
-      if (res.success) { toast.success('Sample data loaded'); void load(); }
+      if (res.success) { toast.success('Sample records loaded - not production evidence'); void load(); }
       else toast.error(res.error || 'Failed to load sample data');
     } catch (e: any) { toast.error(e?.message || 'Failed'); }
     finally { setBusy(false); }
@@ -259,13 +259,16 @@ export default function HRHubPage() {
               </div>
               <p className="text-slate-300 font-medium">No attendance records</p>
               <p className="text-slate-500 text-sm mt-1 max-w-xs">Connect an HR app like Keka or Darwinbox to sync attendance data here.</p>
+              <p className="text-amber-300/80 text-xs mt-3 max-w-xs">
+                Sample records are for layout inspection only and are not audit or paid-pilot evidence.
+              </p>
               <button
                 onClick={handleSeedDemo}
                 disabled={busy}
                 className="mt-4 h-9 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-slate-200 text-sm transition-colors flex items-center gap-1.5"
               >
                 <Database className="w-3.5 h-3.5" />
-                Load sample data
+                Load sample records
               </button>
             </div>
           ) : (

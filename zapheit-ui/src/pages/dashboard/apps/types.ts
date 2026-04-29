@@ -1,4 +1,5 @@
 import type { MarketplaceApp } from '../../../lib/api-client';
+import type { ConnectorCertification, ReadinessStatus } from '../../../lib/production-readiness';
 
 export type AppStatus = 'connected' | 'syncing' | 'error' | 'expired' | 'disconnected';
 export type ConnectorSource = 'marketplace' | 'integration';
@@ -83,6 +84,8 @@ export interface UnifiedApp {
     connector_id?: string;
   }>;
   secureCredentialHandling?: 'server_injected';
+  readinessStatus?: ReadinessStatus;
+  connectorCertification?: ConnectorCertification;
 }
 
 export interface ConnectionLog {

@@ -15,6 +15,7 @@ import type { AIAgent } from '../../../types';
 import { AppLogo } from './components/AppLogo';
 import { useAppsData } from './hooks/useAppsData';
 import { getAppServiceId } from './helpers';
+import { certificationTone, deriveConnectorCertification, isCertifiedProductionConnector, type ReadinessStatus } from '../../../lib/production-readiness';
 import { ConnectWizard } from './connect-wizard/ConnectWizard';
 import { IntentPicker } from './components/IntentPicker';
 import type { UnifiedApp } from './types';
@@ -74,6 +75,15 @@ function formatLastSync(backendApp: any): string | null {
 /* Bridge AppDef → UnifiedApp so ConnectWizard can receive it */
 function appDefToUnifiedApp(def: AppDef, backendUnified?: UnifiedApp | null): UnifiedApp {
   if (backendUnified) return backendUnified;
+  const certification = deriveConnectorCertification({
+    connectorId: def.appId,
+    comingSoon: def.productionStatus === 'coming_soon',
+    connected: false,
+    status: 'disconnected',
+  });
+  const readinessStatus: ReadinessStatus = def.productionStatus === 'coming_soon'
+    ? 'blocked'
+    : 'not_configured';
   return {
     id: `app:${def.appId}`,
     appId: def.appId,
@@ -109,6 +119,8 @@ function appDefToUnifiedApp(def: AppDef, backendUnified?: UnifiedApp | null): Un
     capabilityPolicies: [],
     mcpTools: [],
     primaryServiceId: def.serviceId,
+    readinessStatus,
+    connectorCertification: certification,
   };
 }
 
@@ -628,6 +640,16 @@ function AppCard({
   const govTier = getGovTier(app.appId);
   const score = setupScore(isConnected, health, false);
   const connectorActions = CONNECTOR_ACTIONS[app.appId] ?? [];
+  const certification = backendUnified?.connectorCertification || deriveConnectorCertification({
+    connectorId: app.appId,
+    comingSoon: app.productionStatus === 'coming_soon',
+    connected: isConnected,
+    status,
+    healthStatus: backendUnified?.healthStatus,
+    capabilityPolicies: backendUnified?.capabilityPolicies || [],
+    permissions: backendUnified?.permissions || [],
+    actionsUnlocked: backendUnified?.actionsUnlocked || connectorActions.map((action) => action.label),
+  });
 
   return (
     <div
@@ -682,9 +704,19 @@ function AppCard({
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded border font-medium', GOV_COLOR[govTier])}>
               {GOV_LABEL[govTier]}
             </span>
+
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded border font-medium', certificationTone(certification.state))}>
+              {certification.label}
+            </span>
           </div>
 
           <p className="mt-1 text-xs text-slate-400 leading-relaxed max-w-lg">{app.description}</p>
+
+          {!certification.certified && app.productionStatus !== 'coming_soon' && (
+            <p className="mt-1 text-[11px] text-amber-300/80">
+              Certification required before this connector should be used for paid-pilot production work.
+            </p>
+          )}
 
           {/* Live metric + usage counter chips */}
           {isConnected && (liveMetric || usageCount != null) && (
@@ -754,7 +786,7 @@ function AppCard({
                 className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
               >
                 {actionsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                What can my agent do?
+                Production action contract
                 <span className="ml-1 text-[10px] px-1 rounded bg-white/[0.06] text-slate-500">{connectorActions.length}</span>
               </button>
               {actionsOpen && (
@@ -976,6 +1008,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   }), [connected]);
   const indiaNativeCount = useMemo(() => APP_CATALOG.filter((a) => a.isIndiaNative).length, []);
   const comingSoonCount = useMemo(() => APP_CATALOG.filter((a) => a.productionStatus === 'coming_soon').length, []);
+  const certifiedPathCount = useMemo(() => APP_CATALOG.filter((a) => isCertifiedProductionConnector(a.appId)).length, []);
 
   const popularInIndia = useMemo(
     () => INDIA_POPULAR_IDS.map((id) => apps.find(({ def }) => def.appId === id)).filter(Boolean) as typeof apps,
@@ -1069,7 +1102,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           {[
             { label: 'Connected', value: connected.length, color: 'text-emerald-400' },
-            { label: 'Available now', value: APP_CATALOG.filter((a) => a.productionStatus === 'production_ready').length, color: 'text-blue-400' },
+            { label: 'Certified paths', value: certifiedPathCount, color: 'text-blue-400' },
             { label: 'Coming soon', value: comingSoonCount, color: 'text-slate-400' },
             { label: 'India-native', value: indiaNativeCount, color: 'text-orange-400' },
             { label: 'Categories', value: CATEGORY_TABS.length - 1, color: 'text-slate-400' },
@@ -1136,7 +1169,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-white truncate">{def.name}</p>
-                    <p className="text-[10px] text-slate-500">{status === 'connected' ? '✓ Connected' : def.productionStatus === 'production_ready' ? 'Ready' : 'Coming soon'}</p>
+                    <p className="text-[10px] text-slate-500">{status === 'connected' ? '✓ Connected' : isCertifiedProductionConnector(def.appId) ? 'Certified path' : 'Not certified yet'}</p>
                   </div>
                 </button>
               ))}

@@ -1,4 +1,5 @@
 import { Bot, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { toast } from '../../../../../lib/toast';
 
 interface AutomationRule {
   id: string;
@@ -50,6 +51,12 @@ const DEFAULT_RULES: AutomationRule[] = [
 ];
 
 export default function RecruitmentAutomationTab() {
+  const explainRulePrerequisite = (rule: AutomationRule) => {
+    toast.info(
+      `${rule.name} requires certified recruiting connectors, an approval policy, an owner, and workflow deployment before it can be changed here.`,
+    );
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto p-5 space-y-4">
       {/* Info banner */}
@@ -106,12 +113,12 @@ export default function RecruitmentAutomationTab() {
               <button
                 className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors whitespace-nowrap ${
                   rule.active
-                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
-                    : 'border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                    : 'border-slate-500/30 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
                 }`}
-                onClick={() => {/* coming soon */}}
+                onClick={() => explainRulePrerequisite(rule)}
               >
-                {rule.active ? 'Disable' : 'Enable'}
+                View requirements
               </button>
             </div>
           </div>
