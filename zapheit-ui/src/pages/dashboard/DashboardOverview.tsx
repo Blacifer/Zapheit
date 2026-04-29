@@ -51,6 +51,7 @@ import { calculatePortfolioRoi, formatInr as formatRoiInr } from '../../lib/roi'
 import { api } from '../../lib/api-client';
 import { authenticatedFetch } from '../../lib/api/_helpers';
 import { useCountUp } from '../../hooks/useCountUp';
+import { useActivityStream, type ActivityStreamStatus } from '../../hooks/useActivityStream';
 import { useApp } from '../../context/AppContext';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
 import { HubLiveMetrics, type IntegrationConfig } from './hubs/HubLiveMetrics';
@@ -214,6 +215,30 @@ function statusToneClasses(tone: 'good' | 'warn' | 'risk' | 'info') {
   if (tone === 'warn') return 'border-amber-500/20 bg-amber-500/10 text-amber-300';
   if (tone === 'risk') return 'border-rose-500/20 bg-rose-500/10 text-rose-300';
   return 'border-white/10 bg-white/[0.04] text-slate-200';
+}
+
+function activityStreamTone(status: ActivityStreamStatus) {
+  if (status === 'live') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200';
+  if (status === 'polling') return 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200';
+  if (status === 'error') return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
+  return 'border-slate-600/40 bg-slate-800/70 text-slate-300';
+}
+
+function activityStreamLabel(status: ActivityStreamStatus) {
+  if (status === 'live') return 'Live audit stream';
+  if (status === 'polling') return 'Polling evidence';
+  if (status === 'error') return 'Evidence stream delayed';
+  if (status === 'connecting') return 'Connecting stream';
+  return 'Stream idle';
+}
+
+function activityActorLabel(actor?: string | null) {
+  if (!actor || actor === 'system') return 'System';
+  if (actor.includes('@')) {
+    return actor.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  if (/^[0-9a-f-]{20,}$/i.test(actor)) return 'User';
+  return actor.replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function ActionPill({
@@ -801,6 +826,11 @@ export default function DashboardOverview({
       }
     } catch { /* silently ignore */ }
   }, []);
+  const {
+    events: liveActivityEvents,
+    status: activityStreamStatus,
+    lastEventAt: activityStreamLastAt,
+  } = useActivityStream({ limit: 12 });
 
   // Plan & Usage
   type UsageData = { used: number; quota: number; plan: string; planKey: string; month: string; agentCount?: number; agentLimit?: number };
@@ -923,8 +953,15 @@ const hasData = agents.length > 0;
     }
   };
 
+  const teamActivityEvents = useMemo(() => {
+    return liveActivityEvents.length > 0
+      ? liveActivityEvents
+      : teamActivity.map(activityFromAuditEntry);
+  }, [liveActivityEvents, teamActivity]);
+
   const activityFeed = useMemo(() => {
     const items: ActivityItem[] = [
+      ...liveActivityEvents.slice(0, 8),
       ...incidents.slice(0, 6).map((incident): ActivityItem => ({
         id: `incident-${incident.id}`,
         type: 'incident',
@@ -947,7 +984,7 @@ const hasData = agents.length > 0;
         route: 'approvals',
         sourceRef: approval.id,
       })),
-      ...teamActivity.slice(0, 6).map(activityFromAuditEntry),
+      ...(liveActivityEvents.length > 0 ? [] : teamActivity.slice(0, 6).map(activityFromAuditEntry)),
       ...agents.slice(0, 6).map((agent): ActivityItem => ({
         id: `agent-${agent.id}`,
         type: 'job',
@@ -972,11 +1009,17 @@ const hasData = agents.length > 0;
       })),
     ];
 
+    const seen = new Set<string>();
     return items
       .filter((item) => item.at)
+      .filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      })
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 6);
-  }, [agents, costData, incidents, pendingApprovals, teamActivity]);
+  }, [agents, costData, incidents, liveActivityEvents, pendingApprovals, teamActivity]);
 
   const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
   const latestCostAt = [...costData]
@@ -1999,8 +2042,15 @@ const hasData = agents.length > 0;
           <div className="flex items-center gap-2">
             <Layers3 className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Recent Activity</h2>
+            <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${activityStreamTone(activityStreamStatus)}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${activityStreamStatus === 'live' ? 'bg-emerald-300' : activityStreamStatus === 'error' ? 'bg-amber-300' : 'bg-cyan-300'}`} />
+              {activityStreamLabel(activityStreamStatus)}
+            </span>
           </div>
-          <p className="mt-1 text-sm text-slate-400">Latest incident, fleet, and cost signals.</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Production-backed incident, approval, connector, runtime, cost, and audit signals.
+            {activityStreamLastAt ? ` Last event ${formatRelative(activityStreamLastAt)}.` : ''}
+          </p>
 
           <div className="mt-6 space-y-3">
             {activityFeed.length > 0 ? (
@@ -2110,23 +2160,22 @@ const hasData = agents.length > 0;
       })()}
 
       {/* Team Activity Feed */}
-      {teamActivity.length > 0 && (
+      {teamActivityEvents.length > 0 && (
         <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2 mb-4">
             <UserCheck className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Team Activity</h2>
-            <span className="ml-auto text-xs text-slate-500">Last {teamActivity.length} actions</span>
+            <span className="ml-auto text-xs text-slate-500">
+              {liveActivityEvents.length > 0 ? activityStreamLabel(activityStreamStatus) : `Last ${teamActivityEvents.length} actions`}
+            </span>
           </div>
           <div className="space-y-2">
-            {teamActivity.map((entry: AuditLogEntry) => {
-              const activity = activityFromAuditEntry(entry);
-              const actor = entry.users?.email
-                ? entry.users.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-                : 'System';
+            {teamActivityEvents.map((activity: ActivityItem) => {
+              const actor = activityActorLabel(activity.actor);
               const action = activity.title.replace(/\b\w/g, (c: string) => c.toUpperCase());
               const resource = activity.detail;
               return (
-                <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2.5">
+                <div key={activity.id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2.5">
                   <div className="h-7 w-7 shrink-0 rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-300">
                     {actor.charAt(0).toUpperCase()}
                   </div>
@@ -2135,7 +2184,7 @@ const hasData = agents.length > 0;
                     <span className="text-sm text-slate-500"> · {action} </span>
                     <span className="text-sm text-slate-400">{resource}</span>
                   </div>
-                  <span className="shrink-0 text-xs text-slate-600">{formatRelative(entry.created_at)}</span>
+                  <span className="shrink-0 text-xs text-slate-600">{formatRelative(activity.at)}</span>
                 </div>
               );
             })}
