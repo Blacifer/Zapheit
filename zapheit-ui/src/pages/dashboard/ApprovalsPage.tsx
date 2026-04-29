@@ -236,6 +236,17 @@ function extractDecisionContext(request: ApprovalRequest, riskScore: number) {
     || (riskScore >= 70 ? 'High-risk action based on payload, destination, or action type.' : 'This action matched a human-review policy.');
 
   const safeToShowSignals = Array.from(sensitive).slice(0, 3);
+  const recommendedDecision = (() => {
+    if (riskScore >= 70) return 'Hold or escalate unless the business owner, affected item, and destination are verified.';
+    if (externalUrl || safeToShowSignals.length > 0) return 'Review context carefully before approving because the request touches an external destination or sensitive data.';
+    if (amount) return 'Approve only after the amount and counterparty match the source system.';
+    return 'Approve if the requested action matches the business reason and the affected record is expected.';
+  })();
+  const reviewChecklist = [
+    entity || recipient ? 'Affected person, record, or recipient is expected.' : 'Affected record is clear enough to identify.',
+    amount ? 'Amount matches the source document or finance system.' : 'No unexpected financial value is hidden in the payload.',
+    externalUrl ? 'External destination is trusted and business-approved.' : 'No unexpected external destination detected.',
+  ];
 
   return {
     app: friendlyService(request.service),
@@ -247,6 +258,8 @@ function extractDecisionContext(request: ApprovalRequest, riskScore: number) {
     impact,
     whyReview,
     sensitiveSignals: safeToShowSignals,
+    recommendedDecision,
+    reviewChecklist,
     expectedOutcome: `${friendlyService(request.service)} will receive the ${friendlyAction(request.action)} request and Zapheit will attach the approval decision to the audit trail.`,
   };
 }
@@ -465,6 +478,24 @@ function PendingCard({
         <div className="mt-3 rounded-lg border border-cyan-500/15 bg-cyan-500/[0.05] px-3 py-2">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300">If approved</p>
           <p className="mt-1 text-xs text-slate-300">{decisionContext.expectedOutcome}</p>
+        </div>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
+          <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.05] px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-300">Recommended decision path</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-300">{decisionContext.recommendedDecision}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Reviewer checklist</p>
+            <div className="mt-1 space-y-1">
+              {decisionContext.reviewChecklist.map((item) => (
+                <div key={item} className="flex items-start gap-2 text-xs text-slate-300">
+                  <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {showPayload && (

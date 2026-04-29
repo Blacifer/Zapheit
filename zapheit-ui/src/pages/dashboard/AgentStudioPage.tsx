@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Zap, Bot, FileText, Wand2, Plus } from 'lucide-react';
+import { Zap, Bot, FileText, Wand2, Plus, Eye, ShieldCheck, ArrowRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
@@ -50,6 +50,11 @@ export default function AgentStudioPage({
 }: AgentStudioPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as TabId | null;
+  const shadowSource = searchParams.get('source') === 'shadow';
+  const shadowAgent = searchParams.get('agent');
+  const shadowDepartment = searchParams.get('department');
+  const shadowApps = searchParams.get('apps');
+  const shadowConfidence = searchParams.get('confidence');
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTab || (tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'templates'),
   );
@@ -86,6 +91,52 @@ export default function AgentStudioPage({
           Build from scratch
         </button>
       </div>
+
+      {shadowSource && (
+        <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
+                  <Eye className="h-3.5 w-3.5" />
+                  Shadow launch brief
+                </span>
+                {shadowConfidence && (
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+                    {shadowConfidence}% discovery confidence
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-base font-semibold text-white">
+                Start with {shadowAgent || 'a governed agent'}{shadowDepartment ? ` for ${shadowDepartment}` : ''}.
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                Deploy this first in read-only mode, require human approval before writes, set a budget cap, then run Shadow Mode safety testing before production traffic.
+              </p>
+              {shadowApps && (
+                <p className="mt-2 text-xs text-slate-400">
+                  Source apps detected: <span className="text-slate-200">{shadowApps}</span>
+                </p>
+              )}
+            </div>
+            <div className="grid min-w-[220px] gap-2 text-xs text-slate-300">
+              {['Read-only for 7 days', 'Approval required before writes', 'Budget cap before live rollout'].map((item) => (
+                <div key={item} className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-slate-950/40 px-3 py-2">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>{item}</span>
+                </div>
+              ))}
+              <button
+                onClick={() => setShowWizard(true)}
+                className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white transition-colors hover:bg-cyan-500"
+              >
+                Build from this brief
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-1">

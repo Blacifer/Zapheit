@@ -1,15 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Play, CheckCircle2, XCircle, Bot, Activity,
   AlertTriangle, Filter, Target, Zap, Clock, RefreshCw, X, FileTerminal, Lightbulb,
-  GitCompare, Rocket, ArrowRight,
+  GitCompare, Rocket, ArrowRight, Building2, IndianRupee, Workflow, Eye,
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
+import type { ApprovalRequest, AuditLogEntry, UnifiedConnectorEntry } from '../../lib/api-client';
 import type { AIAgent } from '../../types';
 
 // ==================== TYPES & MOCK DATA ====================
 type TestCategory = 'pii_leak' | 'prompt_injection' | 'hallucination' | 'toxic_content' | 'policy_override';
+type ShadowModeView = 'discovery' | 'single' | 'compare';
+type DiscoveryEffort = 'S' | 'M' | 'L';
+
+type CostComparisonData = {
+  comparison: {
+    agents: Array<{ agentId: string; agentName: string; cost: number; tokens: number; requests: number }>;
+    models: Array<{ model: string; cost: number; tokens: number; requests: number }>;
+  };
+};
 
 interface TestCase {
   id: string;
@@ -19,6 +30,25 @@ interface TestCase {
   simulatedResponse: string; // the simulated output of the agent
   expectedPass: boolean; // Does the agent successfully defend?
   recommendedFix?: string; // Actionable advice to block this vulnerability
+}
+
+interface DiscoveryOpportunity {
+  id: string;
+  title: string;
+  department: string;
+  confidence: number;
+  effort: DiscoveryEffort;
+  estimatedMonthlySavingsInr: number;
+  manualEvents: number;
+  connectedAppLabels: string[];
+  recommendedAgent: string;
+  why: string;
+  shadowPlan: string;
+  evidenceBullets: string[];
+  riskControls: string[];
+  ctaLabel: string;
+  ctaRoute: string;
+  secondaryRoute?: string;
 }
 
 const CATEGORIES: { id: TestCategory; label: string; color: string; icon: React.ElementType }[] = [
@@ -44,8 +74,579 @@ const MOCK_TESTS: Record<string, TestCase[]> = {
 
 const PAYMENT_BLOCK_RE = /payment required|billing|insufficient funds|quota/i;
 
+const WORKFLOW_PATTERNS = [
+  {
+    id: 'hiring',
+    department: 'Hiring',
+    appKeywords: ['naukri', 'linkedin', 'recruiter', 'darwinbox', 'keka', 'greythr'],
+    agentKeywords: ['hiring', 'recruit', 'talent', 'candidate'],
+    title: 'Hiring follow-ups are ready for shadow automation',
+    recommendedAgent: 'Hiring Agent',
+    why: 'Candidate search, screening, interview scheduling, and follow-up reminders repeat across Naukri, LinkedIn, HRMS, and email.',
+    shadowPlan: 'Observe new applications, draft shortlists and follow-ups, then require approval before any candidate message goes out.',
+    route: 'agent-studio',
+  },
+  {
+    id: 'hr',
+    department: 'HR Ops',
+    appKeywords: ['greythr', 'keka', 'darwinbox', 'zoho-people', 'people'],
+    agentKeywords: ['hr', 'employee', 'leave', 'onboarding', 'payroll'],
+    title: 'Employee operations have enough signals for a shadow agent',
+    recommendedAgent: 'HR Ops Agent',
+    why: 'Leave requests, onboarding checks, employee updates, payroll questions, and policy lookups create predictable HR backlogs.',
+    shadowPlan: 'Read HRMS events, draft answers and approval packets, and route anything payroll or policy-sensitive through human review.',
+    route: 'agent-studio',
+  },
+  {
+    id: 'finance',
+    department: 'Finance',
+    appKeywords: ['tally', 'cashfree', 'razorpay', 'quickbooks', 'zoho-books', 'books', 'invoice', 'payment'],
+    agentKeywords: ['finance', 'invoice', 'payment', 'reconciliation', 'expense', 'gst'],
+    title: 'Finance reconciliation can start in read-only shadow mode',
+    recommendedAgent: 'Finance Ops Agent',
+    why: 'Invoices, payments, collections, GST checks, and reconciliation create high-value work that should be automated carefully.',
+    shadowPlan: 'Compare payments and invoices read-only, flag mismatches, and require approval before reminders, ledger changes, or refunds.',
+    route: 'agent-studio',
+  },
+  {
+    id: 'support',
+    department: 'Support',
+    appKeywords: ['freshdesk', 'zendesk', 'intercom', 'whatsapp', 'slack', 'teams'],
+    agentKeywords: ['support', 'ticket', 'customer', 'whatsapp'],
+    title: 'Support triage is a strong shadow-mode candidate',
+    recommendedAgent: 'Support Agent',
+    why: 'Ticket classification, SLA routing, repeated answers, and WhatsApp follow-ups are repetitive but customer-visible.',
+    shadowPlan: 'Classify tickets and draft replies in shadow mode, then ask for approval before sending customer-facing responses.',
+    route: 'agent-studio',
+  },
+  {
+    id: 'sales',
+    department: 'Sales',
+    appKeywords: ['hubspot', 'salesforce', 'zoho-crm', 'freshsales', 'whatsapp'],
+    agentKeywords: ['sales', 'lead', 'crm', 'deal', 'follow-up'],
+    title: 'Sales follow-up automation can be proven safely',
+    recommendedAgent: 'Sales Agent',
+    why: 'Lead enrichment, CRM hygiene, meeting summaries, and follow-up reminders often slip because ownership is fragmented.',
+    shadowPlan: 'Watch CRM changes, draft next-best actions, and require approval before writing to CRM or sending external messages.',
+    route: 'agent-studio',
+  },
+  {
+    id: 'devops',
+    department: 'DevOps',
+    appKeywords: ['jira', 'github', 'gitlab', 'bitbucket', 'datadog', 'sentry'],
+    agentKeywords: ['devops', 'jira', 'github', 'incident', 'release'],
+    title: 'Engineering operations can use a governed shadow agent',
+    recommendedAgent: 'DevOps Agent',
+    why: 'Issue triage, release notes, PR summaries, incident updates, and runbook checks are frequent cross-app coordination tasks.',
+    shadowPlan: 'Summarize issues and incidents, propose updates, and block code or deployment actions without explicit approval.',
+    route: 'agent-studio',
+  },
+];
+
+function formatInr(value: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Math.max(0, Math.round(value)));
+}
+
+function normalizeRiskScore(score?: number | null): number {
+  if (typeof score !== 'number' || Number.isNaN(score)) return 0;
+  return score <= 1 ? Math.round(score * 100) : Math.round(score);
+}
+
+function connectorLabel(connector: UnifiedConnectorEntry): string {
+  return connector.display_name || connector.name || connector.id;
+}
+
+function connectorHaystack(connector: UnifiedConnectorEntry): string {
+  return [
+    connector.id,
+    connector.app_key,
+    connector.display_name,
+    connector.name,
+    connector.category,
+    connector.description,
+    ...(connector.bundles || []),
+    ...(connector.permissions || []),
+    ...(connector.actionsUnlocked || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function isConnectorConnected(connector: UnifiedConnectorEntry): boolean {
+  return Boolean(
+    connector.installed ||
+    connector.is_connected ||
+    connector.connectionStatus === 'connected' ||
+    connector.connection_status === 'connected'
+  );
+}
+
+function includesAny(value: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => value.includes(keyword.toLowerCase()));
+}
+
+function agentMatches(agent: AIAgent, keywords: string[]): boolean {
+  const haystack = [
+    agent.name,
+    agent.description,
+    agent.agent_type,
+    agent.primaryPack,
+    agent.platform,
+    agent.model_name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return includesAny(haystack, keywords);
+}
+
+function auditMatches(entry: AuditLogEntry, keywords: string[]): boolean {
+  const detailsText = (() => {
+    try {
+      return JSON.stringify(entry.details || {});
+    } catch {
+      return '';
+    }
+  })();
+  const haystack = [
+    entry.resource_type,
+    entry.resource_id,
+    entry.action,
+    entry.status,
+    entry.error_message,
+    detailsText,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return includesAny(haystack, keywords);
+}
+
+function approvalMatches(approval: ApprovalRequest, keywords: string[]): boolean {
+  const payloadText = (() => {
+    try {
+      return JSON.stringify(approval.action_payload || {});
+    } catch {
+      return '';
+    }
+  })();
+  const haystack = [
+    approval.service,
+    approval.action,
+    approval.reason_category,
+    approval.reason_message,
+    approval.recommended_next_action,
+    payloadText,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return includesAny(haystack, keywords);
+}
+
+function buildShadowStudioRoute(input: {
+  workflowId: string;
+  department: string;
+  agentName: string;
+  appLabels: string[];
+  confidence: number;
+}): string {
+  const params = new URLSearchParams({
+    tab: 'templates',
+    source: 'shadow',
+    workflow: input.workflowId,
+    department: input.department,
+    agent: input.agentName,
+    confidence: String(input.confidence),
+  });
+  if (input.appLabels.length > 0) params.set('apps', input.appLabels.slice(0, 4).join(', '));
+  return `agent-studio?${params.toString()}`;
+}
+
+function buildDiscoveryOpportunities(input: {
+  agents: AIAgent[];
+  connectedApps: UnifiedConnectorEntry[];
+  pendingApprovals: ApprovalRequest[];
+  auditActivity: AuditLogEntry[];
+  costComparison: CostComparisonData | null;
+}): DiscoveryOpportunity[] {
+  const { agents, connectedApps, pendingApprovals, auditActivity, costComparison } = input;
+  const opportunities: DiscoveryOpportunity[] = [];
+  const activeAgents = agents.filter((agent) => agent.status !== 'terminated');
+  const totalModelRequests = costComparison?.comparison?.agents?.reduce((sum, item) => sum + (Number(item.requests) || 0), 0) || 0;
+
+  if (pendingApprovals.length > 0) {
+    const highRiskCount = pendingApprovals.filter((approval) => normalizeRiskScore(approval.risk_score) >= 70).length;
+    const services = Array.from(new Set(pendingApprovals.map((approval) => approval.service).filter(Boolean))).slice(0, 3);
+    opportunities.push({
+      id: 'approval-routing',
+      title: highRiskCount > 0
+        ? 'High-risk approvals need a routing and evidence agent'
+        : 'Approval backlog can be reduced with an evidence-prep agent',
+      department: 'Governance',
+      confidence: Math.min(97, 76 + pendingApprovals.length * 3 + highRiskCount * 5),
+      effort: 'S',
+      estimatedMonthlySavingsInr: Math.max(18000, pendingApprovals.length * 5200 + highRiskCount * 3500),
+      manualEvents: pendingApprovals.length,
+      connectedAppLabels: services.length ? services : ['Approvals'],
+      recommendedAgent: 'Approval Evidence Agent',
+      why: `${pendingApprovals.length} approval${pendingApprovals.length === 1 ? '' : 's'} are waiting, including ${highRiskCount} high-risk decision${highRiskCount === 1 ? '' : 's'}. The repeated work is collecting context, summarising risk, and routing the right reviewer.`,
+      shadowPlan: 'Draft approval briefs from connected app context, classify urgency, and keep all final decisions with a human reviewer.',
+      evidenceBullets: [
+        `${pendingApprovals.length} pending approval${pendingApprovals.length === 1 ? '' : 's'} in the live queue`,
+        `${highRiskCount} high-risk decision${highRiskCount === 1 ? '' : 's'} detected by risk score`,
+        services.length ? `Affected systems: ${services.join(', ')}` : 'Approval governance is active',
+      ],
+      riskControls: ['Read-only evidence collection', 'Human approval required', 'Escalate overdue high-risk items'],
+      ctaLabel: 'Open approvals',
+      ctaRoute: 'approvals',
+      secondaryRoute: 'action-policies',
+    });
+  }
+
+  WORKFLOW_PATTERNS.forEach((pattern) => {
+    const matchedApps = connectedApps.filter((connector) => includesAny(connectorHaystack(connector), pattern.appKeywords));
+    const matchedApprovals = pendingApprovals.filter((approval) => approvalMatches(approval, pattern.appKeywords));
+    const matchedAudit = auditActivity.filter((entry) => auditMatches(entry, pattern.appKeywords));
+    if (matchedApps.length === 0 && matchedApprovals.length === 0 && matchedAudit.length < 2) return;
+
+    const existingAgent = activeAgents.find((agent) => agentMatches(agent, pattern.agentKeywords));
+    const manualEvents = matchedApprovals.length + matchedAudit.length;
+    const confidence = Math.min(
+      96,
+      58 +
+      Math.min(4, matchedApps.length) * 8 +
+      Math.min(5, matchedApprovals.length) * 4 +
+      Math.min(10, matchedAudit.length) * 2 +
+      (existingAgent ? 8 : 0)
+    );
+    const baseSavings = pattern.id === 'finance' ? 52000 : pattern.id === 'hiring' ? 42000 : 32000;
+    const activitySavings = manualEvents * (pattern.id === 'finance' ? 2200 : 1600);
+    const runtimeSavings = totalModelRequests > 0 ? Math.min(18000, totalModelRequests * 20) : 0;
+    const appLabels = matchedApps.slice(0, 4).map(connectorLabel);
+    const recommendedAgent = existingAgent?.name || pattern.recommendedAgent;
+
+    opportunities.push({
+      id: pattern.id,
+      title: existingAgent
+        ? `${pattern.department} agent is ready for shadow expansion`
+        : pattern.title,
+      department: pattern.department,
+      confidence,
+      effort: matchedApps.length >= 2 ? 'M' : 'S',
+      estimatedMonthlySavingsInr: baseSavings + activitySavings + runtimeSavings,
+      manualEvents,
+      connectedAppLabels: appLabels,
+      recommendedAgent,
+      why: pattern.why,
+      shadowPlan: pattern.shadowPlan,
+      evidenceBullets: [
+        `${matchedApps.length} connected app${matchedApps.length === 1 ? '' : 's'} matched this workflow`,
+        `${matchedApprovals.length} pending approval${matchedApprovals.length === 1 ? '' : 's'} and ${matchedAudit.length} audit event${matchedAudit.length === 1 ? '' : 's'} matched recent activity`,
+        existingAgent ? `Existing agent found: ${existingAgent.name}` : `No matching live agent found for ${pattern.department}`,
+      ],
+      riskControls: [
+        'Start read-only for 7 days',
+        'Require approval before writes',
+        'Auto-disable on incident or policy breach',
+      ],
+      ctaLabel: existingAgent ? 'Review agent' : 'Create shadow agent',
+      ctaRoute: existingAgent ? 'agents' : buildShadowStudioRoute({
+        workflowId: pattern.id,
+        department: pattern.department,
+        agentName: recommendedAgent,
+        appLabels,
+        confidence,
+      }),
+      secondaryRoute: matchedApps[0] ? `apps/${matchedApps[0].id}/workspace` : 'apps',
+    });
+  });
+
+  const unbudgetedAgents = activeAgents.filter((agent) => !agent.budget_limit || agent.budget_limit <= 0);
+  if (unbudgetedAgents.length > 0) {
+    opportunities.push({
+      id: 'budget-guardrails',
+      title: 'Agent budget caps are missing before wider automation',
+      department: 'Platform Ops',
+      confidence: 88,
+      effort: 'S',
+      estimatedMonthlySavingsInr: Math.max(12000, unbudgetedAgents.length * 9000),
+      manualEvents: unbudgetedAgents.length,
+      connectedAppLabels: unbudgetedAgents.slice(0, 3).map((agent) => agent.name),
+      recommendedAgent: 'Governance Guardrail',
+      why: `${unbudgetedAgents.length} active agent${unbudgetedAgents.length === 1 ? '' : 's'} can spend without an explicit budget cap. This blocks safe expansion into more teams.`,
+      shadowPlan: 'Set budget limits, alert thresholds, and auto-throttle rules before increasing agent action volume.',
+      evidenceBullets: [
+        `${unbudgetedAgents.length} active agent${unbudgetedAgents.length === 1 ? '' : 's'} missing explicit budget caps`,
+        'Budget caps are required before expanding agent autonomy',
+        'Finance and platform owners can review spend from the cost dashboard',
+      ],
+      riskControls: ['Monthly cap', 'Auto-throttle', 'Finance owner review'],
+      ctaLabel: 'Set budgets',
+      ctaRoute: 'agents',
+      secondaryRoute: 'costs',
+    });
+  }
+
+  if (connectedApps.length === 0 && opportunities.length === 0) {
+    opportunities.push({
+      id: 'connect-first-app',
+      title: 'Connect one business app to discover the first shadow workflow',
+      department: 'Setup',
+      confidence: 100,
+      effort: 'S',
+      estimatedMonthlySavingsInr: 0,
+      manualEvents: 0,
+      connectedAppLabels: ['No connected apps yet'],
+      recommendedAgent: 'First Shadow Agent',
+      why: 'Zapheit needs at least one connected system before it can observe repetitive work and recommend governed automation.',
+      shadowPlan: 'Connect Naukri, greytHR, Tally, WhatsApp, Slack, Jira, or another core work system, then return here for the first opportunity scan.',
+      evidenceBullets: [
+        'No connected app signal is available yet',
+        'Discovery starts once Zapheit can observe one business system',
+        'Read-only access is enough for the first recommendation scan',
+      ],
+      riskControls: ['OAuth-scoped access', 'Read-only first', 'Human approval before writes'],
+      ctaLabel: 'Connect app',
+      ctaRoute: 'apps',
+    });
+  }
+
+  return opportunities
+    .sort((a, b) => {
+      const urgencyDelta = b.confidence - a.confidence;
+      if (urgencyDelta !== 0) return urgencyDelta;
+      return b.estimatedMonthlySavingsInr - a.estimatedMonthlySavingsInr;
+    })
+    .slice(0, 6);
+}
+
+function WorkforceDiscoveryPanel({
+  agents,
+  connectedApps,
+  opportunities,
+  loading,
+  warning,
+  lastScannedAt,
+  onRefresh,
+  onNavigate,
+}: {
+  agents: AIAgent[];
+  connectedApps: UnifiedConnectorEntry[];
+  opportunities: DiscoveryOpportunity[];
+  loading: boolean;
+  warning?: string | null;
+  lastScannedAt?: string | null;
+  onRefresh: () => void;
+  onNavigate: (route: string) => void;
+}) {
+  const estimatedSavings = opportunities.reduce((sum, item) => sum + item.estimatedMonthlySavingsInr, 0);
+  const shadowReadyCount = opportunities.filter((item) => item.confidence >= 75 && item.id !== 'connect-first-app').length;
+  const activeAgents = agents.filter((agent) => agent.status === 'active').length;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
+              <Eye className="h-4 w-4" />
+              Workforce Discovery
+            </div>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">Find the next work humans should stop doing manually.</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+              Zapheit reads connected app coverage, approval queues, audit activity, active agents, and cost signals to recommend workflows that can run in read-only shadow mode before production.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                Read-only discovery
+              </span>
+              <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-blue-200">
+                Approval-gated launch
+              </span>
+              <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-slate-300">
+                {lastScannedAt ? `Last scan ${new Date(lastScannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Waiting for first scan'}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-cyan-500/50 hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh scan
+          </button>
+        </div>
+
+        {warning && (
+          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <p>{warning}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: 'Connected apps', value: connectedApps.length, icon: Building2, tone: 'text-blue-300' },
+            { label: 'Active agents', value: activeAgents, icon: Bot, tone: 'text-emerald-300' },
+            { label: 'Shadow-ready', value: shadowReadyCount, icon: Workflow, tone: 'text-cyan-300' },
+            { label: 'Monthly upside', value: estimatedSavings > 0 ? formatInr(estimatedSavings) : 'TBD', icon: IndianRupee, tone: 'text-amber-300' },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">{metric.label}</p>
+                <metric.icon className={`h-4 w-4 ${metric.tone}`} />
+              </div>
+              <p className="mt-2 truncate text-2xl font-bold text-white">{metric.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Priority opportunities</h3>
+            <span className="text-xs text-slate-500">{opportunities.length} ranked</span>
+          </div>
+
+          {loading && opportunities.length === 0 ? (
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-8 text-center text-sm text-slate-400">
+              <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-cyan-300" />
+              Scanning connected apps, approvals, audit activity, and agent coverage.
+            </div>
+          ) : (
+            opportunities.map((item, index) => (
+              <div key={item.id} className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5 transition-colors hover:border-slate-600">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
+                        #{index + 1} {item.department}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        item.confidence >= 85 ? 'bg-emerald-500/10 text-emerald-200' : item.confidence >= 70 ? 'bg-amber-500/10 text-amber-200' : 'bg-blue-500/10 text-blue-200'
+                      }`}>
+                        {item.confidence}% confidence
+                      </span>
+                      <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+                        Effort {item.effort}
+                      </span>
+                    </div>
+                    <h4 className="mt-3 text-lg font-bold text-white">{item.title}</h4>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.why}</p>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Suggested agent</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-white">{item.recommendedAgent}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Observed signals</p>
+                        <p className="mt-1 text-sm font-semibold text-white">{item.manualEvents} events</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Monthly upside</p>
+                        <p className="mt-1 text-sm font-semibold text-white">
+                          {item.estimatedMonthlySavingsInr > 0 ? formatInr(item.estimatedMonthlySavingsInr) : 'After app data'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-200">Shadow plan</p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-300">{item.shadowPlan}</p>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-white/[0.07] bg-slate-950/40 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Evidence Zapheit used</p>
+                      <div className="mt-2 grid gap-2 lg:grid-cols-3">
+                        {item.evidenceBullets.map((bullet) => (
+                          <div key={bullet} className="flex items-start gap-2 text-xs leading-relaxed text-slate-300">
+                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                            <span>{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.riskControls.map((control) => (
+                        <span key={control} className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1 text-xs text-emerald-200">
+                          {control}
+                        </span>
+                      ))}
+                      {item.connectedAppLabels.map((label) => (
+                        <span key={label} className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-300">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex w-full flex-col gap-2 lg:w-52">
+                    <button
+                      onClick={() => onNavigate(item.ctaRoute)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500"
+                    >
+                      {item.ctaLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                    {item.secondaryRoute && (
+                      <button
+                        onClick={() => onNavigate(item.secondaryRoute!)}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
+                      >
+                        {item.secondaryRoute.startsWith('apps/') ? 'Open source app' : 'Open controls'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-slate-300">
+              <Workflow className="h-4 w-4 text-cyan-300" />
+              Shadow rollout path
+            </h3>
+            <div className="mt-4 space-y-3">
+              {[
+                ['Observe', 'Read app events and approvals without writing back.'],
+                ['Draft', 'Generate summaries, next actions, and evidence packets.'],
+                ['Approve', 'Route the first live writes through human review.'],
+                ['Promote', 'Red-team the agent, set budget caps, then go live.'],
+              ].map(([title, detail], idx) => (
+                <div key={title} className="flex gap-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-xs font-bold text-cyan-200">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="text-xs leading-relaxed text-slate-400">{detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-200">
+              <CheckCircle2 className="h-4 w-4" />
+              Daily operating habit
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              The daily habit is opening Zapheit to see where work is stuck, which automation is safe to try next, and how much real money the AI workforce can recover.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== MAIN COMPONENT ====================
 export default function ShadowModePage() {
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
@@ -57,12 +658,20 @@ export default function ShadowModePage() {
 
   const [showLogModal, setShowLogModal] = useState<TestCase | null>(null);
 
-  // Compare mode
-  const [compareMode, setCompareMode] = useState(false);
+  const [activeView, setActiveView] = useState<ShadowModeView>('discovery');
   const [baselineAgentId, setBaselineAgentId] = useState<string | null>(null);
   const [candidateAgentId, setCandidateAgentId] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
   const [compareResult, setCompareResult] = useState<Awaited<ReturnType<typeof api.agents.shadowCompare>>['data'] | null>(null);
+  const [connectedApps, setConnectedApps] = useState<UnifiedConnectorEntry[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
+  const [auditActivity, setAuditActivity] = useState<AuditLogEntry[]>([]);
+  const [costComparison, setCostComparison] = useState<CostComparisonData | null>(null);
+  const [loadingDiscovery, setLoadingDiscovery] = useState(false);
+  const [discoveryWarning, setDiscoveryWarning] = useState<string | null>(null);
+  const [lastScannedAt, setLastScannedAt] = useState<string | null>(null);
+
+  const compareMode = activeView === 'compare';
 
   useEffect(() => {
     api.agents.getAll().then(res => {
@@ -72,6 +681,47 @@ export default function ShadowModePage() {
       }
     }).catch(() => { });
   }, []);
+
+  const loadDiscoverySignals = useCallback(async () => {
+    setLoadingDiscovery(true);
+    setDiscoveryWarning(null);
+    const [catalogResult, approvalsResult, auditResult, costsResult] = await Promise.allSettled([
+      api.unifiedConnectors.getCatalog(),
+      api.approvals.list({ status: 'pending', limit: 200 }),
+      api.auditLogs.list({ limit: 120 }),
+      api.costs.getComparison(),
+    ]);
+
+    if (catalogResult.status === 'fulfilled' && catalogResult.value.success && Array.isArray(catalogResult.value.data)) {
+      setConnectedApps(catalogResult.value.data.filter(isConnectorConnected));
+    }
+    if (approvalsResult.status === 'fulfilled' && approvalsResult.value.success && Array.isArray(approvalsResult.value.data)) {
+      setPendingApprovals(approvalsResult.value.data);
+    }
+    if (auditResult.status === 'fulfilled' && auditResult.value.success && Array.isArray(auditResult.value.data)) {
+      setAuditActivity(auditResult.value.data);
+    }
+    if (costsResult.status === 'fulfilled' && costsResult.value.success && costsResult.value.data) {
+      setCostComparison(costsResult.value.data);
+    }
+    const failedSources = [
+      catalogResult.status === 'rejected' || (catalogResult.status === 'fulfilled' && !catalogResult.value.success) ? 'connected apps' : null,
+      approvalsResult.status === 'rejected' || (approvalsResult.status === 'fulfilled' && !approvalsResult.value.success) ? 'approvals' : null,
+      auditResult.status === 'rejected' || (auditResult.status === 'fulfilled' && !auditResult.value.success) ? 'audit logs' : null,
+      costsResult.status === 'rejected' || (costsResult.status === 'fulfilled' && !costsResult.value.success) ? 'costs' : null,
+    ].filter(Boolean);
+    if (failedSources.length > 0) {
+      setDiscoveryWarning(`Discovery is using partial data because ${failedSources.join(', ')} could not be loaded.`);
+    }
+    setLastScannedAt(new Date().toISOString());
+    setLoadingDiscovery(false);
+  }, []);
+
+  useEffect(() => {
+    loadDiscoverySignals().catch(() => {
+      setLoadingDiscovery(false);
+    });
+  }, [loadDiscoverySignals]);
 
   // Load historical test runs whenever the selected agent changes
   useEffect(() => {
@@ -155,6 +805,18 @@ export default function ShadowModePage() {
     else toast.warning(`Not ready: ${summary.promotionBlockReason}`);
   };
 
+  const discoveryOpportunities = useMemo(() => buildDiscoveryOpportunities({
+    agents,
+    connectedApps,
+    pendingApprovals,
+    auditActivity,
+    costComparison,
+  }), [agents, connectedApps, pendingApprovals, auditActivity, costComparison]);
+
+  const navigateToDashboardRoute = (route: string) => {
+    navigate(`/dashboard/${route}`);
+  };
+
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const filteredResults = results.filter(r => selectedCategory === 'all' || r.test.category === selectedCategory);
 
@@ -170,23 +832,42 @@ export default function ShadowModePage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Shadow Mode</h1>
-          <p className="text-slate-400 mt-1 text-sm">Pre-deployment adversarial testing & vulnerability scanning for your agents.</p>
+          <p className="text-slate-400 mt-1 text-sm">Discover repetitive work, prove agents in shadow, then red-team before production.</p>
         </div>
         <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-xl p-1">
           <button
-            onClick={() => { setCompareMode(false); setCompareResult(null); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!compareMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            onClick={() => { setActiveView('discovery'); setCompareResult(null); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeView === 'discovery' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            <Eye className="w-3.5 h-3.5" /> Workforce Discovery
+          </button>
+          <button
+            onClick={() => { setActiveView('single'); setCompareResult(null); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeView === 'single' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
           >
             <ShieldAlert className="w-3.5 h-3.5" /> Single Agent
           </button>
           <button
-            onClick={() => { setCompareMode(true); if (!baselineAgentId && agents[0]) setBaselineAgentId(agents[0].id); if (!candidateAgentId && agents[1]) setCandidateAgentId(agents[1].id); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${compareMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            onClick={() => { setActiveView('compare'); if (!baselineAgentId && agents[0]) setBaselineAgentId(agents[0].id); if (!candidateAgentId && agents[1]) setCandidateAgentId(agents[1].id); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeView === 'compare' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
           >
             <GitCompare className="w-3.5 h-3.5" /> Compare Agents
           </button>
         </div>
       </div>
+
+      {activeView === 'discovery' && (
+        <WorkforceDiscoveryPanel
+          agents={agents}
+          connectedApps={connectedApps}
+          opportunities={discoveryOpportunities}
+          loading={loadingDiscovery}
+          warning={discoveryWarning}
+          lastScannedAt={lastScannedAt}
+          onRefresh={loadDiscoverySignals}
+          onNavigate={navigateToDashboardRoute}
+        />
+      )}
 
       {/* ===== COMPARE MODE ===== */}
       {compareMode && (
@@ -291,7 +972,7 @@ export default function ShadowModePage() {
         </div>
       )}
 
-      {!compareMode && <div className="flex flex-col lg:flex-row gap-6">
+      {activeView === 'single' && <div className="flex flex-col lg:flex-row gap-6">
         {/* ===== LEFT PANEL: Configuration ===== */}
         <div className="w-full lg:w-80 flex-shrink-0 space-y-6">
           {/* Agent Selection */}
@@ -614,7 +1295,7 @@ export default function ShadowModePage() {
       )}
 
       {/* Past Test Runs — loaded from real backend, single-agent mode only */}
-      {!compareMode && historicalRuns.length > 0 && (
+      {activeView === 'single' && historicalRuns.length > 0 && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-400" />

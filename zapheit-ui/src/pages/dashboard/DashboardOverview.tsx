@@ -538,6 +538,17 @@ function TodaysPriorities({
   const statusLine = urgentCount > 0
     ? `${urgentCount} decision${urgentCount !== 1 ? 's' : ''} need attention before agents continue.`
     : 'Your AI workforce is operating normally.';
+  const nextPriority = priorityItems[0];
+  const nextActionLabel = nextPriority
+    ? `${nextPriority.cta}: ${nextPriority.title}`
+    : allClear
+      ? 'No blocker needs action. Review ROI or deploy the next governed agent.'
+      : 'Review informational items when convenient.';
+  const operatingSummary = nextPriority
+    ? nextPriority.detail
+    : allClear
+      ? 'Approvals, incidents, and budget controls are clear on the overview signals currently loaded.'
+      : 'No urgent blocker is present, but Zapheit has non-blocking operational context to review.';
   const counters = [
     { label: 'Pending approvals', value: pendingApprovals.length, tone: pendingApprovals.length > 0 ? 'warn' as const : 'good' as const },
     { label: 'High-risk', value: highRiskApprovalCount + severeIncidents.length, tone: highRiskApprovalCount + severeIncidents.length > 0 ? 'risk' as const : 'good' as const },
@@ -576,6 +587,25 @@ function TodaysPriorities({
               </div>
             );
           })}
+        </div>
+        <div className={`mt-3 rounded-xl border px-4 py-3 ${
+          nextPriority
+            ? priorityToneClasses(nextPriority.tone).row
+            : 'border-emerald-500/20 bg-emerald-500/[0.05]'
+        }`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Next best action</p>
+              <p className="mt-1 text-sm font-semibold text-white line-clamp-1">{nextActionLabel}</p>
+              <p className="mt-0.5 text-xs text-slate-400 line-clamp-2">{operatingSummary}</p>
+            </div>
+            <button
+              onClick={() => nextPriority?.route ? onNavigate?.(nextPriority.route) : onNavigate?.('roi')}
+              className="shrink-0 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-100 transition-colors hover:bg-white/[0.10]"
+            >
+              {nextPriority ? 'Act now' : 'Review ROI'}
+            </button>
+          </div>
         </div>
       </div>
 
