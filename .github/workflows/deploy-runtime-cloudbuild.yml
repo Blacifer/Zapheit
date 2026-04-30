@@ -34,10 +34,8 @@ jobs:
         with:
           project_id: rasisynthetichr
 
-      - name: Submit runtime deploy to Cloud Build
+      - name: Run deploy-runtime Cloud Build trigger
         run: |
-          gcloud builds submit . \
-            --config=zapheit-runtime/cloudbuild.yaml \
+          gcloud builds triggers run deploy-runtime \
             --region=asia-south1 \
-            --service-account=projects/rasisynthetichr/serviceAccounts/cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com \
             --substitutions=COMMIT_SHA=${GITHUB_SHA}
