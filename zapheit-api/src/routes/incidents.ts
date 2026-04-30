@@ -14,7 +14,6 @@ import { incidentDetection } from '../services/incident-detection';
 import { attemptSelfHeal, revertSelfHeal, type SelfHealIncidentType } from '../services/self-healing';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
-import { recordProductionActivity } from '../lib/production-activity';
 
 const router = express.Router();
 
@@ -160,34 +159,6 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
       metadata: { incident_type, severity, title },
     });
 
-    if (data?.[0]?.id) {
-      const incidentSeverity = severity || 'medium';
-      await recordProductionActivity({
-        organizationId: orgId,
-        actorId: req.user?.id || 'system',
-        auditAction: 'incident.opened',
-        resourceType: 'incident',
-        resourceId: data[0].id,
-        event: {
-          type: 'incident',
-          title: `Incident opened: ${title}`,
-          detail: `${incidentSeverity} · ${description || incident_type}`,
-          status: ['critical', 'high'].includes(String(incidentSeverity).toLowerCase()) ? 'blocked' : 'degraded',
-          tone: ['critical', 'high'].includes(String(incidentSeverity).toLowerCase()) ? 'risk' : 'warn',
-          route: 'incidents',
-          sourceRef: data[0].id,
-          evidenceRef: data[0].id,
-        },
-        metadata: {
-          production_journey: { stage: 'incident_opened', source: 'incident_api' },
-          incident_type,
-          severity: incidentSeverity,
-          agent_id,
-          conversation_id,
-        },
-      });
-    }
-
     fireAndForgetWebhookEvent(orgId, 'incident.created', {
       id: `evt_incident_${data?.[0]?.id || crypto.randomUUID()}`,
       type: 'incident.created',
@@ -294,28 +265,6 @@ router.put('/incidents/:id/resolve', requirePermission('incidents.resolve'), asy
       orgId,
       resolution_notes
     );
-
-    await recordProductionActivity({
-      organizationId: orgId,
-      actorId: req.user?.id || 'unknown',
-      auditAction: 'incident.resolved',
-      resourceType: 'incident',
-      resourceId: id,
-      event: {
-        type: 'incident',
-        title: `Incident resolved: ${data[0]?.title || id}`,
-        detail: resolution_notes || 'Incident moved to resolved state with audit evidence.',
-        status: 'deployed',
-        tone: 'success',
-        route: 'incidents',
-        sourceRef: id,
-        evidenceRef: id,
-      },
-      metadata: {
-        production_journey: { stage: 'incident_resolved', source: 'incident_api' },
-        resolution_notes: resolution_notes || null,
-      },
-    });
 
     fireAndForgetWebhookEvent(orgId, 'incident.resolved', {
       id: `evt_incident_resolve_${id}`,
@@ -480,34 +429,6 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
 
       // Push to SSE clients
       if (incident) pushIncidentEvent(orgId, incident);
-
-      if (incident?.id) {
-        const detectedTitle = `${highest.type?.replace('_', ' ').toUpperCase()} Detected`;
-        await recordProductionActivity({
-          organizationId: orgId,
-          actorId: req.user?.id || 'system',
-          auditAction: 'incident.detected',
-          resourceType: 'incident',
-          resourceId: incident.id,
-          event: {
-            type: 'incident',
-            title: `Incident detected: ${detectedTitle}`,
-            detail: `${highest.severity} · ${highest.details}`,
-            status: 'blocked',
-            tone: 'risk',
-            route: 'incidents',
-            sourceRef: incident.id,
-            evidenceRef: incident.id,
-          },
-          metadata: {
-            production_journey: { stage: 'incident_detected', source: 'incident_detection' },
-            incident_type: highest.type,
-            severity: highest.severity,
-            confidence: highest.confidence,
-            agent_id,
-          },
-        });
-      }
 
       // Slack + alert channels (fire-and-forget, all three notification paths)
       if (incident) {

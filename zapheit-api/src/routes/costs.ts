@@ -10,7 +10,6 @@ import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingCon
 import { generateSafeHarborDocument, getSafeHarborState, updateSafeHarborConfig, updateSafeHarborContract } from '../lib/safe-harbor';
 import { usdToInr } from '../lib/currency';
 import { calculateTokenCost } from '../services/ai-service';
-import { recordProductionActivity } from '../lib/production-activity';
 
 const router = express.Router();
 
@@ -491,38 +490,6 @@ router.post('/costs', requirePermission('costs.create'), async (req: Request, re
     });
 
     logger.info('Cost recorded successfully', { cost_id: data?.[0]?.id, cost_usd: costUSD });
-
-    if (data?.[0]?.id) {
-      await recordProductionActivity({
-        organizationId: orgId,
-        actorId: req.user?.id || 'system',
-        auditAction: 'cost.recorded',
-        resourceType: 'cost_tracking',
-        resourceId: data[0].id,
-        event: {
-          type: 'cost',
-          title: `Cost recorded: $${costUSD.toFixed(costUSD >= 1 ? 2 : 4)}`,
-          detail: `${model_name || 'model unknown'} · ${(request_count || 1).toLocaleString()} request(s) · ${totalTokens.toLocaleString()} tokens`,
-          status: 'deployed',
-          tone: 'info',
-          route: 'costs',
-          sourceRef: data[0].id,
-          evidenceRef: data[0].id,
-        },
-        metadata: {
-          production_journey: { stage: 'cost_recorded', source: 'cost_api' },
-          agent_id,
-          conversation_id,
-          model_name,
-          input_tokens: input_tokens || 0,
-          output_tokens: output_tokens || 0,
-          total_tokens: totalTokens,
-          cost_usd: costUSD,
-          request_count: request_count || 1,
-          avg_latency_ms,
-        },
-      });
-    }
 
     fireAndForgetWebhookEvent(orgId, 'usage.updated', {
       id: `evt_usage_${data?.[0]?.id || crypto.randomUUID()}`,
