@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { activityApi } from '../lib/api/activity';
+import { activityApi, type ActivityEventTypeFilter } from '../lib/api/activity';
 import type { UnifiedActivityEvent } from '../lib/production-readiness';
 
 export type ActivityStreamStatus = 'idle' | 'connecting' | 'live' | 'polling' | 'error';
@@ -8,6 +8,7 @@ interface UseActivityStreamOptions {
   enabled?: boolean;
   limit?: number;
   pollMs?: number;
+  type?: ActivityEventTypeFilter;
 }
 
 function sortAndLimit(events: UnifiedActivityEvent[], limit: number) {
@@ -28,6 +29,7 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
   const enabled = options.enabled ?? true;
   const limit = options.limit ?? 20;
   const pollMs = options.pollMs ?? 15000;
+  const type = options.type ?? 'all';
 
   const [events, setEvents] = useState<UnifiedActivityEvent[]>([]);
   const [status, setStatus] = useState<ActivityStreamStatus>(enabled ? 'connecting' : 'idle');
@@ -62,6 +64,7 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
     const response = await activityApi.list({
       limit,
       since: latestAtRef.current,
+      type,
     });
 
     if (!response.success || !response.data) {
@@ -70,7 +73,7 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
 
     mergeEvents(response.data.events);
     setError(null);
-  }, [limit, mergeEvents]);
+  }, [limit, mergeEvents, type]);
 
   useEffect(() => {
     if (!enabled) {
@@ -95,6 +98,9 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
     };
 
     const start = async () => {
+      latestAtRef.current = null;
+      setEvents([]);
+      setLastEventAt(null);
       setStatus('connecting');
 
       try {
@@ -109,6 +115,7 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
 
       activityApi.stream({
         since: latestAtRef.current,
+        type,
         signal: abortController.signal,
         onOpen: () => {
           if (!disposed) setStatus('live');
@@ -141,7 +148,7 @@ export function useActivityStream(options: UseActivityStreamOptions = {}) {
       abortController.abort();
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [enabled, mergeEvents, poll, pollMs]);
+  }, [enabled, mergeEvents, poll, pollMs, type]);
 
   return {
     events,

@@ -1,6 +1,8 @@
 import type { UnifiedActivityEvent } from '../production-readiness';
 import { API_BASE_URL, authenticatedFetch, getAuthHeaders, type ApiResponse } from './_helpers';
 
+export type ActivityEventTypeFilter = UnifiedActivityEvent['type'] | 'all';
+
 export interface ActivityEventsResponse {
   events: UnifiedActivityEvent[];
   generatedAt: string;
@@ -11,16 +13,18 @@ export type ActivityStreamEventName = 'activity' | 'ready' | 'heartbeat' | 'stre
 
 export interface ActivityStreamOptions {
   since?: string | null;
+  type?: ActivityEventTypeFilter;
   signal?: AbortSignal;
   onOpen?: () => void;
   onEvent: (event: UnifiedActivityEvent) => void;
   onStatus?: (event: ActivityStreamEventName, payload: any) => void;
 }
 
-function buildActivityQuery(params?: { limit?: number; since?: string | null }) {
+function buildActivityQuery(params?: { limit?: number; since?: string | null; type?: ActivityEventTypeFilter }) {
   const query = new URLSearchParams();
   if (params?.limit) query.set('limit', String(params.limit));
   if (params?.since) query.set('since', params.since);
+  if (params?.type && params.type !== 'all') query.set('type', params.type);
   const qs = query.toString();
   return qs ? `?${qs}` : '';
 }
@@ -43,7 +47,7 @@ function parseSseChunk(chunk: string) {
 }
 
 export const activityApi = {
-  async list(params?: { limit?: number; since?: string | null }): Promise<ApiResponse<ActivityEventsResponse>> {
+  async list(params?: { limit?: number; since?: string | null; type?: ActivityEventTypeFilter }): Promise<ApiResponse<ActivityEventsResponse>> {
     return authenticatedFetch<ActivityEventsResponse>(`/activity/events${buildActivityQuery(params)}`, {
       method: 'GET',
     });
@@ -56,7 +60,7 @@ export const activityApi = {
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${API_BASE_URL}/activity/stream${buildActivityQuery({ since: options.since })}`, {
+    const response = await fetch(`${API_BASE_URL}/activity/stream${buildActivityQuery({ since: options.since, type: options.type })}`, {
       method: 'GET',
       headers: {
         ...headers,

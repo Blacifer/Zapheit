@@ -288,4 +288,36 @@ describe('GET /events', () => {
       route: 'costs',
     });
   });
+
+  it('filters activity by production source type', async () => {
+    mockRest.mockResolvedValueOnce([
+      {
+        id: 'incident-filtered-1',
+        incident_type: 'prompt_injection',
+        severity: 'critical',
+        status: 'open',
+        title: 'Prompt injection detected',
+        description: 'Prompt injection attempt detected.',
+        created_at: '2026-04-30T00:00:03.000Z',
+      },
+    ]);
+
+    const { statusCode, body } = await invokeActivityRoute('/events', { limit: '20', type: 'incident' });
+
+    expect(statusCode).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.events).toHaveLength(1);
+    expect(body.data.events[0]).toMatchObject({
+      type: 'incident',
+      title: 'Incident opened: Prompt injection detected',
+      status: 'blocked',
+      route: 'incidents',
+    });
+    expect(mockRest).toHaveBeenCalledTimes(1);
+    expect(mockRest).toHaveBeenCalledWith(
+      'mock-jwt',
+      'incidents',
+      expect.any(URLSearchParams),
+    );
+  });
 });

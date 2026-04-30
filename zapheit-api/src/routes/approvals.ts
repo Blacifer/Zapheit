@@ -12,6 +12,7 @@ import { storeCorrection } from '../lib/correction-memory';
 import { markApprovalDeniedExecution, resumeApprovedToolCall } from '../lib/agentic-tool-execution';
 import { sendTransactionalEmail } from '../lib/email';
 import { approvalRequestedEmail, approvalResolvedEmail } from '../lib/email-templates';
+import { connectorActionTitle, recordProductionActivity, type ProductionActivityTone, type ProductionReadinessStatus } from '../lib/production-activity';
 import {
   buildApprovalSummaryFromApprovalRequest,
   buildApprovalSummaryFromJobApproval,
@@ -32,6 +33,60 @@ const ROLE_ORDER: Record<string, number> = {
 
 function canReview(userRole: string, requiredRole: string): boolean {
   return (ROLE_ORDER[userRole] ?? -1) >= (ROLE_ORDER[requiredRole] ?? 999);
+}
+
+function approvalActivityState(status: string): { readiness: ProductionReadinessStatus; tone: ProductionActivityTone } {
+  if (status === 'approved') return { readiness: 'deployed', tone: 'success' };
+  if (status === 'denied' || status === 'rejected') return { readiness: 'blocked', tone: 'risk' };
+  if (status === 'cancelled' || status === 'expired') return { readiness: 'blocked', tone: 'warn' };
+  return { readiness: 'needs_policy', tone: 'warn' };
+}
+
+async function recordApprovalActivity(args: {
+  orgId: string;
+  actorId?: string | null;
+  approvalId: string;
+  service?: string | null;
+  action?: string | null;
+  status: 'pending' | 'approved' | 'denied' | 'rejected' | 'cancelled' | 'expired';
+  auditAction: string;
+  detail: string;
+  req?: Request;
+  metadata?: Record<string, any>;
+}) {
+  const state = approvalActivityState(args.status);
+  const verb = args.status === 'pending'
+    ? 'Approval requested'
+    : args.status === 'approved'
+      ? 'Approval approved'
+      : args.status === 'cancelled'
+        ? 'Approval cancelled'
+        : args.status === 'expired'
+          ? 'Approval expired'
+          : 'Approval denied';
+
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.actorId || 'system',
+    auditAction: args.auditAction,
+    resourceType: 'approval_request',
+    resourceId: args.approvalId,
+    event: {
+      type: 'approval',
+      title: `${verb}: ${connectorActionTitle(args.service || 'workflow', args.action || 'review')}`,
+      detail: args.detail,
+      status: state.readiness,
+      tone: state.tone,
+      route: 'approvals',
+      sourceRef: args.approvalId,
+      evidenceRef: args.approvalId,
+    },
+    metadata: {
+      ...(args.metadata || {}),
+      ip_address: args.req?.ip || (args.req?.socket as any)?.remoteAddress,
+      user_agent: args.req?.get?.('user-agent') || undefined,
+    },
+  });
 }
 
 async function safeUserRest<T = any[]>(req: Request, table: string, query?: URLSearchParams | string, options?: Record<string, any>): Promise<T> {
@@ -559,6 +614,25 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
       metadata: { service, action, requested_by, required_role: effectiveRole, assigned_to: assignedTo },
     });
 
+    await recordApprovalActivity({
+      orgId,
+      actorId: userId || requested_by || 'system',
+      approvalId: row.id,
+      service,
+      action,
+      status: 'pending',
+      auditAction: 'approval.requested',
+      detail: `${effectiveRole} review required${assignedTo ? ` · assigned to ${assignedTo}` : ''}`,
+      req,
+      metadata: {
+        production_journey: { stage: 'approval_requested', source: 'approval_api' },
+        requested_by,
+        required_role: effectiveRole,
+        assigned_to: assignedTo,
+        risk_score: riskScore,
+      },
+    });
+
     // Notify assigned approver via Slack if routing rules specified one.
     if (assignedTo) {
       notifyApprovalAssignedAsync({ organizationId: orgId, assignedToUserId: assignedTo, service, action, referenceId: row.id });
@@ -704,6 +778,25 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       }
 
       const normalized = decorateJobApproval(updatedJob, updatedApprovals?.[0] || { ...jobApproval, status: finalDecision, approval_history: nextHistory, decided_at: finalDecision === 'approved' ? now : null, approved_by: finalDecision === 'approved' ? userId : null });
+      await recordApprovalActivity({
+        orgId,
+        actorId: userId,
+        approvalId: jobApproval.id,
+        service: jobApproval.policy_snapshot?.connector_policy?.service || job.input?.connector?.service || 'runtime',
+        action: jobApproval.policy_snapshot?.connector_policy?.action || job.input?.connector?.action || job.type,
+        status: finalDecision === 'approved' ? 'approved' : 'pending',
+        auditAction: finalDecision === 'approved' ? 'approval.approved' : 'approval.partial_approval',
+        detail: finalDecision === 'approved'
+          ? 'Human approval released the queued runtime job.'
+          : `${approvedCount}/${requiredApprovals} approvals recorded; waiting for the remaining reviewer.`,
+        req,
+        metadata: {
+          production_journey: { stage: finalDecision === 'approved' ? 'approval_approved' : 'approval_partial', source: 'agent_job_approval' },
+          job_id: job.id,
+          approvals_recorded: approvedCount,
+          required_approvals: requiredApprovals,
+        },
+      });
       return res.json({
         success: true,
         data: normalized,
@@ -761,6 +854,22 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       ip_address: req.ip || (req.socket as any)?.remoteAddress,
       user_agent: req.get('user-agent') || undefined,
       metadata: { service: row.service, action: row.action, note: parsed.data?.note },
+    });
+
+    await recordApprovalActivity({
+      orgId,
+      actorId: userId,
+      approvalId: id,
+      service: row.service,
+      action: row.action,
+      status: 'approved',
+      auditAction: 'approval.approved',
+      detail: parsed.data?.note || 'Human approval released the governed action.',
+      req,
+      metadata: {
+        production_journey: { stage: 'approval_approved', source: 'approval_api' },
+        note: parsed.data?.note || null,
+      },
     });
 
     fireAndForgetWebhookEvent(orgId, 'approval.completed', {
@@ -941,6 +1050,22 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       })) as any[];
       const updatedJob = updatedJobs?.[0] || { ...job, status: 'canceled' };
       const normalized = decorateJobApproval(updatedJob, updatedApprovals?.[0] || { ...jobApproval, status: 'rejected', approval_history: nextHistory, decided_at: now });
+      await recordApprovalActivity({
+        orgId,
+        actorId: userId,
+        approvalId: jobApproval.id,
+        service: jobApproval.policy_snapshot?.connector_policy?.service || job.input?.connector?.service || 'runtime',
+        action: jobApproval.policy_snapshot?.connector_policy?.action || job.input?.connector?.action || job.type,
+        status: 'rejected',
+        auditAction: 'approval.rejected',
+        detail: parsed.data?.note || 'Reviewer denied the runtime job before execution.',
+        req,
+        metadata: {
+          production_journey: { stage: 'approval_denied', source: 'agent_job_approval' },
+          job_id: job.id,
+          reviewer_note: parsed.data?.note || null,
+        },
+      });
       return res.json({
         success: true,
         data: normalized,
@@ -988,6 +1113,22 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       ip_address: req.ip || (req.socket as any)?.remoteAddress,
       user_agent: req.get('user-agent') || undefined,
       metadata: { service: row.service, action: row.action, note: parsed.data?.note },
+    });
+
+    await recordApprovalActivity({
+      orgId,
+      actorId: userId,
+      approvalId: id,
+      service: row.service,
+      action: row.action,
+      status: 'denied',
+      auditAction: 'approval.rejected',
+      detail: parsed.data?.note || 'Reviewer denied the governed action before execution.',
+      req,
+      metadata: {
+        production_journey: { stage: 'approval_denied', source: 'approval_api' },
+        note: parsed.data?.note || null,
+      },
     });
 
     fireAndForgetWebhookEvent(orgId, 'approval.completed', {
@@ -1066,6 +1207,21 @@ router.post('/:id/cancel', requirePermission('policies.manage'), async (req: Req
       ip_address: req.ip || (req.socket as any)?.remoteAddress,
       user_agent: req.get('user-agent') || undefined,
       metadata: {},
+    });
+
+    await recordApprovalActivity({
+      orgId,
+      actorId: userId || 'system',
+      approvalId: id,
+      service: row.service,
+      action: row.action,
+      status: 'cancelled',
+      auditAction: 'approval.cancelled',
+      detail: 'Pending approval was cancelled before execution.',
+      req,
+      metadata: {
+        production_journey: { stage: 'approval_cancelled', source: 'approval_api' },
+      },
     });
 
     return res.json({ success: true, data: updated?.[0] || row });

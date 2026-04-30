@@ -129,6 +129,11 @@ function parseSince(value: unknown) {
   return timestamp.toISOString();
 }
 
+function parseType(value: unknown): ProductionActivityType | null {
+  if (typeof value !== 'string' || !value.trim() || value === 'all') return null;
+  return ACTIVITY_TYPES.has(value as ProductionActivityType) ? value as ProductionActivityType : null;
+}
+
 function cleanText(value: unknown, fallback: string) {
   return typeof value === 'string' && value.trim() ? value : fallback;
 }
@@ -395,8 +400,10 @@ async function loadActivityEvents(args: {
   limit: number;
   since?: string | null;
   ascending?: boolean;
+  type?: ProductionActivityType | null;
 }) {
   const direction = args.ascending ? 'asc' : 'desc';
+  const shouldLoad = (type: ProductionActivityType) => !args.type || args.type === type;
   const buildQuery = (select: string, orderColumn = 'created_at', sinceFilter?: string) => {
     const query = new URLSearchParams();
     query.set('select', select);
@@ -441,13 +448,13 @@ async function loadActivityEvents(args: {
     integrationEvents,
     costEvents,
   ] = await Promise.all([
-    loadSource<AuditLogActivityRow>(
+    shouldLoad('audit') ? loadSource<AuditLogActivityRow>(
       'audit_logs',
       'audit_logs',
       buildQuery(ACTIVITY_SELECT),
       normalizeActivityEvent,
-    ),
-    loadSource<ApprovalActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('approval') ? loadSource<ApprovalActivityRow>(
       'approval_requests',
       'approval_requests',
       buildQuery(
@@ -456,8 +463,8 @@ async function loadActivityEvents(args: {
         `(created_at.gt.${args.since},updated_at.gt.${args.since},reviewed_at.gt.${args.since})`,
       ),
       normalizeApprovalEvent,
-    ),
-    loadSource<JobActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('job') ? loadSource<JobActivityRow>(
       'agent_jobs',
       'agent_jobs',
       buildQuery(
@@ -466,8 +473,8 @@ async function loadActivityEvents(args: {
         `(created_at.gt.${args.since},started_at.gt.${args.since},finished_at.gt.${args.since})`,
       ),
       normalizeJobEvent,
-    ),
-    loadSource<IncidentActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('incident') ? loadSource<IncidentActivityRow>(
       'incidents',
       'incidents',
       buildQuery(
@@ -476,14 +483,14 @@ async function loadActivityEvents(args: {
         `(created_at.gt.${args.since},resolved_at.gt.${args.since})`,
       ),
       normalizeIncidentEvent,
-    ),
-    loadSource<ConnectorExecutionActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('connector') ? loadSource<ConnectorExecutionActivityRow>(
       'connector_action_executions',
       'connector_action_executions',
       buildQuery(CONNECTOR_EXECUTION_SELECT),
       normalizeConnectorExecutionEvent,
-    ),
-    loadSource<IntegrationActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('connector') ? loadSource<IntegrationActivityRow>(
       'integrations',
       'integrations',
       buildQuery(
@@ -492,13 +499,13 @@ async function loadActivityEvents(args: {
         `(updated_at.gt.${args.since},last_sync_at.gt.${args.since},last_error_at.gt.${args.since})`,
       ),
       normalizeIntegrationEvent,
-    ),
-    loadSource<CostActivityRow>(
+    ) : Promise.resolve([]),
+    shouldLoad('cost') ? loadSource<CostActivityRow>(
       'cost_tracking',
       'cost_tracking',
       buildQuery(COST_SELECT),
       normalizeCostEvent,
-    ),
+    ) : Promise.resolve([]),
   ]);
 
   const events = [
@@ -547,11 +554,13 @@ router.get('/events', async (req: Request, res: Response) => {
   try {
     const limit = parseLimit(req.query.limit);
     const since = parseSince(req.query.since);
+    const type = parseType(req.query.type);
     const events = await loadActivityEvents({
       userJwt,
       organizationId,
       limit,
       since,
+      type,
       ascending: false,
     });
 
@@ -593,6 +602,7 @@ router.get('/stream', async (req: Request, res: Response) => {
 
   let closed = false;
   let cursor = parseSince(req.query.since);
+  const type = parseType(req.query.type);
 
   const emitEvents = async (limit: number) => {
     const hasCursor = Boolean(cursor);
@@ -601,6 +611,7 @@ router.get('/stream', async (req: Request, res: Response) => {
       organizationId,
       limit,
       since: cursor,
+      type,
       ascending: hasCursor,
     });
     const eventsToEmit = hasCursor ? events : [...events].reverse();
