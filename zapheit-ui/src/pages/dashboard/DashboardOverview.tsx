@@ -115,20 +115,10 @@ interface DashboardOverviewProps {
 }
 
 type ActivityItem = UnifiedActivityEvent;
-type ActivityFilter = ActivityItem['type'] | 'all';
 
 const ACTIVITY_EVENT_TYPES = new Set<ActivityItem['type']>(['approval', 'incident', 'job', 'connector', 'audit', 'cost']);
 const ACTIVITY_STATUSES = new Set<ActivityItem['status']>(['not_configured', 'needs_policy', 'ready', 'deployed', 'degraded', 'blocked']);
 const ACTIVITY_TONES = new Set<ActivityItem['tone']>(['info', 'success', 'warn', 'risk']);
-const ACTIVITY_FILTERS: Array<{ id: ActivityFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'approval', label: 'Approvals' },
-  { id: 'incident', label: 'Incidents' },
-  { id: 'job', label: 'Jobs' },
-  { id: 'connector', label: 'Connectors' },
-  { id: 'cost', label: 'Cost' },
-  { id: 'audit', label: 'Audit' },
-];
 
 function activityFromAuditEntry(entry: AuditLogEntry): ActivityItem {
   const raw = entry.details?.unified_activity_event;
@@ -218,35 +208,6 @@ function formatRelative(value?: string | null) {
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.round(diffHours / 24)}d ago`;
-}
-
-function formatActivityAge(value?: string | null) {
-  if (!value) return 'No timestamp';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'No timestamp';
-  const ageMs = Date.now() - date.getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-  if (ageMs >= 7 * dayMs) return `Historical · ${formatRelative(value)}`;
-  if (ageMs >= dayMs) return `Older · ${formatRelative(value)}`;
-  return formatRelative(value);
-}
-
-function isHistoricalActivity(value?: string | null) {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  return Date.now() - date.getTime() >= 7 * 24 * 60 * 60 * 1000;
-}
-
-function formatOpenDuration(value?: string | null) {
-  if (!value) return 'Open · no timestamp';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Open · no timestamp';
-  const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `Open ${diffMinutes}m`;
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `Open ${diffHours}h`;
-  return `Open ${Math.round(diffHours / 24)}d`;
 }
 
 function statusToneClasses(tone: 'good' | 'warn' | 'risk' | 'info') {
@@ -519,7 +480,7 @@ function buildPriorityItems(args: {
     label: `${incident.severity} incident`,
     title: incident.title,
     detail: incident.description || `${incident.agent_name} needs attention before the workflow is trusted again.`,
-    meta: `${incident.agent_name || 'Agent'} · ${formatOpenDuration(incident.created_at)}`,
+    meta: `${incident.agent_name || 'Agent'} · ${formatRelative(incident.created_at)}`,
     cta: 'Open incident',
     route: 'incidents',
     priority: 30 + index,
@@ -672,7 +633,7 @@ function TodaysPriorities({
           <div>
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${urgentCount > 0 ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-              <p className="text-sm font-semibold text-white">Production Command Center</p>
+              <p className="text-sm font-semibold text-white">Today's Command Center</p>
             </div>
             <p className={`mt-1 text-xs ${urgentCount > 0 ? 'text-rose-200' : 'text-emerald-200'}`}>{statusLine}</p>
           </div>
@@ -855,7 +816,6 @@ export default function DashboardOverview({
 
   // Team Activity Feed — recent audit log entries
   const [teamActivity, setTeamActivity] = useState<AuditLogEntry[]>([]);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const loadTeamActivity = useCallback(async () => {
     try {
       const res = await api.auditLogs.list({ limit: 8 });
@@ -870,9 +830,7 @@ export default function DashboardOverview({
     events: liveActivityEvents,
     status: activityStreamStatus,
     lastEventAt: activityStreamLastAt,
-  } = useActivityStream({
-    limit: 50,
-  });
+  } = useActivityStream({ limit: 12 });
 
   // Plan & Usage
   type UsageData = { used: number; quota: number; plan: string; planKey: string; month: string; agentCount?: number; agentLimit?: number };
@@ -1054,7 +1012,6 @@ const hasData = agents.length > 0;
     const seen = new Set<string>();
     return items
       .filter((item) => item.at)
-      .filter((item) => activityFilter === 'all' || item.type === activityFilter)
       .filter((item) => {
         if (seen.has(item.id)) return false;
         seen.add(item.id);
@@ -1062,7 +1019,7 @@ const hasData = agents.length > 0;
       })
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 12);
-  }, [activityFilter, agents, costData, incidents, liveActivityEvents, pendingApprovals, teamActivity]);
+  }, [agents, costData, incidents, liveActivityEvents, pendingApprovals, teamActivity]);
 
   const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
   const latestCostAt = [...costData]
@@ -2143,80 +2100,54 @@ const hasData = agents.length > 0;
             Production-backed incident, approval, connector, runtime, cost, and audit signals.
             {activityStreamLastAt ? ` Last event ${formatRelative(activityStreamLastAt)}.` : ''}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {ACTIVITY_FILTERS.map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => setActivityFilter(filter.id)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  activityFilter === filter.id
-                    ? 'border-cyan-400/40 bg-cyan-400/15 text-cyan-100'
-                    : 'border-slate-700 bg-slate-950/35 text-slate-400 hover:border-slate-500 hover:text-slate-200'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
 
           <div className="mt-6 space-y-3">
             {activityFeed.length > 0 ? (
               <AnimatePresence initial={false}>
-                {activityFeed.map((item, index) => {
-                  const historical = isHistoricalActivity(item.at);
-                  return (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, y: 12, height: 0 }}
-                      animate={{ opacity: 1, y: 0, height: 'auto' }}
-                      exit={{ opacity: 0, y: -8, height: 0 }}
-                      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                      className={`flex items-start gap-4 rounded-2xl border p-4 overflow-hidden ${
-                        historical
-                          ? 'border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.36),rgba(2,6,23,0.50))]'
-                          : index === 0
-                            ? 'border-cyan-500/20 bg-[linear-gradient(180deg,rgba(8,47,73,0.24),rgba(2,6,23,0.56))] shadow-[inset_0_1px_0_rgba(34,211,238,0.10)]'
-                            : 'border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
+                {activityFeed.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, y: 12, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -8, height: 0 }}
+                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                    className={`flex items-start gap-4 rounded-2xl border border-slate-800 p-4 overflow-hidden ${index === 0
+                      ? 'bg-[linear-gradient(180deg,rgba(8,47,73,0.24),rgba(2,6,23,0.56))] shadow-[inset_0_1px_0_rgba(34,211,238,0.10)]'
+                      : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))]'
                       }`}
-                    >
-                      <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : item.tone === 'success' ? 'bg-emerald-300' : 'bg-blue-300'}`} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${readinessTone(item.status)}`}>
-                                {READINESS_LABELS[item.status]}
+                  >
+                    <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${item.tone === 'risk' ? 'bg-rose-400' : item.tone === 'warn' ? 'bg-amber-400' : 'bg-blue-300'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${readinessTone(item.status)}`}>
+                              {READINESS_LABELS[item.status]}
+                            </span>
+                            <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                              {item.type}
+                            </span>
+                            {item.evidenceRef && (
+                              <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
+                                Evidence
                               </span>
-                              <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                                {item.type}
-                              </span>
-                              {historical && (
-                                <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                                  Historical
-                                </span>
-                              )}
-                              {item.evidenceRef && (
-                                <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
-                                  Evidence
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-2 font-semibold text-white">{item.title}</p>
+                            )}
                           </div>
-                          <span className="whitespace-nowrap text-xs text-slate-500">{formatActivityAge(item.at)}</span>
+                          <p className="mt-2 font-semibold text-white">{item.title}</p>
                         </div>
-                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
-                        {(item.actor || item.sourceRef) && (
-                          <p className="mt-2 text-[11px] text-slate-600">
-                            {item.actor ? `Actor: ${activityActorLabel(item.actor)} · ` : ''}
-                            {item.sourceRef ? `Source: ${item.sourceRef}` : ''}
-                          </p>
-                        )}
+                        <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(item.at)}</span>
                       </div>
-                    </motion.div>
-                  );
-                })}
+                      <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
+                      {(item.actor || item.sourceRef) && (
+                        <p className="mt-2 text-[11px] text-slate-600">
+                          {item.actor ? `Actor: ${activityActorLabel(item.actor)} · ` : ''}
+                          {item.sourceRef ? `Source: ${item.sourceRef}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
               </AnimatePresence>
             ) : (
               <div className="rounded-2xl border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_42%),rgba(2,6,23,0.55)] p-5">
