@@ -36,6 +36,29 @@ jobs:
 
       - name: Run deploy-api Cloud Build trigger
         run: |
-          gcloud builds triggers run deploy-api \
+          BUILD_ID="$(gcloud builds triggers run deploy-api \
             --region=asia-south1 \
-            --substitutions=COMMIT_SHA=${GITHUB_SHA}
+            --substitutions=COMMIT_SHA=${GITHUB_SHA} \
+            --format='value(metadata.build.id)')"
+
+          echo "Cloud Build trigger build: ${BUILD_ID}"
+
+          while true; do
+            STATUS="$(gcloud builds describe "${BUILD_ID}" \
+              --region=asia-south1 \
+              --format='value(status)')"
+
+            echo "Cloud Build status: ${STATUS}"
+
+            case "${STATUS}" in
+              SUCCESS)
+                exit 0
+                ;;
+              FAILURE|CANCELLED|TIMEOUT|EXPIRED)
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
