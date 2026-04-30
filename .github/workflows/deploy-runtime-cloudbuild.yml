@@ -1,0 +1,43 @@
+name: Deploy Runtime via Cloud Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'zapheit-runtime/**'
+      - 'deploy/gcp/**'
+      - '.github/workflows/deploy-runtime-cloudbuild.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-runtime-cloudbuild
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1044003479182/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: rasisynthetichr
+
+      - name: Submit runtime deploy to Cloud Build
+        run: |
+          gcloud builds submit . \
+            --config=zapheit-runtime/cloudbuild.yaml \
+            --region=asia-south1 \
+            --service-account=projects/rasisynthetichr/serviceAccounts/cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com \
+            --substitutions=COMMIT_SHA=${GITHUB_SHA}
