@@ -181,6 +181,7 @@ for SA in "${API_SA_NAME}" "${RUNTIME_SA_NAME}"; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor" \
+    --condition=None \
     --quiet
 done
 
@@ -191,38 +192,54 @@ COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/secretmanager.secretAccessor" --quiet
+  --role="roles/secretmanager.secretAccessor" \
+  --condition=None \
+  --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/run.admin" --quiet
+  --role="roles/run.admin" \
+  --condition=None \
+  --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/artifactregistry.writer" --quiet
+  --role="roles/artifactregistry.writer" \
+  --condition=None \
+  --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/logging.logWriter" --quiet
+  --role="roles/logging.logWriter" \
+  --condition=None \
+  --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/cloudbuild.builds.builder" --quiet
+  --role="roles/cloudbuild.builds.builder" \
+  --condition=None \
+  --quiet
 
 # Allow Cloud Build to act as the dedicated service accounts during deploy
 gcloud iam service-accounts add-iam-policy-binding \
   "${API_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/iam.serviceAccountUser" --quiet
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None \
+  --quiet
 
 gcloud iam service-accounts add-iam-policy-binding \
   "${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
   --member="serviceAccount:${BUILD_SA_EMAIL}" \
-  --role="roles/iam.serviceAccountUser" --quiet
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None \
+  --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${COMPUTE_SA}" \
-  --role="roles/artifactregistry.reader" --quiet
+  --role="roles/artifactregistry.reader" \
+  --condition=None \
+  --quiet
 
 # ── Step 5: Configure Docker auth ────────────────────────────────────────────
 echo "[5/8] Configuring Docker credentials for Artifact Registry..."
@@ -294,6 +311,8 @@ API_URL=$(gcloud run services describe "${API_SERVICE_NAME}" \
   --project="${PROJECT_ID}" \
   --format="value(status.url)")
 
+DEPLOY_ENV_TITLE="$(printf '%s%s' "$(printf '%s' "${DEPLOY_ENV:0:1}" | tr '[:lower:]' '[:upper:]')" "${DEPLOY_ENV:1}")"
+
 # Uptime check for the API health endpoint
 gcloud monitoring uptime create "${UPTIME_CHECK_NAME}" \
   --display-name="Zapheit API Health (${DEPLOY_ENV})" \
@@ -308,7 +327,7 @@ gcloud monitoring uptime create "${UPTIME_CHECK_NAME}" \
 if [ "${CREATE_BUDGET_ALERT}" = "true" ] && [ -n "${BILLING_ACCOUNT}" ]; then
   gcloud billing budgets create \
     --billing-account="${BILLING_ACCOUNT}" \
-    --display-name="Zapheit ${DEPLOY_ENV^} Monthly Budget" \
+    --display-name="Zapheit ${DEPLOY_ENV_TITLE} Monthly Budget" \
     --budget-amount="2000INR" \
     --threshold-rule=percent=50 \
     --threshold-rule=percent=90 \

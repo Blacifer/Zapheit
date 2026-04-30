@@ -144,43 +144,51 @@ gcloud iam service-accounts create cloudbuild-deployer \
 # Allow the build SA to access secrets
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/secretmanager.secretAccessor"
+  --role="roles/secretmanager.secretAccessor" \
+  --condition=None
 
 # Allow the build SA to deploy Cloud Run services
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/run.admin"
+  --role="roles/run.admin" \
+  --condition=None
 
 # Allow the build SA to push images to Artifact Registry
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/artifactregistry.writer"
+  --role="roles/artifactregistry.writer" \
+  --condition=None
 
 # Allow the build SA to write build logs
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/logging.logWriter"
+  --role="roles/logging.logWriter" \
+  --condition=None
 
 # Allow the build SA to execute builds
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/cloudbuild.builds.builder"
+  --role="roles/cloudbuild.builds.builder" \
+  --condition=None
 
 # Allow the build SA to deploy with the runtime identities
 gcloud iam service-accounts add-iam-policy-binding \
   zapheit-api@YOUR_PROJECT_ID.iam.gserviceaccount.com \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/iam.serviceAccountUser"
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None
 
 gcloud iam service-accounts add-iam-policy-binding \
   zapheit-runtime@YOUR_PROJECT_ID.iam.gserviceaccount.com \
   --member="serviceAccount:${BUILD_SA}" \
-  --role="roles/iam.serviceAccountUser"
+  --role="roles/iam.serviceAccountUser" \
+  --condition=None
 
 # Allow Cloud Run to pull images from Artifact Registry
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/artifactregistry.reader"
+  --role="roles/artifactregistry.reader" \
+  --condition=None
 ```
 
 ---
