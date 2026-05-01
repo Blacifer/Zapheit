@@ -21,6 +21,7 @@ import type { UnifiedApp } from './types';
 import type { AuthType, ProductionStatus, CredField, AppDef, AppStack } from './data/catalog';
 import { APP_CATALOG, CATEGORY_TABS, STACKS, INDIA_POPULAR_IDS } from './data/catalog';
 import { AppCardSkeleton } from './components/AppCardSkeleton';
+import { RequestAccessModal } from './components/RequestAccessModal';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Helpers
