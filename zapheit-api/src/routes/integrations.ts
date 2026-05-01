@@ -790,7 +790,7 @@ function getApiBaseUrl(req: any): string {
   return `${proto}://${host}`.replace(/\/+$/, '');
 }
 
-const CANONICAL_FRONTEND_URL = 'https://zapheit.com';
+const CANONICAL_FRONTEND_URL = 'https://www.zapheit.com';
 
 function getFrontendUrl(): string {
   const raw = process.env.FRONTEND_URL || '';

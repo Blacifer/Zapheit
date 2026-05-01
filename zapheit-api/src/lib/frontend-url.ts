@@ -4,12 +4,15 @@ export function getFrontendBaseUrl(): string {
   const raw = process.env.FRONTEND_URL?.trim();
   if (!raw) return DEFAULT_FRONTEND_URL;
 
-  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  // FRONTEND_URL may be comma-separated. Take the first.
+  const first = raw.split(',')[0].trim();
+
+  const withScheme = /^https?:\/\//i.test(first) ? first : `https://${first}`;
 
   try {
     return new URL(withScheme).origin;
   } catch {
-    return raw.replace(/\/+$/, '') || DEFAULT_FRONTEND_URL;
+    return first.replace(/\/+$/, '') || DEFAULT_FRONTEND_URL;
   }
 }
 

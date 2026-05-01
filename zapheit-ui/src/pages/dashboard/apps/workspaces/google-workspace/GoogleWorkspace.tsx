@@ -138,7 +138,7 @@ export default function GoogleWorkspace() {
   const loadApprovals = useCallback(async () => {
     try {
       const res = await api.approvals.list({ service: CONNECTOR_ID, status: 'pending', limit: 50 });
-      if (res.success && res.data) setPendingApprovals(res.data);
+      if (res.success && res.data) setPendingApprovals(Array.isArray(res.data) ? res.data : []);
     } catch { /* empty */ }
   }, []);
 
