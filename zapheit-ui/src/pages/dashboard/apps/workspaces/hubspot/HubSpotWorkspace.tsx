@@ -57,8 +57,9 @@ export default function HubSpotWorkspace() {
     try {
       const res = await api.unifiedConnectors.executeAction('hubspot', 'list_contacts', { limit: 50 });
       const inner = res.data as any;
-      const list = inner?.data?.data ?? inner?.data;
-      if (res.success) { setContacts(Array.isArray(list) ? list : []); setConnectionStatus('connected'); }
+      const payload = inner?.data?.data ?? inner?.data;
+      const list = payload?.results ?? (Array.isArray(payload) ? payload : []);
+      if (res.success) { setContacts(list); setConnectionStatus('connected'); }
     } catch {
       setConnectionStatus('disconnected');
     } finally {
@@ -71,8 +72,9 @@ export default function HubSpotWorkspace() {
     try {
       const res = await api.unifiedConnectors.executeAction('hubspot', 'list_deals', { limit: 50 });
       const inner = res.data as any;
-      const list = inner?.data?.data ?? inner?.data;
-      if (res.success) setDeals(Array.isArray(list) ? list : []);
+      const payload = inner?.data?.data ?? inner?.data;
+      const list = payload?.results ?? (Array.isArray(payload) ? payload : []);
+      if (res.success) setDeals(list);
     } catch { /* empty */ }
     finally { setLoadingDeals(false); }
   }, []);
@@ -82,8 +84,9 @@ export default function HubSpotWorkspace() {
     try {
       const res = await api.unifiedConnectors.executeAction('hubspot', 'list_companies', { limit: 50 });
       const inner = res.data as any;
-      const list = inner?.data?.data ?? inner?.data;
-      if (res.success) setCompanies(Array.isArray(list) ? list : []);
+      const payload = inner?.data?.data ?? inner?.data;
+      const list = payload?.results ?? (Array.isArray(payload) ? payload : []);
+      if (res.success) setCompanies(list);
     } catch { /* empty */ }
     finally { setLoadingCompanies(false); }
   }, []);
