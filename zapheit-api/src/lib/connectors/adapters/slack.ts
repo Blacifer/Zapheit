@@ -102,7 +102,7 @@ const slackAdapter: ConnectorAdapter = {
 
       case 'list_channels': {
         const r = await jsonFetch(
-          `https://slack.com/api/conversations.list?limit=${params.limit || 20}&types=${params.types || 'public_channel,private_channel'}`,
+          `https://slack.com/api/conversations.list?limit=${params.limit || 100}&types=${params.types || 'public_channel'}`,
           { headers },
         );
         if (!r.data.ok) return { success: false, error: r.data.error || 'Slack API error' };

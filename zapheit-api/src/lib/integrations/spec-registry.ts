@@ -1134,7 +1134,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
       tokenUrl: 'https://slack.com/api/oauth.v2.access',
       scopes: [
         'channels:read',
+        'channels:history',
+        'groups:read',
+        'groups:history',
         'chat:write',
+        'users:read',
+        'users:read.email',
       ],
       redirectPath: `${API_CALLBACK_BASE}/slack`,
     },
