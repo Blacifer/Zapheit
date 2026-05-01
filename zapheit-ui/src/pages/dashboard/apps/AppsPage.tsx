@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import Fuse from 'fuse.js';
 import { useSearchParams } from 'react-router-dom';
 import {
   Loader2, ChevronDown, ChevronUp, X, Eye, EyeOff, ExternalLink,
@@ -529,6 +530,16 @@ function StackWizard({
 /* 5-minute cache for live metrics to avoid re-fetching on every re-render */
 const METRIC_CACHE = new Map<string, { value: string; expiresAt: number }>();
 
+function highlightText(text: string, terms: string[] | undefined): React.ReactNode {
+  if (!terms?.length) return text;
+  const pattern = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const regex = new RegExp(`(${pattern})`, 'gi');
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part) ? <mark key={i} className="bg-yellow-400/25 text-yellow-200 rounded px-0.5">{part}</mark> : part,
+  );
+}
+
 function AppCard({
   app,
   status,
@@ -540,6 +551,7 @@ function AppCard({
   onOpenWizard,
   onRequestAccess,
   onNavigate,
+  highlightTerms,
 }: {
   app: AppDef;
   status: ConnStatus;
@@ -551,6 +563,7 @@ function AppCard({
   onOpenWizard: (app: AppDef, backendUnified: UnifiedApp | null) => void;
   onRequestAccess: (app: AppDef) => void;
   onNavigate?: (route: string) => void;
+  highlightTerms?: string[];
 }) {
   const [busy, setBusy] = useState(false);
   const [liveMetric, setLiveMetric] = useState<string | null>(null);
@@ -671,7 +684,7 @@ function AppCard({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold text-white">{app.name}</h3>
+            <h3 className="text-sm font-semibold text-white">{highlightText(app.name, highlightTerms)}</h3>
 
             {/* Status badge */}
             {isConnected && (
@@ -984,19 +997,49 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
     return { def, status: resolveStatus(def, backendUnified), backendApp: backendUnified, backendUnified };
   }), [allApps]);
 
-  // Filter
+  // Fuse.js instance — rebuilt only when apps list changes
+  const fuse = useMemo(() => new Fuse(apps, {
+    keys: [
+      { name: 'def.name', weight: 3 },
+      { name: 'def.description', weight: 1 },
+      { name: 'def.category', weight: 1 },
+      { name: 'def.tags', weight: 0.5 },
+    ],
+    threshold: 0.35,
+    includeScore: true,
+    includeMatches: true,
+    ignoreLocation: true,
+    minMatchCharLength: 2,
+  }), [apps]);
+
+  // Matched term indices per appId for highlighting
+  const [matchMap, setMatchMap] = useState<Record<string, string[]>>({});
+
   const filtered = useMemo(() => {
     let list = apps;
     if (stackFilter) list = list.filter(({ def }) => stackFilter.includes(def.appId));
     else if (activeCategory !== 'all') list = list.filter(({ def }) => def.category === activeCategory);
+
     if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(({ def }) =>
-        def.name.toLowerCase().includes(q) ||
-        def.description.toLowerCase().includes(q) ||
-        def.category.toLowerCase().includes(q),
-      );
+      const results = fuse.search(search);
+      const appIdOrder = new Map(results.map((r, i) => [r.item.def.appId, i]));
+      // Build match map for highlighting
+      const mm: Record<string, string[]> = {};
+      for (const r of results) {
+        const terms: string[] = [];
+        for (const m of r.matches ?? []) {
+          for (const [start, end] of m.indices) {
+            if (end - start >= 1) terms.push((m.value ?? '').slice(start, end + 1));
+          }
+        }
+        mm[r.item.def.appId] = terms;
+      }
+      setMatchMap(mm);
+      list = results.map((r) => r.item).filter((item) => list.some(({ def }) => def.appId === item.def.appId));
+      return list.sort((a, b) => (appIdOrder.get(a.def.appId) ?? 999) - (appIdOrder.get(b.def.appId) ?? 999));
     }
+
+    setMatchMap({});
     // India-native apps sort to top within category
     return [...list].sort((a, b) => {
       if (a.def.isIndiaNative && !b.def.isIndiaNative) return -1;
@@ -1005,7 +1048,47 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       if (a.status !== 'connected' && b.status === 'connected') return 1;
       return 0;
     });
-  }, [apps, activeCategory, search, stackFilter]);
+  }, [apps, activeCategory, search, stackFilter, fuse]);
+
+  // Keyboard navigation cursor for search results
+  const [cursor, setCursor] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const appCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Reset cursor when search changes
+  useEffect(() => { setCursor(-1); }, [search]);
+
+  // Keyboard navigation for search results
+  useEffect(() => {
+    if (!search.trim()) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCursor((c) => Math.min(c + 1, filtered.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCursor((c) => Math.max(c - 1, 0));
+      } else if (e.key === 'Enter' && cursor >= 0) {
+        const item = filtered[cursor];
+        if (item) {
+          const el = appCardRefs.current[item.def.appId];
+          el?.querySelector('button')?.click();
+        }
+      } else if (e.key === 'Escape') {
+        setSearch('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [search, cursor, filtered]);
+
+  // Scroll focused card into view
+  useEffect(() => {
+    if (cursor < 0) return;
+    const item = filtered[cursor];
+    if (item) appCardRefs.current[item.def.appId]?.scrollIntoView({ block: 'nearest' });
+  }, [cursor, filtered]);
 
   const connected = useMemo(() => apps.filter((a) => a.status === 'connected'), [apps]);
 
@@ -1128,10 +1211,12 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search 150+ apps by name or category…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setStackFilter(null); }}
+            onKeyDown={(e) => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault(); }}
             className="w-full rounded-xl border border-white/10 bg-white/[0.05] pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/40 transition-colors"
           />
           {search && (
@@ -1232,24 +1317,28 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           </div>
         )}
 
-        {/* Category tabs */}
+        {/* Category tabs — horizontal scroll on mobile with fade gradient */}
         {!stackFilter && (
-          <div className="flex gap-1 flex-wrap">
-            {CATEGORY_TABS.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  activeCategory === cat.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white/[0.05] text-slate-400 hover:text-slate-200 hover:bg-white/[0.09]',
-                )}
-              >
-                <cat.Icon className="w-3 h-3" />
-                {cat.label}
-              </button>
-            ))}
+          <div className="relative">
+            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+              {CATEGORY_TABS.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0',
+                    activeCategory === cat.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white/[0.05] text-slate-400 hover:text-slate-200 hover:bg-white/[0.09]',
+                  )}
+                >
+                  <cat.Icon className="w-3 h-3" />
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            {/* Right fade gradient — only shown on mobile */}
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-[#0a0f1a] to-transparent sm:hidden" />
           </div>
         )}
 
@@ -1311,21 +1400,66 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(({ def, status, backendApp, backendUnified }) => (
-              <AppCard
-                key={def.appId}
-                app={def}
-                status={status}
-                backendApp={backendApp}
-                backendUnified={backendUnified}
-                onConnect={handleConnect}
-                onDisconnect={handleDisconnect}
-                onOpenWorkspace={handleOpenWorkspace}
-                onOpenWizard={handleOpenWizard}
-                onRequestAccess={setRequestApp}
-                onNavigate={onNavigate}
-              />
-            ))}
+            {/* Recently connected — shown at top of search results */}
+            {search.trim() && connected.length > 0 && (() => {
+              const recentlyConnected = filtered.filter(({ status }) => status === 'connected');
+              if (recentlyConnected.length === 0) return null;
+              return (
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2 px-1">Recently connected</p>
+                  <div className="space-y-2">
+                    {recentlyConnected.map(({ def, status, backendApp, backendUnified }, idx) => (
+                      <div
+                        key={def.appId}
+                        ref={(el) => { appCardRefs.current[def.appId] = el; }}
+                        className={cn('rounded-2xl transition-colors', cursor === idx && 'ring-1 ring-blue-500/50 bg-blue-500/5')}
+                      >
+                        <AppCard
+                          app={def}
+                          status={status}
+                          backendApp={backendApp}
+                          backendUnified={backendUnified}
+                          onConnect={handleConnect}
+                          onDisconnect={handleDisconnect}
+                          onOpenWorkspace={handleOpenWorkspace}
+                          onOpenWizard={handleOpenWizard}
+                          onRequestAccess={setRequestApp}
+                          onNavigate={onNavigate}
+                          highlightTerms={matchMap[def.appId]}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {filtered.filter(({ status }) => status !== 'connected').length > 0 && (
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mt-4 mb-2 px-1">All results</p>
+                  )}
+                </div>
+              );
+            })()}
+            {filtered.filter(({ status }) => !search.trim() || status !== 'connected').map(({ def, status, backendApp, backendUnified }, idx) => {
+              const globalIdx = search.trim() ? connected.filter(({ status: s }) => s === 'connected').length + idx : idx;
+              return (
+                <div
+                  key={def.appId}
+                  ref={(el) => { appCardRefs.current[def.appId] = el; }}
+                  className={cn('rounded-2xl transition-colors', cursor === globalIdx && 'ring-1 ring-blue-500/50 bg-blue-500/5')}
+                >
+                  <AppCard
+                    app={def}
+                    status={status}
+                    backendApp={backendApp}
+                    backendUnified={backendUnified}
+                    onConnect={handleConnect}
+                    onDisconnect={handleDisconnect}
+                    onOpenWorkspace={handleOpenWorkspace}
+                    onOpenWizard={handleOpenWizard}
+                    onRequestAccess={setRequestApp}
+                    onNavigate={onNavigate}
+                    highlightTerms={search.trim() ? matchMap[def.appId] : undefined}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 
