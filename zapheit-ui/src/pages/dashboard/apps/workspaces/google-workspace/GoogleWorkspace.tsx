@@ -72,7 +72,7 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50 });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setEmails(payload.data);
+        setEmails(Array.isArray(payload.data) ? payload.data : []);
         setEmailsNextPageToken(payload.nextPageToken ?? null);
         setConnectionStatus('connected');
       } else {
@@ -92,7 +92,7 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50, pageToken: emailsNextPageToken });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setEmails((prev) => [...prev, ...payload.data]);
+        setEmails((prev) => [...prev, ...(Array.isArray(payload.data) ? payload.data : [])]);
         setEmailsNextPageToken(payload.nextPageToken ?? null);
       }
     } catch { /* empty */ }
@@ -103,7 +103,7 @@ export default function GoogleWorkspace() {
     setLoadingEvents(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_events', { maxResults: 50 });
-      if (res.success && res.data?.data) setEvents(res.data.data);
+      if (res.success && res.data?.data) setEvents(Array.isArray(res.data.data) ? res.data.data : []);
     } catch { /* empty */ }
     finally { setLoadingEvents(false); }
   }, []);
@@ -114,7 +114,7 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50 });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setFiles(payload.data);
+        setFiles(Array.isArray(payload.data) ? payload.data : []);
         setFilesNextPageToken(payload.nextPageToken ?? null);
       }
     } catch { /* empty */ }
@@ -128,7 +128,7 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50, pageToken: filesNextPageToken });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setFiles((prev) => [...prev, ...payload.data]);
+        setFiles((prev) => [...prev, ...(Array.isArray(payload.data) ? payload.data : [])]);
         setFilesNextPageToken(payload.nextPageToken ?? null);
       }
     } catch { /* empty */ }
