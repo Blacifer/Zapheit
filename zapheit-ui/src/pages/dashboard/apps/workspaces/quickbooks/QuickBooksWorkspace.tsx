@@ -56,7 +56,9 @@ export default function QuickBooksWorkspace() {
     setLoadingInvoices(true);
     try {
       const res = await api.unifiedConnectors.executeAction('quickbooks', 'list_invoices', { limit: 50 });
-      if (res.success && res.data?.data) setInvoices(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setInvoices(Array.isArray(_list) ? _list : []);
       setConnectionStatus('connected');
     } catch {
       setConnectionStatus('disconnected');
@@ -69,7 +71,9 @@ export default function QuickBooksWorkspace() {
     setLoadingCustomers(true);
     try {
       const res = await api.unifiedConnectors.executeAction('quickbooks', 'list_customers', { limit: 50 });
-      if (res.success && res.data?.data) setCustomers(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setCustomers(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setLoadingCustomers(false); }
   }, []);
@@ -78,7 +82,9 @@ export default function QuickBooksWorkspace() {
     setLoadingPayments(true);
     try {
       const res = await api.unifiedConnectors.executeAction('quickbooks', 'list_payments', { limit: 50 });
-      if (res.success && res.data?.data) setPayments(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setPayments(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setLoadingPayments(false); }
   }, []);

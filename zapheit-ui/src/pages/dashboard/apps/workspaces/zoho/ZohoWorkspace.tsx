@@ -56,7 +56,9 @@ export default function ZohoWorkspace() {
     setLoadingEmployees(true);
     try {
       const res = await api.unifiedConnectors.executeAction('zoho-people', 'list_employees', { limit: 50 });
-      if (res.success && res.data?.data) setEmployees(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setEmployees(Array.isArray(_list) ? _list : []);
       setConnectionStatus('connected');
     } catch {
       setConnectionStatus('disconnected');
@@ -69,7 +71,9 @@ export default function ZohoWorkspace() {
     setLoadingLeave(true);
     try {
       const res = await api.unifiedConnectors.executeAction('zoho-people', 'list_leave_requests', { limit: 50 });
-      if (res.success && res.data?.data) setLeaveRequests(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setLeaveRequests(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setLoadingLeave(false); }
   }, []);
@@ -78,7 +82,9 @@ export default function ZohoWorkspace() {
     setLoadingAttendance(true);
     try {
       const res = await api.unifiedConnectors.executeAction('zoho-people', 'list_attendance', { limit: 50 });
-      if (res.success && res.data?.data) setAttendance(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setAttendance(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setLoadingAttendance(false); }
   }, []);

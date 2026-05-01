@@ -57,7 +57,9 @@ export default function NotionWorkspace() {
     setLoadingDatabases(true);
     try {
       const res = await api.unifiedConnectors.executeAction('notion', 'list_databases', {});
-      if (res.success && res.data?.data) setDatabases(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setDatabases(Array.isArray(_list) ? _list : []);
       setConnectionStatus('connected');
     } catch {
       setConnectionStatus('disconnected');
@@ -70,7 +72,9 @@ export default function NotionWorkspace() {
     setLoadingPages(true);
     try {
       const res = await api.unifiedConnectors.executeAction('notion', 'search', { filter: { property: 'object', value: 'page' }, page_size: 50 });
-      if (res.success && res.data?.data) setPages(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setPages(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setLoadingPages(false); }
   }, []);
@@ -80,7 +84,9 @@ export default function NotionWorkspace() {
     setSearching(true);
     try {
       const res = await api.unifiedConnectors.executeAction('notion', 'search', { query, page_size: 20 });
-      if (res.success && res.data?.data) setSearchResults(res.data.data);
+      const _inner = res.data as any;
+      const _list = _inner?.data?.data ?? _inner?.data;
+      if (res.success) setSearchResults(Array.isArray(_list) ? _list : []);
     } catch { /* empty */ }
     finally { setSearching(false); }
   }, []);

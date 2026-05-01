@@ -428,7 +428,8 @@ export default function GreythrWorkspace() {
     setLoading((p) => ({ ...p, leave: true }));
     try {
       const res = await api.unifiedConnectors.executeAction('greythr', 'list_leave_requests', {});
-      if (res.success && res.data?.data?.requests) setLeaves(res.data.data.requests);
+      const _gi = res.data as any; const _reqs = _gi?.data?.data?.requests ?? _gi?.data?.requests;
+      if (res.success && _reqs) setLeaves(Array.isArray(_reqs) ? _reqs : []);
       else setLeaves(MOCK_LEAVES);
     } catch {
       setLeaves(MOCK_LEAVES);
@@ -441,7 +442,8 @@ export default function GreythrWorkspace() {
     setLoading((p) => ({ ...p, payroll: true }));
     try {
       const res = await api.unifiedConnectors.executeAction('greythr', 'get_payroll_summary', {});
-      if (res.success && res.data?.data) setPayroll(res.data.data as PayrollSummary);
+      const _pi = res.data as any; const _pr = _pi?.data?.data ?? _pi?.data;
+      if (res.success && _pr) setPayroll(_pr as PayrollSummary);
       else setPayroll(MOCK_PAYROLL);
     } catch {
       setPayroll(MOCK_PAYROLL);
