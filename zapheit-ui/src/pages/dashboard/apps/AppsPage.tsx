@@ -870,7 +870,7 @@ function AppCard({
           ) : isError ? (
             <div className="flex flex-col items-end gap-1.5">
               <button
-                onClick={() => app.auth === 'oauth' ? void connect() : onOpenWizard(app, backendUnified)}
+                onClick={() => onOpenWizard(app, backendUnified)}
                 disabled={busy}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold transition-colors disabled:opacity-40"
               >
@@ -891,15 +891,6 @@ function AppCard({
               className="px-3 py-1.5 rounded-xl border border-amber-400/20 bg-amber-500/10 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition-colors"
             >
               Request Access
-            </button>
-          ) : app.auth === 'oauth' ? (
-            <button
-              onClick={() => void connect()}
-              disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors disabled:opacity-40"
-            >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Connect
             </button>
           ) : (
             <button
@@ -1287,10 +1278,16 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           </div>
         )}
 
-        {/* Connected highlight strip */}
+        {/* Your Apps — personalized landing strip for returning users */}
         {connected.length > 0 && !search && !stackFilter && (
           <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4">
-            <p className="text-xs font-semibold text-emerald-400 mb-3">Connected ({connected.length})</p>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <p className="text-xs font-bold text-white uppercase tracking-widest">Your Apps</p>
+              <span className="text-xs text-emerald-400 font-medium">{connected.length} connected</span>
+              {needsAttention.length > 0 && (
+                <span className="text-xs text-amber-400">· {needsAttention.length} need{needsAttention.length === 1 ? 's' : ''} attention</span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               {connected.map(({ def }) => (
                 <button
@@ -1314,6 +1311,22 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Intent picker — between Your Apps and Browse for returning users; top for new users */}
+        {!search && !stackFilter && activeCategory === 'all' && (
+          <IntentPicker onSelect={(bundleId) => {
+            const stack = STACKS.find((s) => s.id === bundleId);
+            if (stack) { setActiveWizard(stack); } else { setSearch(bundleId); }
+          }} />
+        )}
+
+        {/* Browse all apps divider — shown when user has connected apps */}
+        {connected.length > 0 && !search && !stackFilter && activeCategory === 'all' && (
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest shrink-0">Browse all apps</p>
+            <div className="flex-1 h-px bg-white/[0.06]" />
           </div>
         )}
 
@@ -1373,14 +1386,6 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               ))}
             </div>
           </div>
-        )}
-
-        {/* Intent picker — shown on All tab with no filters */}
-        {!search && !stackFilter && activeCategory === 'all' && (
-          <IntentPicker onSelect={(bundleId) => {
-            const stack = STACKS.find((s) => s.id === bundleId);
-            if (stack) { setActiveWizard(stack); } else { setSearch(bundleId); }
-          }} />
         )}
 
         {/* App list */}
