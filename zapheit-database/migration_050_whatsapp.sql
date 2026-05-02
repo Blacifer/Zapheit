@@ -28,10 +28,10 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
   UNIQUE (waba_id, wa_message_id)
 );
 
-CREATE INDEX idx_wa_messages_org        ON whatsapp_messages(organization_id);
-CREATE INDEX idx_wa_messages_thread     ON whatsapp_messages(organization_id, thread_phone, created_at DESC);
-CREATE INDEX idx_wa_messages_status     ON whatsapp_messages(organization_id, status);
-CREATE INDEX idx_wa_messages_created    ON whatsapp_messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_org        ON whatsapp_messages(organization_id);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_thread     ON whatsapp_messages(organization_id, thread_phone, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_status     ON whatsapp_messages(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_created    ON whatsapp_messages(created_at DESC);
 
 -- ─── WhatsApp Contacts ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS whatsapp_contacts (
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_contacts (
   UNIQUE (organization_id, phone)
 );
 
-CREATE INDEX idx_wa_contacts_org        ON whatsapp_contacts(organization_id);
-CREATE INDEX idx_wa_contacts_labels     ON whatsapp_contacts USING gin(labels);
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_org        ON whatsapp_contacts(organization_id);
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_labels     ON whatsapp_contacts USING gin(labels);
 
 -- ─── WhatsApp Templates ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS whatsapp_templates (
@@ -77,8 +77,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_templates (
   UNIQUE (organization_id, wa_template_id)
 );
 
-CREATE INDEX idx_wa_templates_org       ON whatsapp_templates(organization_id);
-CREATE INDEX idx_wa_templates_status    ON whatsapp_templates(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_wa_templates_org       ON whatsapp_templates(organization_id);
+CREATE INDEX IF NOT EXISTS idx_wa_templates_status    ON whatsapp_templates(organization_id, status);
 
 -- ─── Row Level Security ─────────────────────────────────────────────
 ALTER TABLE whatsapp_messages  ENABLE ROW LEVEL SECURITY;
