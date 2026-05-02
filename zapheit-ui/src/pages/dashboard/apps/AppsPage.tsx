@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Loader2, ChevronDown, X, ExternalLink,
   Search, CheckCircle2, AlertCircle, Clock, ArrowRight, RefreshCw,
-  Shield, BarChart3, Zap,
+  Shield, BarChart3, Zap, GitCompare,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -388,6 +388,12 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
           >
             <Zap className="w-3.5 h-3.5" /> Build Your Stack
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/apps/compare')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-500/25 bg-slate-500/10 text-slate-300 text-xs font-medium hover:bg-slate-500/20 transition-colors"
+          >
+            <GitCompare className="w-3.5 h-3.5" /> Compare
           </button>
         </div>
 
