@@ -53,6 +53,7 @@ const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
 const AppsPage = lazy(() => import('./dashboard/apps'));
 const PermissionMatrix = lazy(() => import('./dashboard/apps/PermissionMatrix'));
 const AppAnalytics = lazy(() => import('./dashboard/apps/AppAnalytics'));
+const BuildStackWizard = lazy(() => import('./dashboard/apps/BuildStackWizard'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
@@ -1212,6 +1213,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/analytics" element={
                     <SectionErrorBoundary fallbackMessage="Analytics failed to load">
                       <AppAnalytics />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="apps/build-stack" element={
+                    <SectionErrorBoundary fallbackMessage="Stack wizard failed to load">
+                      <BuildStackWizard />
                     </SectionErrorBoundary>
                   } />
                   <Route path="apps/slack/workspace" element={<WorkspaceErrorBoundary><SlackWorkspace /></WorkspaceErrorBoundary>} />

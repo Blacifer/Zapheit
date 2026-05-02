@@ -98,7 +98,7 @@ export default function PermissionMatrix() {
       try {
         const [agentRes, integRes] = await Promise.all([
           api.agents.getAll(),
-          api.integrations.list(),
+          api.integrations.getAll(),
         ]);
 
         const loadedAgents: AIAgent[] = Array.isArray(agentRes.data) ? agentRes.data : [];

@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Loader2, ChevronDown, X, ExternalLink,
   Search, CheckCircle2, AlertCircle, Clock, ArrowRight, RefreshCw,
-  Shield, BarChart3,
+  Shield, BarChart3, Zap,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -382,6 +382,12 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 text-blue-300 text-xs font-medium hover:bg-blue-500/20 transition-colors"
           >
             <BarChart3 className="w-3.5 h-3.5" /> Analytics
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/apps/build-stack')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+          >
+            <Zap className="w-3.5 h-3.5" /> Build Your Stack
           </button>
         </div>
 
