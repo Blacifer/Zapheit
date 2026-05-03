@@ -285,7 +285,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     featured: false,
     colorHex: '#1AB4D7',
     logoLetter: 'X',
-    comingSoon: true,
   },
 
   // --- Support ---
@@ -1389,7 +1388,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Popular',
     colorHex: '#2D8CFF',
     logoLetter: 'Z',
-    comingSoon: true,
   },
   {
     id: 'google-chat',
@@ -1439,10 +1437,7 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Fetch pipeline status', 'Read MRs', 'Open issues', 'Monitor CI failures'],
     setupTimeMinutes: 4,
     bundleIds: ['devops-stack'],
-    installMethod: 'api_key',
-    requiredFields: [
-      { name: 'access_token', label: 'Personal Access Token', type: 'password', placeholder: 'glpat-...', required: true },
-    ],
+    installMethod: 'oauth2',
     installCount: 4600,
     featured: false,
     badge: 'Verified',
@@ -1836,7 +1831,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#625DF5',
     logoLetter: 'L',
-    comingSoon: true,
   },
   {
     id: 'whatsapp',
@@ -2322,7 +2316,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#F24E1E',
     logoLetter: 'F',
-    comingSoon: true,
   },
   {
     id: 'notion',
@@ -2362,7 +2355,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#00C4CC',
     logoLetter: 'C',
-    comingSoon: true,
   },
   {
     id: 'calendly',
@@ -2381,7 +2373,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#006BFF',
     logoLetter: 'C',
-    comingSoon: true,
   },
   {
     id: 'miro',
@@ -2400,7 +2391,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#FFD02F',
     logoLetter: 'M',
-    comingSoon: true,
   },
   {
     id: 'asana',
@@ -2419,7 +2409,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#FC636B',
     logoLetter: 'A',
-    comingSoon: true,
   },
   {
     id: 'monday',
@@ -2438,7 +2427,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     badge: 'Verified',
     colorHex: '#FF3D57',
     logoLetter: 'M',
-    comingSoon: true,
   },
   {
     id: 'zapier',
