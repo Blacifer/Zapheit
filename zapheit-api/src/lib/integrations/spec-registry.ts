@@ -1871,16 +1871,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://auth.calendly.com/oauth/authorize',
       tokenUrl: 'https://auth.calendly.com/oauth/token',
-      scopes: [
-        'availability:read',
-        'event_types:read',
-        'scheduled_events:read',
-        'scheduled_events:write',
-        'scheduling_links:write',
-        'shares:write',
-        'users:read',
-        'organizations:read',
-      ],
+      scopes: ['default'],
       redirectPath: `${API_CALLBACK_BASE}/calendly`,
     },
     endpoints: {
