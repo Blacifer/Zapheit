@@ -1578,7 +1578,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://gitlab.com/oauth/authorize',
       tokenUrl: 'https://gitlab.com/oauth/token',
-      scopes: ['api', 'read_user', 'read_repository'],
+      scopes: ['read_api', 'read_user', 'openid', 'profile', 'email'],
       redirectPath: `${API_CALLBACK_BASE}/gitlab`,
     },
     endpoints: {
