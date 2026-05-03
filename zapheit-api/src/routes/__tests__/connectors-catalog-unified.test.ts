@@ -280,9 +280,9 @@ describe('Connectors catalog unified canonicalization', () => {
     expect(zohoPeopleRows[0].readiness_status).toBe('not_configured');
     expect(zohoPeopleRows[0].connector_certification).toMatchObject({
       connectorId: 'zoho-people',
-      certified: false,
-      state: 'unavailable',
-      label: 'Certification required',
+      certified: true,
+      state: 'approval_gated',
+      label: 'Certified with governed writes',
     });
 
     expect(zohoLearnRows).toHaveLength(1);
