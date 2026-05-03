@@ -1636,7 +1636,17 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://www.figma.com/oauth',
       tokenUrl: 'https://www.figma.com/api/oauth/token',
-      scopes: ['files:read', 'file_comments:write'],
+      scopes: [
+        'current_user:read',
+        'file_content:read',
+        'file_metadata:read',
+        'file_comments:read',
+        'file_comments:write',
+        'file_versions:read',
+        'library_assets:read',
+        'library_content:read',
+        'team_library_content:read',
+      ],
       redirectPath: `${API_CALLBACK_BASE}/figma`,
     },
     endpoints: {
