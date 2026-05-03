@@ -3153,6 +3153,60 @@ router.get('/oauth/callback/:service', async (req, res) => {
       } else if (service === 'hubspot') {
         clientIdEnv = 'HUBSPOT_CLIENT_ID';
         clientSecretEnv = 'HUBSPOT_CLIENT_SECRET';
+      } else if (service === 'zoom') {
+        clientIdEnv = 'ZOOM_CLIENT_ID';
+        clientSecretEnv = 'ZOOM_CLIENT_SECRET';
+      } else if (service === 'gitlab') {
+        clientIdEnv = 'GITLAB_CLIENT_ID';
+        clientSecretEnv = 'GITLAB_CLIENT_SECRET';
+      } else if (service === 'xero') {
+        clientIdEnv = 'XERO_CLIENT_ID';
+        clientSecretEnv = 'XERO_CLIENT_SECRET';
+      } else if (service === 'figma') {
+        clientIdEnv = 'FIGMA_CLIENT_ID';
+        clientSecretEnv = 'FIGMA_CLIENT_SECRET';
+      } else if (service === 'asana') {
+        clientIdEnv = 'ASANA_CLIENT_ID';
+        clientSecretEnv = 'ASANA_CLIENT_SECRET';
+      } else if (service === 'monday') {
+        clientIdEnv = 'MONDAY_CLIENT_ID';
+        clientSecretEnv = 'MONDAY_CLIENT_SECRET';
+      } else if (service === 'mailchimp') {
+        clientIdEnv = 'MAILCHIMP_CLIENT_ID';
+        clientSecretEnv = 'MAILCHIMP_CLIENT_SECRET';
+      } else if (service === 'box') {
+        clientIdEnv = 'BOX_CLIENT_ID';
+        clientSecretEnv = 'BOX_CLIENT_SECRET';
+      } else if (service === 'dropbox_business') {
+        clientIdEnv = 'DROPBOX_CLIENT_ID';
+        clientSecretEnv = 'DROPBOX_CLIENT_SECRET';
+      } else if (service === 'google_chat') {
+        clientIdEnv = 'GOOGLE_CLIENT_ID';
+        clientSecretEnv = 'GOOGLE_CLIENT_SECRET';
+      } else if (service === 'calendly') {
+        clientIdEnv = 'CALENDLY_CLIENT_ID';
+        clientSecretEnv = 'CALENDLY_CLIENT_SECRET';
+      } else if (service === 'miro') {
+        clientIdEnv = 'MIRO_CLIENT_ID';
+        clientSecretEnv = 'MIRO_CLIENT_SECRET';
+      } else if (service === 'canva') {
+        clientIdEnv = 'CANVA_CLIENT_ID';
+        clientSecretEnv = 'CANVA_CLIENT_SECRET';
+      } else if (service === 'zoho_crm') {
+        clientIdEnv = 'ZOHO_CLIENT_ID';
+        clientSecretEnv = 'ZOHO_CLIENT_SECRET';
+      } else if (service === 'aircall') {
+        clientIdEnv = 'AIRCALL_CLIENT_ID';
+        clientSecretEnv = 'AIRCALL_CLIENT_SECRET';
+      } else if (service === 'loom') {
+        clientIdEnv = 'LOOM_CLIENT_ID';
+        clientSecretEnv = 'LOOM_CLIENT_SECRET';
+      } else if (service === 'gorgias') {
+        clientIdEnv = 'GORGIAS_CLIENT_ID';
+        clientSecretEnv = 'GORGIAS_CLIENT_SECRET';
+      } else if (service === 'azure' || service === 'microsoft_entra' || service === 'power_bi') {
+        clientIdEnv = 'MICROSOFT_CLIENT_ID';
+        clientSecretEnv = 'MICROSOFT_CLIENT_SECRET';
       } else {
         throw new Error('OAuth provider not implemented');
       }
