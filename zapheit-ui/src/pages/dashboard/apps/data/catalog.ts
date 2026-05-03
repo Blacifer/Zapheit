@@ -171,7 +171,7 @@ export const APP_CATALOG: AppDef[] = [
   },
   {
     appId: 'linkedin', serviceId: 'linkedin', name: 'LinkedIn Recruiter',
-    description: 'Search candidates, send InMails, and post jobs on the world\'s largest professional network.',
+    description: 'Connect LinkedIn to verify candidate profiles and pull basic professional data. Note: InMail, candidate search, and job posting require LinkedIn Talent Solutions partner access.',
     category: 'recruitment', auth: 'oauth', logoLetter: 'in', colorHex: '#0A66C2',
     productionStatus: 'production_ready',
     workspaceRoute: 'apps/linkedin/workspace', suggestedAgent: 'Hiring Agent',

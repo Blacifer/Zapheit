@@ -238,7 +238,7 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
     id: 'linkedin',
     name: 'LinkedIn',
     category: 'RECRUITMENT',
-    description: 'Talent intelligence, skill mapping, and professional network analysis.',
+    description: 'Verify candidate profiles and pull basic professional data via LinkedIn OAuth. Full recruiter features (InMail, search, job posting) require LinkedIn Talent Solutions partner access.',
     authType: 'oauth2',
     tags: ['GLOBAL', 'RECRUITMENT', 'AI-READY'],
     status: 'READY',
