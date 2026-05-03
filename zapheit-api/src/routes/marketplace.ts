@@ -649,7 +649,6 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     featured: false,
     colorHex: '#6B4FBB',
     logoLetter: 'F',
-    comingSoon: true,
   },
 
   // --- HR & Payroll (new) ---
