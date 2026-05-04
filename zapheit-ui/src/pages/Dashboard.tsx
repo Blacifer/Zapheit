@@ -82,6 +82,10 @@ const FreshdeskWorkspace = lazy(() => import('./dashboard/apps/workspaces/freshd
 const CashfreeWorkspace = lazy(() => import('./dashboard/apps/workspaces/cashfree/CashfreeWorkspace'));
 const NaukriWorkspace = lazy(() => import('./dashboard/apps/workspaces/naukri/NaukriWorkspace'));
 const RecruitmentWorkspace = lazy(() => import('./dashboard/apps/workspaces/recruitment/RecruitmentWorkspace'));
+const CalendlyWorkspace = lazy(() => import('./dashboard/apps/workspaces/calendly/CalendlyWorkspace'));
+const FigmaWorkspace = lazy(() => import('./dashboard/apps/workspaces/figma/FigmaWorkspace'));
+const MiroWorkspace = lazy(() => import('./dashboard/apps/workspaces/miro/MiroWorkspace'));
+const AsanaWorkspace = lazy(() => import('./dashboard/apps/workspaces/asana/AsanaWorkspace'));
 const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
 const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
 
@@ -1245,6 +1249,10 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/cashfree/workspace" element={<WorkspaceErrorBoundary><CashfreeWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/naukri/workspace" element={<WorkspaceErrorBoundary><NaukriWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/workspaces/recruitment" element={<WorkspaceErrorBoundary><RecruitmentWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/calendly/workspace" element={<WorkspaceErrorBoundary><CalendlyWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/figma/workspace" element={<WorkspaceErrorBoundary><FigmaWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/miro/workspace" element={<WorkspaceErrorBoundary><MiroWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/asana/workspace" element={<WorkspaceErrorBoundary><AsanaWorkspace /></WorkspaceErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={
                     <SectionErrorBoundary fallbackMessage="Hubs failed to load">

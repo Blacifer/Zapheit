@@ -860,6 +860,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Project management and task tracking — organize work, automate workflows, and hit deadlines.',
     category: 'productivity', auth: 'oauth', logoLetter: 'AS', colorHex: '#F06A6A',
     productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
+    workspaceRoute: 'apps/asana/workspace',
   },
   {
     appId: 'monday', serviceId: 'monday', name: 'Monday.com',
@@ -872,6 +873,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Read designs, audit brand consistency, and post review comments. Note: Figma\'s API is read-only for canvas content — agents cannot create or edit designs.',
     category: 'productivity', auth: 'oauth', logoLetter: 'FG', colorHex: '#F24E1E',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/figma/workspace',
   },
   {
     appId: 'canva', serviceId: 'canva', name: 'Canva',
@@ -884,12 +886,14 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Automated scheduling — book meetings without back-and-forth emails.',
     category: 'productivity', auth: 'oauth', logoLetter: 'CL', colorHex: '#006BFF',
     productionStatus: 'production_ready', suggestedAgent: 'HR Assistant',
+    workspaceRoute: 'apps/calendly/workspace',
   },
   {
     appId: 'miro', serviceId: 'miro', name: 'Miro',
     description: 'Online collaborative whiteboard — brainstorm, plan, and collaborate visually.',
     category: 'productivity', auth: 'oauth', logoLetter: 'MI', colorHex: '#FFD02F',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/miro/workspace',
   },
   {
     appId: 'shopify', serviceId: 'shopify', name: 'Shopify',
