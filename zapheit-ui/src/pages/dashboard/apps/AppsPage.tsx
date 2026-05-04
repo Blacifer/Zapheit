@@ -114,7 +114,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [activeWizard, setActiveWizard] = useState<AppStack | null>(null);
   const [wizardApp, setWizardApp] = useState<{ def: AppDef; unified: UnifiedApp } | null>(null);
 
-  const { allApps, loading, reload, markDisconnected } = useAppsData(agents);
+  const { allApps, loading, reload, markConnected, markDisconnected } = useAppsData(agents);
   const hasEverConnected = useRef(false);
 
   // Handle OAuth callback — supports both integrations flow (?status=&service=)
@@ -134,6 +134,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       needsClean = true;
       if (status === 'connected') {
         void reload().then(() => {
+          markConnected(service);
           const app = APP_CATALOG.find((a) => a.serviceId === service || a.appId === service);
           toast.success(`${app?.name ?? service} connected`);
           if (app?.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
@@ -166,7 +167,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         return p;
       }, { replace: true });
     }
-  }, [searchParams, setSearchParams, reload, onNavigate]);
+  }, [searchParams, setSearchParams, reload, markConnected, onNavigate]);
 
   // Merge backend status
   const apps = useMemo(() => APP_CATALOG.map((def) => {
