@@ -1635,7 +1635,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     priority: 4,
     oauthConfig: {
       authorizationUrl: 'https://www.figma.com/oauth',
-      tokenUrl: 'https://www.figma.com/api/oauth/token',
+      tokenUrl: 'https://api.figma.com/v1/oauth/token',
       scopes: [
         'current_user:read',
         'file_content:read',
