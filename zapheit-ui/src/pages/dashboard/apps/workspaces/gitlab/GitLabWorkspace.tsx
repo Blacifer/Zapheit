@@ -223,7 +223,7 @@ export default function GitLabWorkspace() {
     { id: 'mrs',        label: 'Merge Requests',  Icon: GitMerge },
     { id: 'issues',     label: 'Issues',          Icon: CircleDot },
     { id: 'activity',   label: 'Activity',        Icon: Activity },
-    { id: 'automation', label: 'Automation',       Icon: Bot },
+    { id: 'automation', label: 'Automation',       Icon: RefreshCw },
   ];
 
   return (

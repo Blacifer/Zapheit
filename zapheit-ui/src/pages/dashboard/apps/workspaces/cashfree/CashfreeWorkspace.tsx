@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, IndianRupee, Send, Link2, Activity,
   RefreshCw, Loader2, CheckCircle2, XCircle, Clock,
-  AlertCircle, TrendingUp, TrendingDown, ExternalLink, Copy,
+  AlertCircle, TrendingUp, TrendingDown, ExternalLink, Copy, Star,
 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
@@ -11,12 +11,11 @@ import { toast } from '../../../../../lib/toast';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
 import { SharedAutomationTab } from '../shared/SharedAutomationTab';
-import { IndianRupee as PaymentIcon, XCircle, RefreshCw as RetryIcon, Star } from 'lucide-react';
 
 const CASHFREE_TRIGGERS = {
-  payment_received:     { label: 'Payment received',     description: 'Agent processes or logs a new successful payment', Icon: PaymentIcon },
+  payment_received:     { label: 'Payment received',     description: 'Agent processes or logs a new successful payment', Icon: IndianRupee },
   payment_failed:       { label: 'Payment failed',       description: 'Agent retries or notifies on failed payment',       Icon: XCircle },
-  refund_requested:     { label: 'Refund requested',     description: 'Agent validates and processes refund requests',     Icon: RetryIcon },
+  refund_requested:     { label: 'Refund requested',     description: 'Agent validates and processes refund requests',     Icon: RefreshCw },
   subscription_created: { label: 'Subscription created', description: 'Agent onboards or notifies new subscribers',        Icon: Star },
 };
 const CASHFREE_EXAMPLES = [
