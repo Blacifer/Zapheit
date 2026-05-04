@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../../../../lib/api-client';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp } from '../types';
@@ -8,15 +8,36 @@ import { FEATURED_IDS, CATEGORIES } from '../constants';
 export function useAppsData(agents: AIAgent[] = []) {
   const [rawCatalog, setRawCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Tracks services just connected via OAuth — survives subsequent reloads for 15 s
+  const pinnedConnected = useRef<Set<string>>(new Set());
+
+  const applyPins = useCallback((entries: any[]) =>
+    entries.map((entry) => {
+      const entryId = entry.app_key || entry.id;
+      if (pinnedConnected.current.has(entryId) && !entry.is_connected) {
+        return {
+          ...entry,
+          installed: true,
+          is_connected: true,
+          connectionStatus: 'connected',
+          connection_status: 'connected',
+          health_status: 'healthy',
+        };
+      }
+      return entry;
+    }),
+  []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const catalogRes = await api.unifiedConnectors.getCatalog();
-      if (catalogRes.success && Array.isArray(catalogRes.data)) setRawCatalog(catalogRes.data);
+      if (catalogRes.success && Array.isArray(catalogRes.data)) {
+        setRawCatalog(applyPins(catalogRes.data));
+      }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, []);
+  }, [applyPins]);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
@@ -48,8 +69,10 @@ export function useAppsData(agents: AIAgent[] = []) {
   const errorCount = connectedList.filter((c) => c.status === 'error' || c.status === 'expired').length;
   const governedCount = connectedList.filter((c) => c.maturity === 'governed').length;
 
-  // Optimistic update helpers
   const markConnected = useCallback((connectorId: string) => {
+    // Pin so subsequent loadData calls don't flip it back to disconnected
+    pinnedConnected.current.add(connectorId);
+    setTimeout(() => pinnedConnected.current.delete(connectorId), 15_000);
     setRawCatalog((prev) =>
       prev.map((entry) => {
         const entryId = entry.app_key || entry.id;
@@ -60,13 +83,14 @@ export function useAppsData(agents: AIAgent[] = []) {
           is_connected: true,
           connectionStatus: 'connected',
           connection_status: 'connected',
-          health_status: entry.supports_health_test ? 'healthy' : entry.health_status,
+          health_status: 'healthy',
         };
       }),
     );
   }, []);
 
   const markDisconnected = useCallback((connectorId: string) => {
+    pinnedConnected.current.delete(connectorId);
     const aliases = new Set([connectorId, connectorId.replace(/_/g, '-'), connectorId.replace(/-/g, '_')]);
     setRawCatalog((prev) =>
       prev.map((entry) => {

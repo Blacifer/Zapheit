@@ -133,8 +133,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
     if (status && service) {
       needsClean = true;
       if (status === 'connected') {
+        markConnected(service);
         void reload().then(() => {
-          markConnected(service);
           const app = APP_CATALOG.find((a) => a.serviceId === service || a.appId === service);
           toast.success(`${app?.name ?? service} connected`);
           if (app?.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
