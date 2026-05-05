@@ -3708,7 +3708,7 @@ router.delete('/scrapers/:id', requirePermission('connectors.manage'), async (re
 // ---------------------------------------------------------------------------
 
 import { PARTNER_APP_CATALOG, getInstalledAppHealth } from './marketplace';
-import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
+import { IMPLEMENTED_INTEGRATIONS } from '../lib/integrations/spec-registry';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 
 type ProductionReadinessStatus = 'not_configured' | 'needs_policy' | 'ready' | 'deployed' | 'degraded' | 'blocked';
@@ -4029,7 +4029,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
     }
 
     // Spec-driven integrations not already in marketplace catalog
-    for (const spec of PHASE1_INTEGRATIONS) {
+    for (const spec of IMPLEMENTED_INTEGRATIONS) {
       const canonicalAppKey = toCanonicalAppKey(spec.id);
       const preferredSource = PREFERRED_SOURCE_BY_CANONICAL[canonicalAppKey] || 'marketplace';
       if (marketplaceIds.has(canonicalAppKey) && preferredSource !== 'integration') continue; // marketplace version wins unless integration is preferred
