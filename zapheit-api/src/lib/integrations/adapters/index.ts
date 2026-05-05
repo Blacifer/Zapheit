@@ -7,6 +7,7 @@ import { Phase5Adapters } from './phase5';
 import { Phase6Adapters } from './phase6';
 import { Phase7Adapters } from './phase7';
 import { Phase8Adapters } from './phase8';
+import { NewOAuthAdapters } from './phase-new-oauth';
 
 export const Adapters: Record<string, IntegrationAdapter> = {
   ...Phase1Adapters,
@@ -17,6 +18,7 @@ export const Adapters: Record<string, IntegrationAdapter> = {
   ...Phase6Adapters,
   ...Phase7Adapters,
   ...Phase8Adapters,
+  ...NewOAuthAdapters,
 };
 
 export function getAdapter(serviceId: string): IntegrationAdapter | undefined {
