@@ -117,6 +117,17 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const { allApps, loading, reload, markConnected, markDisconnected } = useAppsData(agents);
   const hasEverConnected = useRef(false);
 
+  // Capture the just-connected service at mount time (before setSearchParams wipes the URL).
+  // This ref persists for the component lifetime and acts as a guaranteed fallback when the
+  // first API response races against the URL-param cleanup in the OAuth callback effect.
+  const justConnectedService = useRef<string | null>((() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const svc = p.get('service') || p.get('provider');
+      return (svc && p.get('status') === 'connected') ? svc : null;
+    } catch { return null; }
+  })());
+
   // Handle OAuth callback — supports both integrations flow (?status=&service=)
   // and marketplace flow (?marketplace_connected=&marketplace_app= / ?marketplace_error=)
   useEffect(() => {
@@ -175,7 +186,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       const sid = getAppServiceId(a);
       return a.appId === def.appId || sid === def.serviceId;
     }) ?? null;
-    return { def, status: resolveStatus(def, backendUnified), backendApp: backendUnified, backendUnified };
+    let status = resolveStatus(def, backendUnified);
+    // If this service just completed OAuth (read at mount time, before URL params were cleared),
+    // force it to "connected" so the card flips immediately regardless of API timing.
+    const jcs = justConnectedService.current;
+    if (status !== 'connected' && jcs && (def.serviceId === jcs || def.appId === jcs)) {
+      status = 'connected';
+    }
+    return { def, status, backendApp: backendUnified, backendUnified };
   }), [allApps]);
 
   // Fuse.js instance — rebuilt only when apps list changes

@@ -8,6 +8,8 @@ import { FEATURED_IDS, CATEGORIES } from '../constants';
 export function useAppsData(agents: AIAgent[] = []) {
   const [rawCatalog, setRawCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Only show the skeleton on the very first fetch — reloads update silently in the background.
+  const initialLoadDone = useRef(false);
   // Tracks services just connected via OAuth — survives subsequent reloads for 15 s.
   // Initialized from sessionStorage so the pin is already set before the first loadData fires
   // (the OAuth redirect HTML writes the service name to sessionStorage before navigating back).
@@ -38,14 +40,17 @@ export function useAppsData(agents: AIAgent[] = []) {
   []);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (!initialLoadDone.current) setLoading(true);
     try {
       const catalogRes = await api.unifiedConnectors.getCatalog();
       if (catalogRes.success && Array.isArray(catalogRes.data)) {
         setRawCatalog(applyPins(catalogRes.data));
       }
     } catch { /* silent */ }
-    finally { setLoading(false); }
+    finally {
+      initialLoadDone.current = true;
+      setLoading(false);
+    }
   }, [applyPins]);
 
   useEffect(() => { void loadData(); }, [loadData]);
