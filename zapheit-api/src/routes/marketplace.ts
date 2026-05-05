@@ -2523,55 +2523,60 @@ type InstalledAppHealth = {
 };
 
 export async function getInstalledAppHealth(orgId: string, userJwt?: string): Promise<Map<string, InstalledAppHealth>> {
-  try {
-    const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
-    // Prefer user-scoped auth (JWT) over service role key so the health map works
-    // even when SUPABASE_SERVICE_KEY is unavailable. Falls back to service role if no JWT.
-    const queryIntegrations = (params: URLSearchParams) =>
-      userJwt
-        ? supabaseRestAsUser(userJwt, 'integrations', params)
-        : supabaseRestAsService('integrations', params);
-    const rows = (await queryIntegrations(new URLSearchParams({
-      organization_id: eq(orgId),
-      status: 'neq.waitlisted',
-      select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg',
-    }))) as Array<{
-      service_type: string;
-      status: string;
-      connected_at: string | null;
-      last_sync_at: string | null;
-      last_error_at: string | null;
-      last_error_msg: string | null;
-    }>;
-    const map = new Map<string, InstalledAppHealth>();
-    (rows || []).forEach((r) => {
-      const normalizedStatus = String(r.status || '').toLowerCase();
-      if (!activeStatuses.has(normalizedStatus)) return;
-      // OAuth initiation/callback failures can persist an `error` row before the app has ever
-      // been connected. Those should not be shown as installed/fixable connections in the apps UI.
-      if ((normalizedStatus === 'error' || normalizedStatus === 'expired') && !r.connected_at) return;
-      // All spec-driven connections are treated as non-marketplace (marketplace_app flag is set
-      // only via the marketplace install flow which sets metadata.marketplace_app='true').
-      // We no longer select metadata here to avoid query failures when the column is missing.
-      const isMarketplace = false;
-      const nextValue: InstalledAppHealth = {
-        service_type: r.service_type,
-        status: r.status,
-        last_sync_at: r.last_sync_at,
-        last_error_at: r.last_error_at,
-        last_error_msg: r.last_error_msg,
-        connectionSource: isMarketplace ? 'marketplace' : 'connections',
-      };
-      for (const alias of toServiceAliases(r.service_type)) {
-        const existing = map.get(alias);
-        if (existing && existing.connectionSource === 'marketplace' && !isMarketplace) continue;
-        map.set(alias, nextValue);
-      }
-    });
-    return map;
-  } catch {
-    return new Map();
+  const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
+  const params = new URLSearchParams({
+    organization_id: eq(orgId),
+    status: 'neq.waitlisted',
+    select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg',
+  });
+
+  // Try user-scoped auth first (same path as GET /integrations which works correctly),
+  // then fall back to service role key if userJwt was not provided or user-auth fails.
+  let rows: Array<{
+    service_type: string;
+    status: string;
+    connected_at: string | null;
+    last_sync_at: string | null;
+    last_error_at: string | null;
+    last_error_msg: string | null;
+  }> | null = null;
+
+  if (userJwt) {
+    try {
+      rows = await supabaseRestAsUser(userJwt, 'integrations', params);
+    } catch (e: any) {
+      logger.warn('getInstalledAppHealth: user-jwt query failed, trying service role', { error: e?.message });
+    }
   }
+  if (rows == null) {
+    try {
+      rows = await supabaseRestAsService('integrations', params);
+    } catch (e: any) {
+      logger.warn('getInstalledAppHealth: service-role query also failed', { error: e?.message });
+      return new Map();
+    }
+  }
+
+  const map = new Map<string, InstalledAppHealth>();
+  (rows || []).forEach((r) => {
+    const normalizedStatus = String(r.status || '').toLowerCase();
+    if (!activeStatuses.has(normalizedStatus)) return;
+    // OAuth initiation/callback failures can persist an `error` row before the app has ever
+    // been connected. Those should not be shown as installed/fixable connections in the apps UI.
+    if ((normalizedStatus === 'error' || normalizedStatus === 'expired') && !r.connected_at) return;
+    const nextValue: InstalledAppHealth = {
+      service_type: r.service_type,
+      status: r.status,
+      last_sync_at: r.last_sync_at,
+      last_error_at: r.last_error_at,
+      last_error_msg: r.last_error_msg,
+      connectionSource: 'connections',
+    };
+    for (const alias of toServiceAliases(r.service_type)) {
+      map.set(alias, nextValue);
+    }
+  });
+  return map;
 }
 
 function toServiceAliases(serviceType: string) {

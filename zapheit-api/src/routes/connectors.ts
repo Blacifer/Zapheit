@@ -3767,7 +3767,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
     // Load installed status for all integrations in this org.
     // Pass the user's JWT so the query runs under user-scoped auth (same path as
     // GET /integrations) instead of depending on the service role key.
-    const userJwt = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || undefined;
+    const userJwt = (req as any).userJwt as string | undefined;
     const healthMap = await getInstalledAppHealth(orgId, userJwt);
     const openApiSpecs = (await supabaseRestAsService('integration_openapi_specs', new URLSearchParams({
       organization_id: eqFilter(orgId),
