@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { logger } from '../lib/logger';
 import { encryptSecret } from '../lib/integrations/encryption';
-import { eq, supabaseRestAsService } from '../lib/supabase-rest';
+import { eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
 import { installApp, uninstallApp } from '../services/marketplace-service';
 
 const router = express.Router();
@@ -2522,14 +2522,16 @@ type InstalledAppHealth = {
   connectionSource: 'marketplace' | 'connections';
 };
 
-export async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
+export async function getInstalledAppHealth(orgId: string, userJwt?: string): Promise<Map<string, InstalledAppHealth>> {
   try {
     const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
-    // Fetch all integrations for the org — both marketplace-installed and spec-driven.
-    // This lets marketplace apps appear "installed" even when connected via the
-    // Integrations/Connections flow, giving users a unified view.
-    // Exclude waitlisted entries — those are not yet installed.
-    const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
+    // Prefer user-scoped auth (JWT) over service role key so the health map works
+    // even when SUPABASE_SERVICE_KEY is unavailable. Falls back to service role if no JWT.
+    const queryIntegrations = (params: URLSearchParams) =>
+      userJwt
+        ? supabaseRestAsUser(userJwt, 'integrations', params)
+        : supabaseRestAsService('integrations', params);
+    const rows = (await queryIntegrations(new URLSearchParams({
       organization_id: eq(orgId),
       status: 'neq.waitlisted',
       select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg',
