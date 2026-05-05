@@ -5,6 +5,7 @@ jest.mock('../../lib/supabase', () => ({
 
 jest.mock('../../lib/supabase-rest', () => ({
   supabaseRestAsService: jest.fn(),
+  supabaseRestAsUser: jest.fn(),
   eq: (value: string | number) => `eq.${encodeURIComponent(String(value))}`,
 }));
 
@@ -118,8 +119,8 @@ jest.mock('../marketplace', () => ({
   getInstalledAppHealth: jest.fn(async () => new Map()),
 }));
 
-jest.mock('../../lib/integrations/spec-registry', () => ({
-  PHASE1_INTEGRATIONS: [
+jest.mock('../../lib/integrations/spec-registry', () => {
+  const specs = [
     {
       id: 'google_workspace',
       name: 'Google Workspace',
@@ -170,8 +171,9 @@ jest.mock('../../lib/integrations/spec-registry', () => ({
       status: 'READY',
       color: '#DC2626',
     },
-  ],
-}));
+  ];
+  return { PHASE1_INTEGRATIONS: specs, IMPLEMENTED_INTEGRATIONS: specs };
+});
 
 jest.mock('../../lib/connectors/action-registry', () => ({
   ACTION_REGISTRY: {},
